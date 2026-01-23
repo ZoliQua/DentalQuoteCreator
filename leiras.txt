@@ -1,0 +1,194 @@
+1) Projekt célja (MVP)
+
+Készíts egy böngészőben futó fogászati árajánlat-készítő webalkalmazást, amelyben:
+	1.	Páciensek rögzíthetők alapadatokkal.
+	2.	Egy pácienshez új árajánlat készíthető előre definiált tételekből (kezelésekből).
+	3.	Az árajánlat PDF-be generálható “standard” rendelői sablonnal és nyomtatható.
+
+Későbbi bővítés: backend, több felhasználó, jogosultságok, adatbázis, számlázás, naptár stb.
+Most: működő, gyors, egyszerű MVP – lehet lokális tárolással is.
+
+⸻
+
+2) Platform és technikai keret (elvárás)
+	•	Web app (desktop elsődlegesen, mobil nem kritikus, de ne essen szét).
+	•	Dinamikus UI: tételek hozzáadása/törlése, mennyiség, kedvezmény, összegzés.
+	•	Adattárolás MVP-ben:
+	•	minimum: böngésző LocalStorage/IndexedDB, exportálható/importálható JSON.
+	•	(opcionális): később backend API-ra cserélhető legyen.
+	•	PDF generálás: kliens oldalon (pl. jsPDF / PDFLib) vagy szerver oldalon később. MVP-ben kliens oldali oké.
+
+⸻
+
+3) Fő entitások és adatszerkezet
+
+3.1 Páciens (Patient)
+	•	patientId (egyedi azonosító)
+	•	lastName (kötelező)
+	•	firstName (kötelező)
+	•	sex (kötelező)
+	•	birthDate (YYYY-MM-DD) (kötelező)
+	•	insuranceNum (000-000-000) (TAJ szám, opcionális, de jó ha van)
+	•	phone (opcionális)
+	•	email (opcionális)
+	•	address (opcionális)
+	•	notes (opcionális)
+
+3.2 Árlista tétel (CatalogItem) - Kezelés Lista - előre feltöltött és szerkeszthető
+	•	catalogItemId
+	•	catalogCode (pl. “KONZ01”)
+	•	catalogName (pl. “Konzultáció”)
+	•	catalogUnit (pl. “alkalom”, “fog”, “kvadráns”)
+	•	catalogPrice (bruttó egységár)
+	•	catalogPriceCurrency (HUF vagy EUR)
+	•	catalogPricevatRate (alapból 0)
+	•	catalogCategory (Diagnosztika, Konzerváló, Endo, Sebészet, Protetika, Esztétika stb.)
+
+3.3 Árajánlat (Quote)
+	•	quoteId
+	•	patientId
+	•	createdAt
+	•	validUntil (alapból +60 nap)
+	•	status (draft / final / archived)
+	•	currency (HUF/EUR; MVP-ben fix HUF)
+	•	items[] (lásd lent)
+	•	discount (összes kedvezmény: % vagy fix)
+	•	commentToPatient (szöveg)
+	•	internalNotes (nem kerül PDF-re)
+	•	totals (számolt mezők)
+
+3.4 Árajánlat sor (QuoteItem)
+	•	lineId
+	•	catalogItemId
+	•	quoteId
+	•	quoteName (a PDF-re kerülő név, alapból catalogName)
+	•	quoteUnitPriceGross (ár)
+	•	quoteUnitPriceCurrency (deviza típus)
+	•	quoteQty (mennyiség)
+	•	quoteLineDiscount (kedvezmény % vagy fix)
+	•	quoteLineTotalGross (számolt)
+	•	type (fogszám vagy kvadráns vagy régio)
+	•	toothNum (opcionális: fogszám)
+	•	quadrant (opcionálsi: kvadráns)
+	•	jaw (opcionális: állcsont)
+
+
+⸻
+
+4) Felhasználói folyamatok (user flows)
+
+4.1 Páciens felvitel
+	•	“Új páciens” gomb → űrlap → mentés
+	•	Pácienslista: keresés név/szülidő/tajszám/telefon/email alapján
+
+4.2 Árajánlat készítés
+	•	Páciens adatlapján: “Új árajánlat”
+	•	Árajánlat szerkesztő:
+	•	tételek hozzáadása árlistából (kereső + kategória szűrő)
+	•	mennyiség állítása
+	•	sor kedvezmény (opcionális)
+	•	globál kedvezmény (opcionális)
+	•	megjegyzés a páciensnek (PDF-re kerül)
+	•	automatikus összegzés: részösszeg / kedvezmény / végösszeg
+
+4.3 PDF generálás
+	•	“PDF letöltés / Nyomtatás” gomb
+	•	A PDF egy “standard” ajánlat:
+	•	rendelő adatai fejlécben
+	•	páciens adatai
+	•	árajánlat azonosító + dátum + érvényesség
+	•	tételsorok táblázatban
+	•	végösszeg
+	•	jogi/kommunikációs lábléc (pl. “Az árajánlat tájékoztató jellegű…”)
+
+4.4 Beállítások rész:
+	•	PDF egyedi részei szerkeszthetőek:
+		- rendelő neve, (alap: Mackó Dental Kft)
+		- lábléc (alap: Kelt, Szombathely [YYYY.MM.DD] )
+		- garancia feltétlek (nagy szöveg box) - (készíts egy alap garanciális szöveget fogpótlásokra)
+
+⸻
+
+5) PDF sablon (konkrét elvárások)
+
+formátum: A4 oldal
+
+1. oldal (illetve ha hosszabb akkor több)
+
+Fejléc (középen) minden oldalt szerepel
+	•	Bal: Rendelő neve, cím, telefonszám, email, web (konfigurálható)
+	•	Jobb: “ÁRAJÁNLAT” cím, Quote ID, dátum, érvényesség
+
+Páciens blokk
+	•	Név (Vezetéknév - Keresztnév sorrend)
+	•	Születési dátum (ha van)
+	•	Telefonszám/email (ha van)
+
+Tételtábla oszlopok
+	•	Sorszám
+	•	Megnevezés
+	•	Mennyiség + egység
+	•	Egységár (bruttó)
+	•	Kedvezmény (ha van)
+	•	Sor összesen
+
+Összesítő blokk
+	•	Részösszeg
+	•	Kedvezmény összesen
+	•	Fizetendő végösszeg
+
+
+2. oldal (vagy az árajánlat utáni következő)
+
+	•	Egy előre megírt szöveg ami módosítható: garancia feltételek hosszan sorolva.
+
+Lábléc
+	•	Rövid disclaimer + aláírás hely (“Kelt, …”, “Páciens / Rendelő”)
+
+⸻
+
+6) Funkcionális követelmények (MVP)
+	•	CRUD:
+	•	Páciens: létrehozás, listázás, szerkesztés, duplikálás, törlés (vagy archiválás)
+	•	Árajánlat: létrehozás, másolás újként, mentés draftként, véglegesítés, PDF export
+	•	Árlista: alap lista, bővíthető/szerkeszthető (minimum import/export)
+	•	Keresés:
+		•	páciens kereső
+		•	árlista tétel kereső (név/kód)
+	•	Számítási szabályok:
+		•	sorösszeg = qty * unitPrice - sor kedvezmény
+		•	végösszeg = sorösszegek összege - globál kedvezmény
+		•	kerekítés: forintra kerekítés (0 tizedes), egyértelműen dokumentálva
+	•	Adat export/import:
+		•	JSON export (backup)
+		•	JSON import (visszatöltés)
+
+⸻
+
+7) Nem-funkcionális követelmények
+	•	Gyors használhatóság: 2–3 kattintásból legyen új ajánlat.
+	•	Adatbiztonság MVP-ben: lokális tárolás esetén figyelmeztetés (nem több gépen szinkron).
+	•	Kódstruktúra: későbbi backend cserére alkalmas (pl. repository pattern / API layer).
+	•	Nyelv: magyar UI., angol UI (váltás lehetősége)
+
+⸻
+
+8) Későbbi bővítési pontok sorrendben a későbbiekre (csak tervezési szempontból)
+	•	Fogak állcsont grafikai megjelenítése kattintással árajánlat tétel hozzáadás a fogaknál, állcsontnál
+	•	Felhős adatbázis (mySQL)
+	•	Klinikán belüli több kezelőorvos
+	•	NEAK / magán árlisták
+	•	Kezelési terv + időpont + számlázás integráció
+	•	Dokumentumtár + aláíratás	
+	•	Felhasználók + bejelentkezés
+	•	GDPR funkciók (adatkezelési napló, törlési kérelem kezelése)
+
+⸻
+
+9) Elfogadási kritériumok (hogyan “kész” az MVP)
+	•	Tudok felvinni egy pácienst és a listában megtalálom.
+	•	Tudok a pácienshez árajánlatot készíteni árlistából tételekkel.
+	•	A végösszeg helyesen számolódik (mennyiség + kedvezmények).
+	•	Egy gombnyomásra letöltök egy igényes, nyomtatható PDF-et a fenti sablon szerint.
+	•	A mentett adatok újratöltés után is megmaradnak (local storage).
+	•	JSON export/import működik.
