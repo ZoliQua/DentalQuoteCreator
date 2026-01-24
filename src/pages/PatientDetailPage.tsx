@@ -73,8 +73,9 @@ export function PatientDetailPage() {
     setDeleteQuoteConfirm(null);
   };
 
-  const sortedQuotes = [...quotes].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  const activeQuotes = quotes.filter((q) => !q.isDeleted);
+  const sortedQuotes = [...activeQuotes].sort(
+    (a, b) => new Date(b.lastStatusChangeAt).getTime() - new Date(a.lastStatusChangeAt).getTime()
   );
 
   return (
@@ -146,10 +147,14 @@ export function PatientDetailPage() {
                 <p className="font-medium">{patient.email}</p>
               </div>
             )}
-            {patient.address && (
+            {(patient.zipCode || patient.city || patient.street) && (
               <div>
-                <label className="text-sm text-gray-500">{t.patients.address}</label>
-                <p className="font-medium">{patient.address}</p>
+                <label className="text-sm text-gray-500">Lakcím</label>
+                <p className="font-medium">
+                  {[patient.zipCode, patient.city].filter(Boolean).join(' ')}
+                  {(patient.zipCode || patient.city) && patient.street ? ', ' : ''}
+                  {patient.street}
+                </p>
               </div>
             )}
             {patient.notes && (
@@ -215,15 +220,22 @@ export function PatientDetailPage() {
                               <span>{formatDate(quote.createdAt)}</span>
                               <Badge
                                 variant={
-                                  quote.status === 'draft'
+                                  quote.quoteStatus === 'draft'
                                     ? 'warning'
-                                    : quote.status === 'final'
-                                    ? 'success'
-                                    : 'default'
+                                    : quote.quoteStatus === 'completed'
+                                    ? 'default'
+                                    : quote.quoteStatus === 'rejected'
+                                    ? 'danger'
+                                    : 'success'
                                 }
                                 size="sm"
                               >
-                                {t.quotes[quote.status]}
+                                {quote.quoteStatus === 'draft' ? t.quotes.statusDraft :
+                                 quote.quoteStatus === 'closed_pending' ? t.quotes.statusClosedPending :
+                                 quote.quoteStatus === 'accepted_in_progress' ? t.quotes.statusAcceptedInProgress :
+                                 quote.quoteStatus === 'rejected' ? t.quotes.statusRejected :
+                                 quote.quoteStatus === 'started' ? t.quotes.statusStarted :
+                                 t.quotes.statusCompleted}
                               </Badge>
                             </div>
                           </div>

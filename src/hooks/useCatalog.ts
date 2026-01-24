@@ -1,7 +1,14 @@
 import { useMemo, useCallback } from 'react';
 import { nanoid } from 'nanoid';
 import { useApp } from '../context/AppContext';
-import { CatalogItem, CatalogItemFormData, CatalogCategory } from '../types';
+import {
+  CatalogItem,
+  CatalogItemFormData,
+  CatalogCategory,
+  CATALOG_CATEGORIES,
+  CATALOG_UNITS,
+} from '../types';
+import { catalogToCsv, parseCatalogCsv } from '../utils';
 
 export function useCatalog() {
   const {
@@ -20,14 +27,14 @@ export function useCatalog() {
   const itemsByCategory = useMemo(() => {
     const grouped: Record<CatalogCategory, CatalogItem[]> = {
       Diagnosztika: [],
-      Konzerváló: [],
-      Endodontia: [],
-      Sebészet: [],
-      Protetika: [],
-      Esztétika: [],
-      Fogszabályozás: [],
       Parodontológia: [],
-      Egyéb: [],
+      Konzerváló: [],
+      Endodoncia: [],
+      Szájsebészet: [],
+      Implantáció: [],
+      Protetika: [],
+      Gyerefogászat: [],
+      Fogszabályozás: [],
     };
 
     activeItems.forEach((item) => {
@@ -39,9 +46,12 @@ export function useCatalog() {
 
   const createCatalogItem = useCallback(
     (data: CatalogItemFormData): CatalogItem => {
+      const technicalPrice = data.catalogTechnicalPrice ?? 0;
       const item: CatalogItem = {
         ...data,
+        catalogTechnicalPrice: technicalPrice,
         catalogItemId: nanoid(),
+        hasTechnicalPrice: technicalPrice > 0,
       };
       addCatalogItem(item);
       return item;
@@ -57,6 +67,8 @@ export function useCatalog() {
       const updated: CatalogItem = {
         ...existing,
         ...data,
+        hasTechnicalPrice:
+          (data.catalogTechnicalPrice ?? existing.catalogTechnicalPrice) > 0,
       };
       updateCatalogItem(updated);
       return updated;
@@ -103,27 +115,107 @@ export function useCatalog() {
     return JSON.stringify(catalog, null, 2);
   }, [catalog]);
 
+  const normalizeCatalogItems = useCallback((items: Partial<CatalogItem>[]): CatalogItem[] | null => {
+    const normalized: CatalogItem[] = [];
+
+    for (const item of items) {
+      const code = item.catalogCode?.toString().trim();
+      const name = item.catalogName?.toString().trim();
+      const unit = item.catalogUnit?.toString().trim();
+      const category = item.catalogCategory as CatalogCategory | undefined;
+
+      if (!code || !name || !unit || !category || !CATALOG_CATEGORIES.includes(category)) {
+        return null;
+      }
+
+      const priceValue = Number(item.catalogPrice);
+      const vatValue = Number(item.catalogVatRate);
+      const technicalValue = Number(item.catalogTechnicalPrice);
+      const rawIsActive = item.isActive as unknown;
+      let isActive = true;
+      if (typeof rawIsActive === 'boolean') {
+        isActive = rawIsActive;
+      } else if (typeof rawIsActive === 'string') {
+        isActive = ['true', '1'].includes(rawIsActive.trim().toLowerCase());
+      }
+
+      const isFullMouthValue = (() => {
+        const val = item.isFullMouth as unknown;
+        if (typeof val === 'boolean') return val;
+        if (typeof val === 'string') {
+          return ['true', '1'].includes(val.trim().toLowerCase());
+        }
+        return false;
+      })();
+
+      const isArchValue = (() => {
+        const val = item.isArch as unknown;
+        if (typeof val === 'boolean') return val;
+        if (typeof val === 'string') {
+          return ['true', '1'].includes(val.trim().toLowerCase());
+        }
+        return false;
+      })();
+
+      const normalizedUnit = ((): (typeof CATALOG_UNITS)[number] => {
+        if (CATALOG_UNITS.includes(unit as (typeof CATALOG_UNITS)[number])) {
+          return unit as (typeof CATALOG_UNITS)[number];
+        }
+        return 'alkalom';
+      })();
+
+      normalized.push({
+        catalogItemId: item.catalogItemId?.toString() || nanoid(),
+        catalogCode: code.toUpperCase(),
+        catalogName: name,
+        catalogUnit: normalizedUnit,
+        catalogPrice: Number.isFinite(priceValue) ? priceValue : 0,
+        catalogPriceCurrency: item.catalogPriceCurrency === 'EUR' ? 'EUR' : 'HUF',
+        catalogVatRate: Number.isFinite(vatValue) ? vatValue : 0,
+        catalogTechnicalPrice: Number.isFinite(technicalValue) ? technicalValue : 0,
+        catalogCategory: category,
+        hasTechnicalPrice: Number.isFinite(technicalValue) ? technicalValue > 0 : false,
+        isFullMouth: isFullMouthValue,
+        isArch: isArchValue,
+        isActive,
+      });
+    }
+
+    return normalized;
+  }, []);
+
   const importCatalog = useCallback(
     (data: string): boolean => {
       try {
-        const items: CatalogItem[] = JSON.parse(data);
+        const items: Partial<CatalogItem>[] = JSON.parse(data);
         if (!Array.isArray(items)) return false;
 
-        // Validate structure
-        for (const item of items) {
-          if (!item.catalogItemId || !item.catalogName || !item.catalogCode) {
-            return false;
-          }
-        }
+        const normalized = normalizeCatalogItems(items);
+        if (!normalized) return false;
 
-        // Replace all catalog items
-        items.forEach((item) => addCatalogItem(item));
+        resetCatalog(normalized);
         return true;
       } catch {
         return false;
       }
     },
-    [addCatalogItem]
+    [normalizeCatalogItems, resetCatalog]
+  );
+
+  const exportCatalogCSV = useCallback(() => catalogToCsv(catalog), [catalog]);
+
+  const importCatalogCSV = useCallback(
+    (data: string) => {
+      const rows = parseCatalogCsv(data);
+      if (rows === null) return false;
+
+      const normalized = normalizeCatalogItems(rows);
+      if (!normalized) return false;
+
+      resetCatalog(normalized);
+      return true;
+    },
+    [normalizeCatalogItems, resetCatalog]
   );
 
   return {
@@ -140,5 +232,7 @@ export function useCatalog() {
     resetCatalog,
     exportCatalog,
     importCatalog,
+    exportCatalogCSV,
+    importCatalogCSV,
   };
 }

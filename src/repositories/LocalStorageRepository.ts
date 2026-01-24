@@ -1,4 +1,5 @@
-import { Patient, CatalogItem, Quote, Settings } from '../types';
+import { nanoid } from 'nanoid';
+import { Patient, CatalogItem, Quote, Settings, CatalogCategory, CATALOG_CATEGORIES, CATALOG_UNITS } from '../types';
 import { StorageRepository, ExportData } from './StorageRepository';
 import { defaultCatalog } from '../data/defaultCatalog';
 import { defaultSettings } from '../data/defaultSettings';
@@ -18,7 +19,39 @@ export class LocalStorageRepository implements StorageRepository {
     const data = localStorage.getItem(STORAGE_KEYS.PATIENTS);
     if (!data) return [];
     try {
-      return JSON.parse(data);
+      const patients = JSON.parse(data);
+
+      // Migration: convert old address string to zipCode, city, street
+      let needsSave = false;
+      const migratedPatients = patients.map((p: Patient & { address?: string }) => {
+        if (p.address && !p.zipCode && !p.city && !p.street) {
+          needsSave = true;
+          // Try to parse address: "9700 Szombathely, Fő tér 1."
+          const match = p.address.match(/^(\d{4})\s+([^,]+),?\s*(.*)$/);
+          if (match) {
+            return {
+              ...p,
+              zipCode: match[1],
+              city: match[2].trim(),
+              street: match[3]?.trim() || '',
+              address: undefined,
+            };
+          }
+          // Fallback: put everything in street
+          return {
+            ...p,
+            street: p.address,
+            address: undefined,
+          };
+        }
+        return p;
+      });
+
+      if (needsSave) {
+        localStorage.setItem(STORAGE_KEYS.PATIENTS, JSON.stringify(migratedPatients));
+      }
+
+      return migratedPatients;
     } catch {
       return [];
     }
@@ -48,12 +81,20 @@ export class LocalStorageRepository implements StorageRepository {
   getCatalog(): CatalogItem[] {
     const data = localStorage.getItem(STORAGE_KEYS.CATALOG);
     if (!data) {
-      // Initialize with default catalog
       localStorage.setItem(STORAGE_KEYS.CATALOG, JSON.stringify(defaultCatalog));
       return defaultCatalog;
     }
     try {
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      if (!Array.isArray(parsed)) {
+        return defaultCatalog;
+      }
+      const normalized = parsed.map((item: Partial<CatalogItem>) => normalizeCatalogItem(item));
+      const normalizedString = JSON.stringify(normalized);
+      if (normalizedString !== data) {
+        localStorage.setItem(STORAGE_KEYS.CATALOG, normalizedString);
+      }
+      return normalized;
     } catch {
       return defaultCatalog;
     }
@@ -88,7 +129,76 @@ export class LocalStorageRepository implements StorageRepository {
     const data = localStorage.getItem(STORAGE_KEYS.QUOTES);
     if (!data) return [];
     try {
-      return JSON.parse(data);
+      const quotes = JSON.parse(data);
+      let needsSave = false;
+
+      // Migration: convert old quote format to new format
+      const migratedQuotes = quotes.map((q: Quote & {
+        status?: string;
+        acceptanceStatus?: string;
+        updatedAt?: string;
+        acceptedAt?: string;
+      }, index: number) => {
+        let migrated = { ...q };
+
+        // Migration: old status/acceptanceStatus to new quoteStatus
+        if (q.status && !q.quoteStatus) {
+          needsSave = true;
+          if (q.status === 'draft') {
+            migrated.quoteStatus = 'draft';
+          } else if (q.status === 'final') {
+            if (q.acceptanceStatus === 'accepted') {
+              migrated.quoteStatus = 'accepted_in_progress';
+            } else if (q.acceptanceStatus === 'rejected') {
+              migrated.quoteStatus = 'rejected';
+            } else {
+              migrated.quoteStatus = 'closed_pending';
+            }
+          } else if (q.status === 'archived') {
+            migrated.quoteStatus = 'completed';
+          }
+          delete (migrated as { status?: string }).status;
+          delete (migrated as { acceptanceStatus?: string }).acceptanceStatus;
+          delete (migrated as { acceptedAt?: string }).acceptedAt;
+        }
+
+        // Migration: generate quoteNumber if missing
+        if (!q.quoteNumber) {
+          needsSave = true;
+          // Use index + 1 as a fallback counter
+          const settings = this.getSettings();
+          migrated.quoteNumber = `${settings.quote.prefix}-${String(index + 1).padStart(4, '0')}`;
+        }
+
+        // Migration: lastStatusChangeAt from updatedAt
+        if (!q.lastStatusChangeAt && q.updatedAt) {
+          needsSave = true;
+          migrated.lastStatusChangeAt = q.updatedAt;
+          delete (migrated as { updatedAt?: string }).updatedAt;
+        } else if (!q.lastStatusChangeAt) {
+          needsSave = true;
+          migrated.lastStatusChangeAt = q.createdAt;
+        }
+
+        // Migration: initialize events array if missing
+        if (!q.events) {
+          needsSave = true;
+          migrated.events = [{
+            id: nanoid(),
+            timestamp: q.createdAt,
+            type: 'created' as const,
+            doctorName: 'Ismeretlen',
+          }];
+        }
+
+        return migrated;
+      });
+
+      if (needsSave) {
+        localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(migratedQuotes));
+      }
+
+      return migratedQuotes;
     } catch {
       return [];
     }
@@ -127,7 +237,52 @@ export class LocalStorageRepository implements StorageRepository {
       return defaultSettings;
     }
     try {
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      let needsSave = false;
+
+      // Migration: convert old clinic.doctor string to doctors array
+      if (parsed.clinic?.doctor && !parsed.doctors) {
+        parsed.doctors = [{ id: 'doc-1', name: parsed.clinic.doctor, stampNumber: '' }];
+        delete parsed.clinic.doctor;
+        needsSave = true;
+      }
+
+      // Ensure doctors array exists
+      if (!parsed.doctors) {
+        parsed.doctors = defaultSettings.doctors;
+        needsSave = true;
+      }
+
+      // Migration: add stampNumber to existing doctors
+      if (parsed.doctors && parsed.doctors.length > 0 && parsed.doctors[0].stampNumber === undefined) {
+        parsed.doctors = parsed.doctors.map((d: { id: string; name: string; stampNumber?: string }) => ({
+          ...d,
+          stampNumber: d.stampNumber || '',
+        }));
+        needsSave = true;
+      }
+
+      // Migration: add quote settings if missing
+      if (!parsed.quote) {
+        // Generate random 4-letter prefix
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        let prefix = '';
+        for (let i = 0; i < 4; i++) {
+          prefix += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        parsed.quote = {
+          prefix,
+          counter: 0,
+          deletedCount: 0,
+        };
+        needsSave = true;
+      }
+
+      if (needsSave) {
+        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(parsed));
+      }
+
+      return parsed;
     } catch {
       return defaultSettings;
     }
@@ -180,3 +335,41 @@ export class LocalStorageRepository implements StorageRepository {
 
 // Singleton instance
 export const storage = new LocalStorageRepository();
+
+function normalizeCatalogItem(item: Partial<CatalogItem>): CatalogItem {
+  const toBoolean = (value: unknown, defaultValue = false): boolean => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      return ['true', '1'].includes(value.trim().toLowerCase());
+    }
+    return defaultValue;
+  };
+
+  const technicalPriceValue = Number(item.catalogTechnicalPrice);
+  const catalogPriceValue = Number(item.catalogPrice);
+  const vatValue = Number(item.catalogVatRate);
+  const normalizedUnit = CATALOG_UNITS.includes(item.catalogUnit as (typeof CATALOG_UNITS)[number])
+    ? (item.catalogUnit as (typeof CATALOG_UNITS)[number])
+    : 'alkalom';
+  const normalizedCategory =
+    item.catalogCategory &&
+    (CATALOG_CATEGORIES as readonly CatalogCategory[]).includes(item.catalogCategory as CatalogCategory)
+      ? (item.catalogCategory as CatalogCategory)
+      : CATALOG_CATEGORIES[0];
+
+  return {
+    catalogItemId: item.catalogItemId || nanoid(),
+    catalogCode: item.catalogCode ? item.catalogCode.toString().toUpperCase() : '',
+    catalogName: item.catalogName ? item.catalogName.toString() : '',
+    catalogUnit: normalizedUnit,
+    catalogPrice: Number.isFinite(catalogPriceValue) ? catalogPriceValue : 0,
+    catalogPriceCurrency: item.catalogPriceCurrency === 'EUR' ? 'EUR' : 'HUF',
+    catalogVatRate: Number.isFinite(vatValue) ? vatValue : 0,
+    catalogTechnicalPrice: Number.isFinite(technicalPriceValue) ? technicalPriceValue : 0,
+    catalogCategory: normalizedCategory,
+    hasTechnicalPrice: Number.isFinite(technicalPriceValue) ? technicalPriceValue > 0 : false,
+    isFullMouth: toBoolean(item.isFullMouth),
+    isArch: toBoolean(item.isArch),
+    isActive: toBoolean(item.isActive, true),
+  };
+}

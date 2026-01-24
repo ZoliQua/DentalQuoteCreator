@@ -9,9 +9,10 @@ export function DashboardPage() {
   const { patients, quotes } = useApp();
 
   const activePatients = patients.filter((p) => !p.isArchived);
-  const draftQuotes = quotes.filter((q) => q.status === 'draft');
-  const recentQuotes = [...quotes]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+  const activeQuotes = quotes.filter((q) => !q.isDeleted);
+  const draftQuotes = activeQuotes.filter((q) => q.quoteStatus === 'draft');
+  const recentQuotes = [...activeQuotes]
+    .sort((a, b) => new Date(b.lastStatusChangeAt).getTime() - new Date(a.lastStatusChangeAt).getTime())
     .slice(0, 5);
   const recentPatients = [...patients]
     .filter((p) => !p.isArchived)
@@ -80,7 +81,7 @@ export function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm text-gray-500">{t.quotes.draft}</p>
+                <p className="text-sm text-gray-500">{t.quotes.statusDraft}</p>
                 <p className="text-2xl font-bold text-gray-900">{draftQuotes.length}</p>
               </div>
             </div>
@@ -268,14 +269,21 @@ export function DashboardPage() {
                         <td className="py-3">
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                              quote.status === 'draft'
+                              quote.quoteStatus === 'draft'
                                 ? 'bg-yellow-100 text-yellow-800'
-                                : quote.status === 'final'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-gray-100 text-gray-800'
+                                : quote.quoteStatus === 'completed'
+                                ? 'bg-gray-100 text-gray-600'
+                                : quote.quoteStatus === 'rejected'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-green-100 text-green-800'
                             }`}
                           >
-                            {t.quotes[quote.status]}
+                            {quote.quoteStatus === 'draft' ? t.quotes.statusDraft :
+                             quote.quoteStatus === 'closed_pending' ? t.quotes.statusClosedPending :
+                             quote.quoteStatus === 'accepted_in_progress' ? t.quotes.statusAcceptedInProgress :
+                             quote.quoteStatus === 'rejected' ? t.quotes.statusRejected :
+                             quote.quoteStatus === 'started' ? t.quotes.statusStarted :
+                             t.quotes.statusCompleted}
                           </span>
                         </td>
                         <td className="py-3 text-gray-500">{formatDate(quote.createdAt)}</td>

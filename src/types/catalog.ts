@@ -1,35 +1,43 @@
 export type CatalogCategory =
   | 'Diagnosztika'
-  | 'Konzerváló'
-  | 'Endodontia'
-  | 'Sebészet'
-  | 'Protetika'
-  | 'Esztétika'
-  | 'Fogszabályozás'
   | 'Parodontológia'
-  | 'Egyéb';
+  | 'Konzerváló'
+  | 'Endodoncia'
+  | 'Szájsebészet'
+  | 'Implantáció'
+  | 'Protetika'
+  | 'Gyerefogászat'
+  | 'Fogszabályozás';
 
 export const CATALOG_CATEGORIES: CatalogCategory[] = [
   'Diagnosztika',
-  'Konzerváló',
-  'Endodontia',
-  'Sebészet',
-  'Protetika',
-  'Esztétika',
-  'Fogszabályozás',
   'Parodontológia',
-  'Egyéb',
+  'Konzerváló',
+  'Endodoncia',
+  'Szájsebészet',
+  'Implantáció',
+  'Protetika',
+  'Gyerefogászat',
+  'Fogszabályozás',
 ];
+
+export type CatalogUnit = 'alkalom' | 'db' | 'állcsont' | 'kvadráns' | 'fog';
+
+export const CATALOG_UNITS: CatalogUnit[] = ['alkalom', 'db', 'állcsont', 'kvadráns', 'fog'];
 
 export interface CatalogItem {
   catalogItemId: string;
   catalogCode: string;
   catalogName: string;
-  catalogUnit: string;
+  catalogUnit: CatalogUnit;
   catalogPrice: number;
   catalogPriceCurrency: 'HUF' | 'EUR';
   catalogVatRate: number;
+  catalogTechnicalPrice: number;
   catalogCategory: CatalogCategory;
+  hasTechnicalPrice: boolean;
+  isFullMouth: boolean;
+  isArch: boolean;
   isActive: boolean;
 }
 

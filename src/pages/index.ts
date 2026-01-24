@@ -1,6 +1,7 @@
 export * from './DashboardPage';
 export * from './PatientsPage';
 export * from './PatientDetailPage';
+export * from './QuotesPage';
 export * from './QuoteEditorPage';
 export * from './CatalogPage';
 export * from './SettingsPage';

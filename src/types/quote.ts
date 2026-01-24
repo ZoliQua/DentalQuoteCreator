@@ -1,8 +1,22 @@
-export type QuoteStatus = 'draft' | 'final' | 'archived';
+export type QuoteStatus =
+  | 'draft'
+  | 'closed_pending'
+  | 'accepted_in_progress'
+  | 'rejected'
+  | 'started'
+  | 'completed';
+
 export type DiscountType = 'percent' | 'fixed';
 export type ToothType = 'tooth' | 'quadrant' | 'jaw' | 'region';
 export type Quadrant = '1' | '2' | '3' | '4';
 export type Jaw = 'upper' | 'lower' | 'both';
+
+export interface QuoteEvent {
+  id: string;
+  timestamp: string;
+  type: 'created' | 'closed' | 'reopened' | 'accepted' | 'acceptance_revoked' | 'rejected' | 'rejection_revoked' | 'started' | 'start_revoked' | 'completed' | 'completion_revoked' | 'deleted';
+  doctorName: string;
+}
 
 export interface QuoteItem {
   lineId: string;
@@ -18,16 +32,20 @@ export interface QuoteItem {
   toothNum?: string;
   quadrant?: Quadrant;
   jaw?: Jaw;
+  treatedArea?: string;
   treatmentSession?: number;
 }
 
 export interface Quote {
   quoteId: string;
+  quoteNumber: string; // New: ABCD-0001 format
   patientId: string;
+  doctorId: string;
+  quoteName: string;
   createdAt: string;
-  updatedAt: string;
+  lastStatusChangeAt: string; // New: replaces updatedAt for status changes
   validUntil: string;
-  status: QuoteStatus;
+  quoteStatus: QuoteStatus; // New: replaces status + acceptanceStatus
   currency: 'HUF' | 'EUR';
   items: QuoteItem[];
   globalDiscountType: DiscountType;
@@ -35,6 +53,8 @@ export interface Quote {
   commentToPatient: string;
   internalNotes: string;
   expectedTreatments: number;
+  events: QuoteEvent[]; // New: event log
+  isDeleted?: boolean; // New: soft delete flag
 }
 
 export interface QuoteTotals {

@@ -17,7 +17,7 @@ interface AppContextType {
   updateCatalogItem: (item: CatalogItem) => void;
   deleteCatalogItem: (catalogItemId: string) => void;
   getCatalogItem: (catalogItemId: string) => CatalogItem | undefined;
-  resetCatalog: () => void;
+  resetCatalog: (items?: CatalogItem[]) => void;
 
   // Quotes
   quotes: Quote[];
@@ -101,9 +101,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [catalog]
   );
 
-  const resetCatalog = useCallback(() => {
-    storage.resetCatalog(defaultCatalog);
-    setCatalog(defaultCatalog);
+  const resetCatalog = useCallback((items?: CatalogItem[]) => {
+    const newCatalog = items ?? defaultCatalog;
+    storage.resetCatalog(newCatalog);
+    setCatalog(newCatalog);
   }, []);
 
   // Quotes

@@ -1,30 +1,61 @@
 import { useState, useRef } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useApp } from '../context/AppContext';
+import { useCatalog } from '../hooks';
 import { Button, Card, CardContent, CardHeader, ConfirmModal } from '../components/common';
 
 export function DataManagementPage() {
   const { t } = useSettings();
   const { exportData, importData, refreshData } = useApp();
+  const { exportCatalog, importCatalog, exportCatalogCSV, importCatalogCSV } = useCatalog();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const catalogJsonInputRef = useRef<HTMLInputElement>(null);
+  const catalogCsvInputRef = useRef<HTMLInputElement>(null);
 
   const [importConfirm, setImportConfirm] = useState(false);
   const [pendingImportData, setPendingImportData] = useState<string | null>(null);
+  const [pendingCatalogImport, setPendingCatalogImport] = useState<{ format: 'json' | 'csv'; data: string } | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const downloadFile = (content: string, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const handleExport = () => {
     const data = exportData();
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `dental_quote_backup_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadFile(data, `dental_quote_backup_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
 
     setMessage({ type: 'success', text: 'Adatok sikeresen exportálva!' });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const handleCatalogExportJson = () => {
+    const data = exportCatalog();
+    downloadFile(
+      data,
+      `dental_catalog_${new Date().toISOString().split('T')[0]}.json`,
+      'application/json'
+    );
+    setMessage({ type: 'success', text: t.dataManagement.catalogOnly.exportSuccess });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const handleCatalogExportCsv = () => {
+    const data = exportCatalogCSV();
+    downloadFile(
+      data,
+      `dental_catalog_${new Date().toISOString().split('T')[0]}.csv`,
+      'text/csv;charset=utf-8;'
+    );
+    setMessage({ type: 'success', text: t.dataManagement.catalogOnly.exportSuccess });
     setTimeout(() => setMessage(null), 3000);
   };
 
@@ -48,6 +79,22 @@ export function DataManagementPage() {
     event.target.value = '';
   };
 
+  const handleCatalogFileSelect = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    format: 'json' | 'csv'
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      setPendingCatalogImport({ format, data: content });
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  };
+
   const handleImportConfirm = () => {
     if (!pendingImportData) return;
 
@@ -61,6 +108,24 @@ export function DataManagementPage() {
 
     setPendingImportData(null);
     setImportConfirm(false);
+    setTimeout(() => setMessage(null), 5000);
+  };
+
+  const handleCatalogImportConfirm = () => {
+    if (!pendingCatalogImport) return;
+
+    const success =
+      pendingCatalogImport.format === 'json'
+        ? importCatalog(pendingCatalogImport.data)
+        : importCatalogCSV(pendingCatalogImport.data);
+
+    if (success) {
+      setMessage({ type: 'success', text: t.dataManagement.catalogOnly.importSuccess });
+    } else {
+      setMessage({ type: 'error', text: t.dataManagement.catalogOnly.importError });
+    }
+
+    setPendingCatalogImport(null);
     setTimeout(() => setMessage(null), 5000);
   };
 
@@ -125,6 +190,84 @@ export function DataManagementPage() {
         </div>
       )}
 
+      {/* Catalog-only Card */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">{t.dataManagement.catalogOnly.title}</h2>
+        </CardHeader>
+        <CardContent>
+          <p className="text-gray-600 mb-4">{t.dataManagement.catalogOnly.description}</p>
+          <input
+            ref={catalogJsonInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(event) => handleCatalogFileSelect(event, 'json')}
+          />
+          <input
+            ref={catalogCsvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(event) => handleCatalogFileSelect(event, 'csv')}
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
+              <p className="text-sm font-semibold text-gray-800">
+                {t.dataManagement.catalogOnly.exportJson}
+              </p>
+              <p className="text-xs text-gray-500">
+                {t.dataManagement.catalogOnly.exportJsonDescription}
+              </p>
+              <Button size="sm" onClick={handleCatalogExportJson}>
+                {t.dataManagement.catalogOnly.exportJson}
+              </Button>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
+              <p className="text-sm font-semibold text-gray-800">
+                {t.dataManagement.catalogOnly.exportCsv}
+              </p>
+              <p className="text-xs text-gray-500">
+                {t.dataManagement.catalogOnly.exportCsvDescription}
+              </p>
+              <Button size="sm" onClick={handleCatalogExportCsv}>
+                {t.dataManagement.catalogOnly.exportCsv}
+              </Button>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
+              <p className="text-sm font-semibold text-gray-800">
+                {t.dataManagement.catalogOnly.importJson}
+              </p>
+              <p className="text-xs text-gray-500">
+                {t.dataManagement.catalogOnly.importJsonDescription}
+              </p>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => catalogJsonInputRef.current?.click()}
+              >
+                {t.dataManagement.catalogOnly.importJson}
+              </Button>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
+              <p className="text-sm font-semibold text-gray-800">
+                {t.dataManagement.catalogOnly.importCsv}
+              </p>
+              <p className="text-xs text-gray-500">
+                {t.dataManagement.catalogOnly.importCsvDescription}
+              </p>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => catalogCsvInputRef.current?.click()}
+              >
+                {t.dataManagement.catalogOnly.importCsv}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Export Card */}
       <Card>
         <CardHeader>
@@ -185,6 +328,22 @@ export function DataManagementPage() {
       </Card>
 
       {/* Import Confirmation */}
+      <ConfirmModal
+        isOpen={pendingCatalogImport !== null}
+        onClose={() => setPendingCatalogImport(null)}
+        onConfirm={handleCatalogImportConfirm}
+        title={t.common.confirm}
+        message={t.dataManagement.catalogOnly.importWarning}
+        confirmText={
+          pendingCatalogImport?.format === 'csv'
+            ? t.dataManagement.catalogOnly.importCsv
+            : t.dataManagement.catalogOnly.importJson
+        }
+        cancelText={t.common.cancel}
+        variant="danger"
+      />
+
+      {/* Global Import Confirmation */}
       <ConfirmModal
         isOpen={importConfirm}
         onClose={() => {

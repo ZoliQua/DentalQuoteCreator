@@ -250,7 +250,9 @@ function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: Patient
     insuranceNum: patient?.insuranceNum || '',
     phone: patient?.phone || '',
     email: patient?.email || '',
-    address: patient?.address || '',
+    zipCode: patient?.zipCode || '',
+    city: patient?.city || '',
+    street: patient?.street || '',
     notes: patient?.notes || '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -265,7 +267,9 @@ function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: Patient
         insuranceNum: patient.insuranceNum || '',
         phone: patient.phone || '',
         email: patient.email || '',
-        address: patient.address || '',
+        zipCode: patient.zipCode || '',
+        city: patient.city || '',
+        street: patient.street || '',
         notes: patient.notes || '',
       });
     } else if (isOpen) {
@@ -277,7 +281,9 @@ function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: Patient
         insuranceNum: '',
         phone: '',
         email: '',
-        address: '',
+        zipCode: '',
+        city: '',
+        street: '',
         notes: '',
       });
     }
@@ -395,10 +401,28 @@ function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: Patient
           />
         </div>
 
+        <div className="grid grid-cols-3 gap-4">
+          <Input
+            label={t.patients.zipCode}
+            value={formData.zipCode}
+            onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
+            placeholder="9700"
+          />
+          <div className="col-span-2">
+            <Input
+              label={t.patients.city}
+              value={formData.city}
+              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+              placeholder="Szombathely"
+            />
+          </div>
+        </div>
+
         <Input
-          label={t.patients.address}
-          value={formData.address}
-          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+          label={t.patients.street}
+          value={formData.street}
+          onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+          placeholder="Fő tér 1."
         />
 
         <TextArea

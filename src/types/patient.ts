@@ -7,7 +7,9 @@ export interface Patient {
   insuranceNum?: string;
   phone?: string;
   email?: string;
-  address?: string;
+  zipCode?: string;
+  city?: string;
+  street?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;

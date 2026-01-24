@@ -2,29 +2,103 @@ import { useMemo, useCallback } from 'react';
 import { nanoid } from 'nanoid';
 import { useApp } from '../context/AppContext';
 import { useSettings } from '../context/SettingsContext';
-import { Quote, QuoteItem, QuoteStatus, CatalogItem } from '../types';
+import { Quote, QuoteItem, QuoteStatus, QuoteEvent, CatalogItem } from '../types';
 import { getCurrentDateString, addDays, calculateQuoteTotals } from '../utils';
 
+// Helper to generate quote number in PREFIX-NNNN format
+function generateQuoteNumber(prefix: string, counter: number): string {
+  const paddedCounter = String(counter).padStart(4, '0');
+  return `${prefix}-${paddedCounter}`;
+}
+
+// Helper to get current timestamp for events
+function getEventTimestamp(): string {
+  const now = new Date();
+  return now.toISOString();
+}
+
+// Helper to create an event
+function createEvent(
+  type: QuoteEvent['type'],
+  doctorName: string
+): QuoteEvent {
+  return {
+    id: nanoid(),
+    timestamp: getEventTimestamp(),
+    type,
+    doctorName,
+  };
+}
+
 export function useQuotes() {
-  const { quotes, addQuote, updateQuote, deleteQuote, getQuote, getQuotesByPatient } = useApp();
-  const { settings } = useSettings();
+  const { quotes, addQuote, updateQuote, getQuote, getQuotesByPatient } = useApp();
+  const { settings, updateSettings } = useSettings();
 
-  const draftQuotes = useMemo(() => quotes.filter((q) => q.status === 'draft'), [quotes]);
+  // Filter out deleted quotes for display
+  const activeQuotes = useMemo(() => quotes.filter((q) => !q.isDeleted), [quotes]);
 
-  const finalQuotes = useMemo(() => quotes.filter((q) => q.status === 'final'), [quotes]);
+  // Status-based filters
+  const draftQuotes = useMemo(
+    () => activeQuotes.filter((q) => q.quoteStatus === 'draft'),
+    [activeQuotes]
+  );
 
-  const archivedQuotes = useMemo(() => quotes.filter((q) => q.status === 'archived'), [quotes]);
+  const inProgressQuotes = useMemo(
+    () => activeQuotes.filter((q) =>
+      q.quoteStatus === 'closed_pending' ||
+      q.quoteStatus === 'accepted_in_progress' ||
+      q.quoteStatus === 'started'
+    ),
+    [activeQuotes]
+  );
 
+  const completedQuotes = useMemo(
+    () => activeQuotes.filter((q) => q.quoteStatus === 'completed'),
+    [activeQuotes]
+  );
+
+  const rejectedQuotes = useMemo(
+    () => activeQuotes.filter((q) => q.quoteStatus === 'rejected'),
+    [activeQuotes]
+  );
+
+  // Get doctor name by ID
+  const getDoctorName = useCallback((doctorId: string): string => {
+    const doctor = settings.doctors.find((d) => d.id === doctorId);
+    return doctor?.name || 'Ismeretlen orvos';
+  }, [settings.doctors]);
+
+  // Create a new quote
   const createQuote = useCallback(
-    (patientId: string): Quote => {
+    (patientId: string, patientName?: string): Quote => {
       const now = getCurrentDateString();
+      const defaultDoctorId = settings.doctors.length > 0 ? settings.doctors[0].id : '';
+      const defaultQuoteName = patientName ? `${patientName} árajánlata` : 'Új árajánlat';
+      const doctorName = getDoctorName(defaultDoctorId);
+
+      // Increment counter and generate quote number
+      const newCounter = settings.quote.counter + 1;
+      const quoteNumber = generateQuoteNumber(settings.quote.prefix, newCounter);
+
+      // Update settings with new counter
+      updateSettings({
+        ...settings,
+        quote: {
+          ...settings.quote,
+          counter: newCounter,
+        },
+      });
+
       const quote: Quote = {
         quoteId: nanoid(),
+        quoteNumber,
         patientId,
+        doctorId: defaultDoctorId,
+        quoteName: defaultQuoteName,
         createdAt: now,
-        updatedAt: now,
+        lastStatusChangeAt: now,
         validUntil: addDays(now, settings.defaultValidityDays),
-        status: 'draft',
+        quoteStatus: 'draft',
         currency: 'HUF',
         items: [],
         globalDiscountType: 'percent',
@@ -32,11 +106,12 @@ export function useQuotes() {
         commentToPatient: '',
         internalNotes: '',
         expectedTreatments: 1,
+        events: [createEvent('created', doctorName)],
       };
       addQuote(quote);
       return quote;
     },
-    [addQuote, settings.defaultValidityDays]
+    [addQuote, settings, updateSettings, getDoctorName]
   );
 
   const createQuoteItem = useCallback(
@@ -65,7 +140,6 @@ export function useQuotes() {
       const updated: Quote = {
         ...existing,
         items: [...existing.items, newItem],
-        updatedAt: getCurrentDateString(),
       };
       updateQuote(updated);
       return updated;
@@ -85,7 +159,6 @@ export function useQuotes() {
       const updated: Quote = {
         ...existing,
         items,
-        updatedAt: getCurrentDateString(),
       };
       updateQuote(updated);
       return updated;
@@ -101,7 +174,6 @@ export function useQuotes() {
       const updated: Quote = {
         ...existing,
         items: existing.items.filter((item) => item.lineId !== lineId),
-        updatedAt: getCurrentDateString(),
       };
       updateQuote(updated);
       return updated;
@@ -121,7 +193,6 @@ export function useQuotes() {
       const updated: Quote = {
         ...existing,
         items,
-        updatedAt: getCurrentDateString(),
       };
       updateQuote(updated);
       return updated;
@@ -130,14 +201,13 @@ export function useQuotes() {
   );
 
   const editQuote = useCallback(
-    (quoteId: string, data: Partial<Omit<Quote, 'quoteId' | 'createdAt' | 'items'>>): Quote | undefined => {
+    (quoteId: string, data: Partial<Omit<Quote, 'quoteId' | 'quoteNumber' | 'createdAt' | 'items' | 'events'>>): Quote | undefined => {
       const existing = getQuote(quoteId);
       if (!existing) return undefined;
 
       const updated: Quote = {
         ...existing,
         ...data,
-        updatedAt: getCurrentDateString(),
       };
       updateQuote(updated);
       return updated;
@@ -145,26 +215,175 @@ export function useQuotes() {
     [getQuote, updateQuote]
   );
 
-  const setQuoteStatus = useCallback(
-    (quoteId: string, status: QuoteStatus): Quote | undefined => {
-      return editQuote(quoteId, { status });
+  // Status transition helper
+  const changeStatus = useCallback(
+    (quoteId: string, newStatus: QuoteStatus, eventType: QuoteEvent['type']): Quote | undefined => {
+      const existing = getQuote(quoteId);
+      if (!existing) return undefined;
+
+      const now = getCurrentDateString();
+      const doctorName = getDoctorName(existing.doctorId);
+
+      const updated: Quote = {
+        ...existing,
+        quoteStatus: newStatus,
+        lastStatusChangeAt: now,
+        events: [...existing.events, createEvent(eventType, doctorName)],
+      };
+      updateQuote(updated);
+      return updated;
     },
-    [editQuote]
+    [getQuote, updateQuote, getDoctorName]
   );
 
-  const finalizeQuote = useCallback(
+  // Status transitions
+  const closeQuote = useCallback(
     (quoteId: string): Quote | undefined => {
-      return setQuoteStatus(quoteId, 'final');
+      const existing = getQuote(quoteId);
+      if (!existing || existing.quoteStatus !== 'draft') return undefined;
+      return changeStatus(quoteId, 'closed_pending', 'closed');
     },
-    [setQuoteStatus]
+    [getQuote, changeStatus]
   );
 
-  const archiveQuote = useCallback(
+  const reopenQuote = useCallback(
     (quoteId: string): Quote | undefined => {
-      return setQuoteStatus(quoteId, 'archived');
+      const existing = getQuote(quoteId);
+      if (!existing || existing.quoteStatus !== 'closed_pending') return undefined;
+      return changeStatus(quoteId, 'draft', 'reopened');
     },
-    [setQuoteStatus]
+    [getQuote, changeStatus]
   );
+
+  const acceptQuote = useCallback(
+    (quoteId: string): Quote | undefined => {
+      const existing = getQuote(quoteId);
+      if (!existing || existing.quoteStatus !== 'closed_pending') return undefined;
+      return changeStatus(quoteId, 'accepted_in_progress', 'accepted');
+    },
+    [getQuote, changeStatus]
+  );
+
+  const rejectQuote = useCallback(
+    (quoteId: string): Quote | undefined => {
+      const existing = getQuote(quoteId);
+      if (!existing || existing.quoteStatus !== 'closed_pending') return undefined;
+      return changeStatus(quoteId, 'rejected', 'rejected');
+    },
+    [getQuote, changeStatus]
+  );
+
+  const revokeAcceptance = useCallback(
+    (quoteId: string): Quote | undefined => {
+      const existing = getQuote(quoteId);
+      if (!existing || existing.quoteStatus !== 'accepted_in_progress') return undefined;
+      return changeStatus(quoteId, 'closed_pending', 'acceptance_revoked');
+    },
+    [getQuote, changeStatus]
+  );
+
+  const revokeRejection = useCallback(
+    (quoteId: string): Quote | undefined => {
+      const existing = getQuote(quoteId);
+      if (!existing || existing.quoteStatus !== 'rejected') return undefined;
+      return changeStatus(quoteId, 'closed_pending', 'rejection_revoked');
+    },
+    [getQuote, changeStatus]
+  );
+
+  const startTreatment = useCallback(
+    (quoteId: string): Quote | undefined => {
+      const existing = getQuote(quoteId);
+      if (!existing || existing.quoteStatus !== 'accepted_in_progress') return undefined;
+      return changeStatus(quoteId, 'started', 'started');
+    },
+    [getQuote, changeStatus]
+  );
+
+  const revokeStart = useCallback(
+    (quoteId: string): Quote | undefined => {
+      const existing = getQuote(quoteId);
+      if (!existing || existing.quoteStatus !== 'started') return undefined;
+      return changeStatus(quoteId, 'accepted_in_progress', 'start_revoked');
+    },
+    [getQuote, changeStatus]
+  );
+
+  const completeTreatment = useCallback(
+    (quoteId: string): Quote | undefined => {
+      const existing = getQuote(quoteId);
+      if (!existing || existing.quoteStatus !== 'started') return undefined;
+      return changeStatus(quoteId, 'completed', 'completed');
+    },
+    [getQuote, changeStatus]
+  );
+
+  const reopenTreatment = useCallback(
+    (quoteId: string): Quote | undefined => {
+      const existing = getQuote(quoteId);
+      if (!existing || existing.quoteStatus !== 'completed') return undefined;
+      return changeStatus(quoteId, 'started', 'completion_revoked');
+    },
+    [getQuote, changeStatus]
+  );
+
+  // Soft delete (marks as deleted but keeps the record)
+  const deleteQuote = useCallback(
+    (quoteId: string): boolean => {
+      const existing = getQuote(quoteId);
+      if (!existing) return false;
+
+      // Cannot delete if accepted, started, or completed
+      if (
+        existing.quoteStatus === 'accepted_in_progress' ||
+        existing.quoteStatus === 'started' ||
+        existing.quoteStatus === 'completed'
+      ) {
+        return false;
+      }
+
+      const now = getCurrentDateString();
+      const doctorName = getDoctorName(existing.doctorId);
+
+      const updated: Quote = {
+        ...existing,
+        isDeleted: true,
+        lastStatusChangeAt: now,
+        events: [...existing.events, createEvent('deleted', doctorName)],
+      };
+      updateQuote(updated);
+
+      // Increment deleted count
+      updateSettings({
+        ...settings,
+        quote: {
+          ...settings.quote,
+          deletedCount: settings.quote.deletedCount + 1,
+        },
+      });
+
+      return true;
+    },
+    [getQuote, updateQuote, getDoctorName, settings, updateSettings]
+  );
+
+  // Check if quote can be deleted
+  const canDeleteQuote = useCallback((quoteId: string): boolean => {
+    const existing = getQuote(quoteId);
+    if (!existing) return false;
+    return (
+      existing.quoteStatus !== 'accepted_in_progress' &&
+      existing.quoteStatus !== 'started' &&
+      existing.quoteStatus !== 'completed'
+    );
+  }, [getQuote]);
+
+  // Check if quote can be reopened (lezárás visszavonható)
+  const canReopenQuote = useCallback((quoteId: string): boolean => {
+    const existing = getQuote(quoteId);
+    if (!existing) return false;
+    return existing.quoteStatus === 'closed_pending';
+  }, [getQuote]);
 
   const duplicateQuote = useCallback(
     (quoteId: string): Quote | undefined => {
@@ -172,22 +391,41 @@ export function useQuotes() {
       if (!existing) return undefined;
 
       const now = getCurrentDateString();
+      const doctorName = getDoctorName(existing.doctorId);
+
+      // Increment counter and generate quote number
+      const newCounter = settings.quote.counter + 1;
+      const quoteNumber = generateQuoteNumber(settings.quote.prefix, newCounter);
+
+      // Update settings with new counter
+      updateSettings({
+        ...settings,
+        quote: {
+          ...settings.quote,
+          counter: newCounter,
+        },
+      });
+
       const duplicate: Quote = {
         ...existing,
         quoteId: nanoid(),
+        quoteNumber,
+        quoteName: `${existing.quoteName} (másolat)`,
         createdAt: now,
-        updatedAt: now,
+        lastStatusChangeAt: now,
         validUntil: addDays(now, settings.defaultValidityDays),
-        status: 'draft',
+        quoteStatus: 'draft',
+        isDeleted: false,
         items: existing.items.map((item) => ({
           ...item,
           lineId: nanoid(),
         })),
+        events: [createEvent('created', doctorName)],
       };
       addQuote(duplicate);
       return duplicate;
     },
-    [getQuote, addQuote, settings.defaultValidityDays]
+    [getQuote, addQuote, settings, updateSettings, getDoctorName]
   );
 
   const getQuoteTotals = useCallback((quoteId: string) => {
@@ -196,11 +434,33 @@ export function useQuotes() {
     return calculateQuoteTotals(quote);
   }, [getQuote]);
 
+  // Statistics for settings page
+  const getQuoteStatistics = useCallback(() => {
+    const allQuotes = quotes; // Include deleted for total count
+    const active = quotes.filter((q) => !q.isDeleted);
+
+    return {
+      total: allQuotes.length,
+      deleted: settings.quote.deletedCount,
+      closed: active.filter((q) =>
+        q.quoteStatus !== 'draft' && q.events.some((e) => e.type === 'closed')
+      ).length,
+      acceptedInProgress: active.filter((q) => q.quoteStatus === 'accepted_in_progress').length,
+      started: active.filter((q) => q.quoteStatus === 'started').length,
+      completed: active.filter((q) => q.quoteStatus === 'completed').length,
+      rejected: active.filter((q) => q.quoteStatus === 'rejected').length,
+      draft: active.filter((q) => q.quoteStatus === 'draft').length,
+      closedPending: active.filter((q) => q.quoteStatus === 'closed_pending').length,
+    };
+  }, [quotes, settings.quote.deletedCount]);
+
   return {
-    quotes,
+    quotes: activeQuotes,
+    allQuotes: quotes,
     draftQuotes,
-    finalQuotes,
-    archivedQuotes,
+    inProgressQuotes,
+    completedQuotes,
+    rejectedQuotes,
     getQuote,
     getQuotesByPatient,
     createQuote,
@@ -211,10 +471,23 @@ export function useQuotes() {
     reorderQuoteItems,
     editQuote,
     deleteQuote,
-    setQuoteStatus,
-    finalizeQuote,
-    archiveQuote,
+    canDeleteQuote,
+    canReopenQuote,
+    // Status transitions
+    closeQuote,
+    reopenQuote,
+    acceptQuote,
+    rejectQuote,
+    revokeAcceptance,
+    revokeRejection,
+    startTreatment,
+    revokeStart,
+    completeTreatment,
+    reopenTreatment,
+    // Other
     duplicateQuote,
     getQuoteTotals,
+    getQuoteStatistics,
+    getDoctorName,
   };
 }

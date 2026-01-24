@@ -1,7 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useCatalog } from '../hooks';
-import { CatalogItem, CatalogItemFormData, CatalogCategory, CATALOG_CATEGORIES } from '../types';
+import {
+  CatalogItem,
+  CatalogItemFormData,
+  CatalogCategory,
+  CatalogUnit,
+  CATALOG_CATEGORIES,
+  CATALOG_UNITS,
+} from '../types';
 import {
   Button,
   Card,
@@ -16,9 +23,22 @@ import {
 } from '../components/common';
 import { formatCurrency } from '../utils';
 
+const CATEGORY_CODE_PREFIX: Record<CatalogCategory, string> = {
+  Diagnosztika: 'DIAG',
+  Parodontológia: 'PARO',
+  Konzerváló: 'KONZ',
+  Endodoncia: 'ENDO',
+  Szájsebészet: 'SZAJ',
+  Implantáció: 'IMPL',
+  Protetika: 'PROT',
+  Gyerefogászat: 'GYER',
+  Fogszabályozás: 'SZAB',
+};
+
 export function CatalogPage() {
   const { t } = useSettings();
   const {
+    catalog,
     activeItems,
     inactiveItems,
     createCatalogItem,
@@ -36,6 +56,9 @@ export function CatalogPage() {
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [resetConfirm, setResetConfirm] = useState(false);
+  const [inlineItems, setInlineItems] = useState<Partial<Record<CatalogCategory, CatalogItemFormData>>>(
+    {}
+  );
 
   const filteredItems = useMemo(() => {
     let items = searchCatalog(
@@ -83,6 +106,89 @@ export function CatalogPage() {
     });
     return groups;
   }, [filteredItems]);
+
+  const getNextCatalogCode = (category: CatalogCategory, items: CatalogItem[] = []) => {
+    const prefix = CATEGORY_CODE_PREFIX[category] || category.slice(0, 4).toUpperCase();
+    let maxNumber = 0;
+    items.forEach((item) => {
+      const match = item.catalogCode.match(/(\d+)$/);
+      if (match) {
+        const value = parseInt(match[1], 10);
+        if (value > maxNumber) {
+          maxNumber = value;
+        }
+      }
+    });
+    const nextNumber = maxNumber + 1;
+    return `${prefix}${String(nextNumber).padStart(2, '0')}`;
+  };
+
+  const startInlineItem = (category: CatalogCategory) => {
+    setInlineItems((prev) => {
+      if (prev[category]) return prev;
+      const itemsForCategory = catalog.filter((item) => item.catalogCategory === category);
+      const nextCode = getNextCatalogCode(category, itemsForCategory);
+      return {
+        ...prev,
+        [category]: {
+          catalogCode: nextCode,
+          catalogName: '',
+          catalogUnit: 'alkalom',
+          catalogPrice: 0,
+          catalogPriceCurrency: 'HUF',
+          catalogVatRate: 0,
+          catalogTechnicalPrice: 0,
+          catalogCategory: category,
+          hasTechnicalPrice: false,
+          isFullMouth: false,
+          isArch: false,
+          isActive: true,
+        },
+      };
+    });
+  };
+
+  const updateInlineItem = (category: CatalogCategory, updates: Partial<CatalogItemFormData>) => {
+    setInlineItems((prev) => {
+      const item = prev[category];
+      if (!item) return prev;
+      const nextItem: CatalogItemFormData = {
+        ...item,
+        ...updates,
+      };
+
+      if (updates.catalogTechnicalPrice !== undefined) {
+        const technicalPrice = Number(updates.catalogTechnicalPrice) || 0;
+        nextItem.catalogTechnicalPrice = technicalPrice;
+        nextItem.hasTechnicalPrice = technicalPrice > 0;
+      }
+
+      return {
+        ...prev,
+        [category]: nextItem,
+      };
+    });
+  };
+
+  const cancelInlineItem = (category: CatalogCategory) => {
+    setInlineItems((prev) => {
+      const updated = { ...prev };
+      delete updated[category];
+      return updated;
+    });
+  };
+
+  const saveInlineItem = (category: CatalogCategory) => {
+    const item = inlineItems[category];
+    if (!item) return;
+
+    if (!item.catalogName.trim() || !item.catalogUnit.trim()) {
+      return;
+    }
+
+    createCatalogItem(item);
+    cancelInlineItem(category);
+  };
 
   return (
     <div className="space-y-6">
@@ -156,10 +262,30 @@ export function CatalogPage() {
         </Card>
       ) : (
         <div className="space-y-6">
-          {Object.entries(groupedItems).map(([category, items]) => (
-            <Card key={category}>
-              <CardContent>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">{category}</h3>
+          {Object.entries(groupedItems).map(([category, items]) => {
+            const catalogCategory = category as CatalogCategory;
+            const inlineItem = inlineItems[catalogCategory];
+            const isInlineValid = inlineItem
+              ? inlineItem.catalogName.trim().length > 0 &&
+                inlineItem.catalogUnit.trim().length > 0 &&
+                inlineItem.catalogPrice >= 0 &&
+                inlineItem.catalogTechnicalPrice >= 0
+              : false;
+
+            return (
+              <Card key={category}>
+                <CardContent>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">{category}</h3>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => startInlineItem(catalogCategory)}
+                      disabled={Boolean(inlineItem)}
+                    >
+                      {t.common.add}
+                    </Button>
+                  </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -168,6 +294,7 @@ export function CatalogPage() {
                         <th className="pb-3 font-medium">{t.catalog.name}</th>
                         <th className="pb-3 font-medium">{t.catalog.unit}</th>
                         <th className="pb-3 font-medium text-right">{t.catalog.price}</th>
+                        <th className="pb-3 font-medium text-right">{t.catalog.technicalPrice}</th>
                         <th className="pb-3 font-medium text-right">{t.common.actions}</th>
                       </tr>
                     </thead>
@@ -183,6 +310,9 @@ export function CatalogPage() {
                           <td className="py-3 text-gray-500">{item.catalogUnit}</td>
                           <td className="py-3 text-right font-medium">
                             {formatCurrency(item.catalogPrice)}
+                          </td>
+                          <td className="py-3 text-right font-medium">
+                            {item.hasTechnicalPrice ? formatCurrency(item.catalogTechnicalPrice) : '-'}
                           </td>
                           <td className="py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
@@ -212,12 +342,94 @@ export function CatalogPage() {
                           </td>
                         </tr>
                       ))}
+                      {inlineItem && (
+                        <tr className="border-b last:border-0 bg-gray-50">
+                          <td className="py-3 font-mono text-sm">{inlineItem.catalogCode}</td>
+                          <td className="py-3">
+                            <input
+                              type="text"
+                              value={inlineItem.catalogName}
+                              onChange={(e) =>
+                                updateInlineItem(catalogCategory, { catalogName: e.target.value })
+                              }
+                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-dental-500 focus:ring-dental-500"
+                              placeholder="Megnevezés"
+                            />
+                          </td>
+                          <td className="py-3">
+                            <select
+                              value={inlineItem.catalogUnit}
+                              onChange={(e) =>
+                                updateInlineItem(catalogCategory, {
+                                  catalogUnit: e.target.value as CatalogItemFormData['catalogUnit'],
+                                })
+                              }
+                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-dental-500 focus:ring-dental-500"
+                            >
+                              {CATALOG_UNITS.map((unit) => (
+                                <option key={unit} value={unit}>
+                                  {unit}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="py-3 text-right">
+                            <input
+                              type="number"
+                              min="0"
+                              value={inlineItem.catalogPrice}
+                              onChange={(e) =>
+                                updateInlineItem(catalogCategory, {
+                                  catalogPrice: Number(e.target.value) || 0,
+                                })
+                              }
+                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-right focus:border-dental-500 focus:ring-dental-500"
+                              placeholder="Ár"
+                            />
+                          </td>
+                          <td className="py-3 text-right">
+                            <input
+                              type="number"
+                              min="0"
+                              value={inlineItem.catalogTechnicalPrice}
+                              onChange={(e) =>
+                                updateInlineItem(catalogCategory, {
+                                  catalogTechnicalPrice: Number(e.target.value) || 0,
+                                })
+                              }
+                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-right focus:border-dental-500 focus:ring-dental-500"
+                              placeholder={t.catalog.technicalPrice}
+                            />
+                          </td>
+                          <td className="py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="success"
+                                disabled={!isInlineValid}
+                                onClick={() => saveInlineItem(catalogCategory)}
+                              >
+                                Rögzítés
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => cancelInlineItem(catalogCategory)}
+                              >
+                                Törlés
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
               </CardContent>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -283,7 +495,14 @@ function CatalogItemFormModal({
     catalogPrice: item?.catalogPrice || 0,
     catalogPriceCurrency: item?.catalogPriceCurrency || 'HUF',
     catalogVatRate: item?.catalogVatRate || 0,
-    catalogCategory: item?.catalogCategory || 'Egyéb',
+    catalogTechnicalPrice: item?.catalogTechnicalPrice || 0,
+    catalogCategory: item?.catalogCategory || 'Diagnosztika',
+    hasTechnicalPrice:
+      item?.catalogTechnicalPrice !== undefined
+        ? (item.catalogTechnicalPrice ?? 0) > 0
+        : item?.hasTechnicalPrice ?? false,
+    isFullMouth: item?.isFullMouth ?? false,
+    isArch: item?.isArch ?? false,
     isActive: item?.isActive ?? true,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -295,14 +514,19 @@ function CatalogItemFormModal({
     if (!formData.catalogCode.trim()) newErrors.catalogCode = t.validation.required;
     if (!formData.catalogName.trim()) newErrors.catalogName = t.validation.required;
     if (!formData.catalogUnit.trim()) newErrors.catalogUnit = t.validation.required;
-    if (formData.catalogPrice < 0) newErrors.catalogPrice = 'Az ár nem lehet negatív';
+    if (formData.catalogPrice < 0) newErrors.catalogPrice = t.catalog.priceNegative;
+    if (formData.catalogTechnicalPrice < 0)
+      newErrors.catalogTechnicalPrice = t.catalog.technicalPriceNegative;
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
-    onSubmit(formData);
+    onSubmit({
+      ...formData,
+      hasTechnicalPrice: formData.catalogTechnicalPrice > 0,
+    });
     onClose();
   };
 
@@ -342,14 +566,6 @@ function CatalogItemFormModal({
 
         <div className="grid grid-cols-3 gap-4">
           <Input
-            label={t.catalog.unit}
-            value={formData.catalogUnit}
-            onChange={(e) => setFormData({ ...formData, catalogUnit: e.target.value })}
-            error={errors.catalogUnit}
-            required
-            placeholder="pl. alkalom, fog"
-          />
-          <Input
             label={t.catalog.price}
             type="number"
             value={formData.catalogPrice}
@@ -374,6 +590,54 @@ function CatalogItemFormModal({
               { value: 'EUR', label: 'EUR' },
             ]}
           />
+          <Select
+            label={t.catalog.unit}
+            value={formData.catalogUnit}
+            onChange={(e) =>
+              setFormData({ ...formData, catalogUnit: e.target.value as CatalogUnit })
+            }
+            options={CATALOG_UNITS.map((unit) => ({ value: unit, label: unit }))}
+            error={errors.catalogUnit}
+            required
+          />
+        </div>
+
+        <Input
+          label={t.catalog.technicalPrice}
+          type="number"
+          value={formData.catalogTechnicalPrice}
+          onChange={(e) => {
+            const value = parseFloat(e.target.value) || 0;
+            setFormData({
+              ...formData,
+              catalogTechnicalPrice: value,
+              hasTechnicalPrice: value > 0,
+            });
+          }}
+          error={errors.catalogTechnicalPrice}
+          min={0}
+          placeholder="0"
+        />
+
+        <div className="grid grid-cols-2 gap-4">
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={formData.isFullMouth}
+              onChange={(e) => setFormData({ ...formData, isFullMouth: e.target.checked })}
+              className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
+            />
+            {t.catalog.fullMouth}
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={formData.isArch}
+              onChange={(e) => setFormData({ ...formData, isArch: e.target.checked })}
+              className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
+            />
+            {t.catalog.arch}
+          </label>
         </div>
 
         <div className="flex items-center gap-2">
