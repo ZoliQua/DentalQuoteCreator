@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Patient, CatalogItem, Quote } from '../types';
+import { Patient, CatalogItem, Quote, DentalStatusSnapshot } from '../types';
 import { storage } from '../repositories';
 import { defaultCatalog } from '../data/defaultCatalog';
 
@@ -31,6 +31,13 @@ interface AppContextType {
   exportData: () => string;
   importData: (data: string) => boolean;
   refreshData: () => void;
+
+  // Dental status snapshots
+  dentalStatusSnapshots: DentalStatusSnapshot[];
+  getDentalStatusSnapshots: (patientId: string) => DentalStatusSnapshot[];
+  getLatestDentalStatusSnapshot: (patientId: string) => DentalStatusSnapshot | undefined;
+  createDentalStatusSnapshot: (snapshot: DentalStatusSnapshot) => void;
+  updateDentalStatusSnapshot: (snapshot: DentalStatusSnapshot) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -39,12 +46,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [dentalStatusSnapshots, setDentalStatusSnapshots] = useState<DentalStatusSnapshot[]>([]);
 
   // Load data on mount
   useEffect(() => {
     setPatients(storage.getPatients());
     setCatalog(storage.getCatalog());
     setQuotes(storage.getQuotes());
+    setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
   }, []);
 
   // Listen for storage changes (for multi-tab support)
@@ -53,6 +62,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setPatients(storage.getPatients());
       setCatalog(storage.getCatalog());
       setQuotes(storage.getQuotes());
+      setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -133,6 +143,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [quotes]
   );
 
+  // Dental status snapshots
+  const getDentalStatusSnapshots = useCallback(
+    (patientId: string) => {
+      const allSnapshots = dentalStatusSnapshots.length
+        ? dentalStatusSnapshots
+        : storage.getDentalStatusSnapshots(patientId);
+      return patientId ? allSnapshots.filter((s) => s.patientId === patientId) : allSnapshots;
+    },
+    [dentalStatusSnapshots]
+  );
+
+  const getLatestDentalStatusSnapshot = useCallback(
+    (patientId: string) => {
+      const snapshots = getDentalStatusSnapshots(patientId);
+      return snapshots
+        .slice()
+        .sort((a, b) => new Date(b.takenAt).getTime() - new Date(a.takenAt).getTime())[0];
+    },
+    [getDentalStatusSnapshots]
+  );
+
+  const createDentalStatusSnapshot = useCallback((snapshot: DentalStatusSnapshot) => {
+    storage.createDentalStatusSnapshot(snapshot);
+    setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
+  }, []);
+
+  const updateDentalStatusSnapshot = useCallback((snapshot: DentalStatusSnapshot) => {
+    storage.updateDentalStatusSnapshot(snapshot);
+    setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
+  }, []);
+
   // Data management
   const exportData = useCallback(() => storage.exportAll(), []);
 
@@ -142,6 +183,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setPatients(storage.getPatients());
       setCatalog(storage.getCatalog());
       setQuotes(storage.getQuotes());
+      setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
     }
     return success;
   }, []);
@@ -150,6 +192,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPatients(storage.getPatients());
     setCatalog(storage.getCatalog());
     setQuotes(storage.getQuotes());
+    setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
   }, []);
 
   return (
@@ -172,6 +215,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteQuote,
         getQuote,
         getQuotesByPatient,
+        dentalStatusSnapshots,
+        getDentalStatusSnapshots,
+        getLatestDentalStatusSnapshot,
+        createDentalStatusSnapshot,
+        updateDentalStatusSnapshot,
         exportData,
         importData,
         refreshData,

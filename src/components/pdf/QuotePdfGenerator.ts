@@ -78,8 +78,8 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text(toPdfText(`Kezelőorvos:`), margin, yPos);
-    let marginDoctorName = margin + 30;
-    let yPosDoctorName = yPos;
+    const marginDoctorName = margin + 30;
+    const yPosDoctorName = yPos;
     doc.text(toPdfText(doctorName || ''), marginDoctorName, yPosDoctorName);
     yPos += 4;
 
