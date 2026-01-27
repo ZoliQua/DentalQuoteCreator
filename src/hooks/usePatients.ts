@@ -1,11 +1,18 @@
 import { useMemo, useCallback } from 'react';
 import { nanoid } from 'nanoid';
 import { useApp } from '../context/AppContext';
-import { Patient, PatientFormData } from '../types';
-import { getCurrentDateString } from '../utils';
+import { Patient, PatientFormData, DentalStatusSnapshot } from '../types';
+import { createHealthyTeethRecord, getCurrentDateString } from '../utils';
 
 export function usePatients() {
-  const { patients, addPatient, updatePatient, deletePatient, getPatient } = useApp();
+  const {
+    patients,
+    addPatient,
+    updatePatient,
+    deletePatient,
+    getPatient,
+    createDentalStatusSnapshot,
+  } = useApp();
 
   const activePatients = useMemo(
     () => patients.filter((p) => !p.isArchived),
@@ -28,9 +35,17 @@ export function usePatients() {
         isArchived: false,
       };
       addPatient(patient);
+      const snapshot: DentalStatusSnapshot = {
+        snapshotId: nanoid(),
+        patientId: patient.patientId,
+        takenAt: now,
+        note: '',
+        teeth: createHealthyTeethRecord(now),
+      };
+      createDentalStatusSnapshot(snapshot);
       return patient;
     },
-    [addPatient]
+    [addPatient, createDentalStatusSnapshot]
   );
 
   const editPatient = useCallback(
@@ -92,9 +107,17 @@ export function usePatients() {
         isArchived: false,
       };
       addPatient(duplicate);
+      const snapshot: DentalStatusSnapshot = {
+        snapshotId: nanoid(),
+        patientId: duplicate.patientId,
+        takenAt: now,
+        note: '',
+        teeth: createHealthyTeethRecord(now),
+      };
+      createDentalStatusSnapshot(snapshot);
       return duplicate;
     },
-    [getPatient, addPatient]
+    [getPatient, addPatient, createDentalStatusSnapshot]
   );
 
   const searchPatients = useCallback(

@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
-import { usePatients, useQuotes } from '../hooks';
+import { useDentalStatus, usePatients, useQuotes } from '../hooks';
 import {
   Button,
   Card,
@@ -10,10 +10,15 @@ import {
   EmptyState,
   EmptyQuoteIcon,
   ConfirmModal,
+  Select,
+  TextArea,
 } from '../components/common';
-import { formatDate, formatCurrency, formatPatientName, formatQuoteId } from '../utils';
+import { createHealthyTeethRecord, formatDate, formatCurrency, formatPatientName, formatQuoteId, getCurrentDateString } from '../utils';
 import { calculateQuoteTotals } from '../utils/calculations';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { DentalStatusSnapshot, FDITooth, ToothStatus } from '../types';
+import { Odontogram } from '../components/odontogram/Odontogram';
+import { ToothStatusEditor } from '../components/odontogram/ToothStatusEditor';
 
 export function PatientDetailPage() {
   const { patientId } = useParams<{ patientId: string }>();
@@ -21,9 +26,19 @@ export function PatientDetailPage() {
   const { t } = useSettings();
   const { getPatient, duplicatePatient, archivePatient, deletePatient } = usePatients();
   const { getQuotesByPatient, createQuote, deleteQuote, duplicateQuote } = useQuotes();
+  const {
+    snapshots,
+    latestSnapshot,
+    createSnapshot,
+    saveSnapshot,
+    updateTooth,
+  } = useDentalStatus(patientId);
 
   const [deleteQuoteConfirm, setDeleteQuoteConfirm] = useState<string | null>(null);
   const [deletePatientConfirm, setDeletePatientConfirm] = useState(false);
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
+  const [draftSnapshot, setDraftSnapshot] = useState<DentalStatusSnapshot | null>(null);
+  const [selectedTooth, setSelectedTooth] = useState<FDITooth | undefined>(undefined);
 
   const patient = patientId ? getPatient(patientId) : undefined;
   const quotes = patientId ? getQuotesByPatient(patientId) : [];
@@ -77,6 +92,78 @@ export function PatientDetailPage() {
   const sortedQuotes = [...activeQuotes].sort(
     (a, b) => new Date(b.lastStatusChangeAt).getTime() - new Date(a.lastStatusChangeAt).getTime()
   );
+
+  const sortedSnapshots = useMemo(() => {
+    return [...snapshots].sort((a, b) => new Date(b.takenAt).getTime() - new Date(a.takenAt).getTime());
+  }, [snapshots]);
+
+  useEffect(() => {
+    if (!patientId || !patient || snapshots.length > 0) return;
+    const created = createSnapshot({ persist: true });
+    if (created) {
+      setSelectedSnapshotId(created.snapshotId);
+    }
+  }, [patientId, patient, snapshots.length, createSnapshot]);
+
+  useEffect(() => {
+    if (draftSnapshot || !latestSnapshot) return;
+    setSelectedSnapshotId((current) => current || latestSnapshot.snapshotId);
+  }, [draftSnapshot, latestSnapshot]);
+
+  const activeSnapshot = useMemo(() => {
+    if (draftSnapshot) return draftSnapshot;
+    if (selectedSnapshotId) {
+      return sortedSnapshots.find((snapshot) => snapshot.snapshotId === selectedSnapshotId);
+    }
+    return latestSnapshot;
+  }, [draftSnapshot, selectedSnapshotId, sortedSnapshots, latestSnapshot]);
+
+  const isEditingSnapshot = Boolean(draftSnapshot);
+  const fallbackTeeth = useMemo(() => createHealthyTeethRecord(getCurrentDateString()), []);
+
+  const handleStartSnapshot = (mode: 'copy' | 'clean') => {
+    const base = mode === 'copy' ? latestSnapshot : undefined;
+    const draft = createSnapshot({ base, persist: false });
+    if (draft) {
+      setDraftSnapshot(draft);
+      setSelectedSnapshotId(draft.snapshotId);
+      setSelectedTooth(undefined);
+    }
+  };
+
+  const handleSaveSnapshot = () => {
+    if (!draftSnapshot) return;
+    saveSnapshot(draftSnapshot);
+    setDraftSnapshot(null);
+    setSelectedSnapshotId(draftSnapshot.snapshotId);
+  };
+
+  const handleCancelSnapshot = () => {
+    setDraftSnapshot(null);
+    setSelectedTooth(undefined);
+    if (latestSnapshot) {
+      setSelectedSnapshotId(latestSnapshot.snapshotId);
+    }
+  };
+
+  const handleToothUpdate = (next: ToothStatus) => {
+    if (!draftSnapshot || !selectedTooth) return;
+    setDraftSnapshot(updateTooth(draftSnapshot, selectedTooth, next));
+  };
+
+  const handleSnapshotNoteChange = (value: string) => {
+    if (!draftSnapshot) return;
+    setDraftSnapshot({ ...draftSnapshot, note: value });
+  };
+
+  const snapshotSelectOptions = sortedSnapshots.map((snapshot) => {
+    const takenAt = new Date(snapshot.takenAt);
+    const timeLabel = takenAt.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
+    return {
+      value: snapshot.snapshotId,
+      label: `${formatDate(snapshot.takenAt, 'long')} ${timeLabel}`,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -280,6 +367,120 @@ export function PatientDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Dental Status */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Státusz</h2>
+              <p className="text-sm text-gray-500">
+                Legutóbbi státusz: {latestSnapshot ? formatDate(latestSnapshot.takenAt, 'long') : '—'}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => handleStartSnapshot('copy')}
+                disabled={!latestSnapshot || isEditingSnapshot}
+              >
+                Új státuszfelvétel
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => handleStartSnapshot('clean')}
+                disabled={isEditingSnapshot}
+              >
+                Tiszta státusz
+              </Button>
+              {isEditingSnapshot && (
+                <>
+                  <Button onClick={handleSaveSnapshot}>Mentés</Button>
+                  <Button variant="ghost" onClick={handleCancelSnapshot}>
+                    Mégse
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <Select
+              label="Korábbi státuszok"
+              options={snapshotSelectOptions.length > 0 ? snapshotSelectOptions : [{ value: '', label: 'Nincs mentett státusz' }]}
+              value={isEditingSnapshot ? '' : selectedSnapshotId || ''}
+              onChange={(event) => {
+                setSelectedSnapshotId(event.target.value || null);
+                setSelectedTooth(undefined);
+              }}
+              disabled={isEditingSnapshot || snapshotSelectOptions.length === 0}
+              className="w-72"
+            />
+            {isEditingSnapshot && (
+              <Badge variant="warning" size="sm">
+                Szerkesztés folyamatban
+              </Badge>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-4">
+              <Odontogram
+                teeth={activeSnapshot?.teeth || fallbackTeeth}
+                selectedTooth={selectedTooth}
+                onSelect={setSelectedTooth}
+              />
+              <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-rose-500" />
+                  Szuvas
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-sky-500" />
+                  Tömött
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-purple-500" />
+                  Gyökérkezelt
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  Korona
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-slate-400" />
+                  Implantátum
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  Protézis
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-gray-400" />
+                  Hiány
+                </span>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <ToothStatusEditor
+                toothId={selectedTooth}
+                status={selectedTooth && activeSnapshot ? activeSnapshot.teeth[selectedTooth] : undefined}
+                readOnly={!isEditingSnapshot}
+                onChange={handleToothUpdate}
+              />
+              <TextArea
+                label="Státusz megjegyzés"
+                value={activeSnapshot?.note || ''}
+                onChange={(event) => handleSnapshotNoteChange(event.target.value)}
+                rows={3}
+                disabled={!isEditingSnapshot}
+                placeholder="Opcionális megjegyzés a státuszhoz"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Delete Quote Confirmation */}
       <ConfirmModal
