@@ -1,4 +1,4 @@
-import { Patient, CatalogItem, Quote, Settings } from '../types';
+import { Patient, CatalogItem, Quote, Settings, DentalStatusSnapshot } from '../types';
 
 export interface StorageRepository {
   // Patients
@@ -25,6 +25,12 @@ export interface StorageRepository {
   getSettings(): Settings;
   saveSettings(settings: Settings): void;
 
+  // Dental status snapshots
+  getDentalStatusSnapshots(patientId: string): DentalStatusSnapshot[];
+  getLatestDentalStatusSnapshot(patientId: string): DentalStatusSnapshot | undefined;
+  createDentalStatusSnapshot(snapshot: DentalStatusSnapshot): void;
+  updateDentalStatusSnapshot(snapshot: DentalStatusSnapshot): void;
+
   // Export/Import
   exportAll(): string;
   importAll(data: string): boolean;
@@ -37,4 +43,5 @@ export interface ExportData {
   catalog: CatalogItem[];
   quotes: Quote[];
   settings: Settings;
+  dentalStatusSnapshots?: DentalStatusSnapshot[];
 }

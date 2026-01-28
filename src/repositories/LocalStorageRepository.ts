@@ -1,5 +1,14 @@
 import { nanoid } from 'nanoid';
-import { Patient, CatalogItem, Quote, Settings, CatalogCategory, CATALOG_CATEGORIES, CATALOG_UNITS } from '../types';
+import {
+  Patient,
+  CatalogItem,
+  Quote,
+  Settings,
+  CatalogCategory,
+  CATALOG_CATEGORIES,
+  CATALOG_UNITS,
+  DentalStatusSnapshot,
+} from '../types';
 import { StorageRepository, ExportData } from './StorageRepository';
 import { defaultCatalog } from '../data/defaultCatalog';
 import { defaultSettings } from '../data/defaultSettings';
@@ -9,6 +18,7 @@ const STORAGE_KEYS = {
   CATALOG: 'dental_quote_catalog',
   QUOTES: 'dental_quote_quotes',
   SETTINGS: 'dental_quote_settings',
+  DENTAL_STATUS: 'dental_quote_dental_status_snapshots',
 } as const;
 
 const DATA_VERSION = '1.0.0';
@@ -139,7 +149,7 @@ export class LocalStorageRepository implements StorageRepository {
         updatedAt?: string;
         acceptedAt?: string;
       }, index: number) => {
-        let migrated = { ...q };
+        const migrated = { ...q };
 
         // Migration: old status/acceptanceStatus to new quoteStatus
         if (q.status && !q.quoteStatus) {
@@ -292,6 +302,61 @@ export class LocalStorageRepository implements StorageRepository {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
   }
 
+  // Dental status snapshots
+  getDentalStatusSnapshots(patientId: string): DentalStatusSnapshot[] {
+    const data = localStorage.getItem(STORAGE_KEYS.DENTAL_STATUS);
+    if (!data) return [];
+    try {
+      const snapshots = JSON.parse(data) as DentalStatusSnapshot[];
+      if (!Array.isArray(snapshots)) return [];
+      return patientId ? snapshots.filter((s) => s.patientId === patientId) : snapshots;
+    } catch {
+      return [];
+    }
+  }
+
+  getLatestDentalStatusSnapshot(patientId: string): DentalStatusSnapshot | undefined {
+    const snapshots = this.getDentalStatusSnapshots(patientId);
+    return snapshots
+      .slice()
+      .sort((a, b) => new Date(b.takenAt).getTime() - new Date(a.takenAt).getTime())[0];
+  }
+
+  createDentalStatusSnapshot(snapshot: DentalStatusSnapshot): void {
+    const data = localStorage.getItem(STORAGE_KEYS.DENTAL_STATUS);
+    let snapshots: DentalStatusSnapshot[] = [];
+    if (data) {
+      try {
+        const parsed = JSON.parse(data) as DentalStatusSnapshot[];
+        snapshots = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        snapshots = [];
+      }
+    }
+    snapshots.push(snapshot);
+    localStorage.setItem(STORAGE_KEYS.DENTAL_STATUS, JSON.stringify(snapshots));
+  }
+
+  updateDentalStatusSnapshot(snapshot: DentalStatusSnapshot): void {
+    const data = localStorage.getItem(STORAGE_KEYS.DENTAL_STATUS);
+    let snapshots: DentalStatusSnapshot[] = [];
+    if (data) {
+      try {
+        const parsed = JSON.parse(data) as DentalStatusSnapshot[];
+        snapshots = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        snapshots = [];
+      }
+    }
+    const index = snapshots.findIndex((s) => s.snapshotId === snapshot.snapshotId);
+    if (index >= 0) {
+      snapshots[index] = snapshot;
+    } else {
+      snapshots.push(snapshot);
+    }
+    localStorage.setItem(STORAGE_KEYS.DENTAL_STATUS, JSON.stringify(snapshots));
+  }
+
   // Export/Import
   exportAll(): string {
     const exportData: ExportData = {
@@ -301,6 +366,16 @@ export class LocalStorageRepository implements StorageRepository {
       catalog: this.getCatalog(),
       quotes: this.getQuotes(),
       settings: this.getSettings(),
+      dentalStatusSnapshots: (() => {
+        const data = localStorage.getItem(STORAGE_KEYS.DENTAL_STATUS);
+        if (!data) return [];
+        try {
+          const snapshots = JSON.parse(data);
+          return Array.isArray(snapshots) ? snapshots : [];
+        } catch {
+          return [];
+        }
+      })(),
     };
     return JSON.stringify(exportData, null, 2);
   }
@@ -325,6 +400,10 @@ export class LocalStorageRepository implements StorageRepository {
       localStorage.setItem(STORAGE_KEYS.CATALOG, JSON.stringify(importData.catalog));
       localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(importData.quotes));
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(importData.settings));
+      localStorage.setItem(
+        STORAGE_KEYS.DENTAL_STATUS,
+        JSON.stringify(importData.dentalStatusSnapshots || [])
+      );
 
       return true;
     } catch {
