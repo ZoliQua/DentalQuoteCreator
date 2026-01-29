@@ -2,3 +2,4 @@ export * from './formatters';
 export * from './calculations';
 export * from './validators';
 export * from './catalogImportExport';
+export * from './dentalStatus';
