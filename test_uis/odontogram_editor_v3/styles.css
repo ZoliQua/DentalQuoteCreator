@@ -37,9 +37,19 @@ body{
   padding:8px 12px; border-radius:12px;
   cursor:pointer; font-weight:600;
 }
+.btn-sm{
+  padding:6px 10px;
+  font-size:12px;
+}
 .btn:hover{background:rgba(59,123,255,.18)}
 .btn-ghost{background:rgba(0,0,0,.04)}
 .btn-ghost:hover{background:rgba(0,0,0,.08)}
+.btn-danger{
+  background: rgba(217,69,69,.12);
+  border-color: rgba(217,69,69,.4);
+  color:#b83a3a;
+}
+.btn-danger:hover{background: rgba(217,69,69,.2)}
 .btn-toggle[aria-pressed="true"]{
   background: rgb(100 15 235 / 20%);
   border-color: rgba(18,185,129,.5);
@@ -97,6 +107,18 @@ select:focus{
   gap:4px;
   padding:10px;
 }
+.tooth-label-row{
+  display:contents;
+}
+.tooth-label-cell{
+  text-align:center;
+  font-size:11px;
+  color:rgba(30,42,58,.8);
+  padding:2px 0 4px;
+  font-weight:600;
+  cursor:pointer;
+}
+.tooth-label-cell:hover{color:rgba(30,42,58,1)}
 .tooth-tile{
   position:relative;
   border:1px solid var(--line);
@@ -107,26 +129,21 @@ select:focus{
   transition: transform .05s ease, border-color .12s ease, background .12s ease;
   min-height:100px;
 }
+.tooth-tile.occl-view{
+  min-height:78px;
+}
+.tooth-tile.placeholder{
+  cursor:default;
+  background: rgba(255,255,255,.3);
+}
+.tooth-tile.placeholder .tooth-svg svg{
+  opacity:0;
+}
 .tooth-tile:hover{background: rgba(59,123,255,.08)}
 .tooth-tile:active{transform: scale(.99)}
 .tooth-tile.active{
   border-color: rgba(59,123,255,.85);
   box-shadow: 0 0 0 3px rgba(59,123,255,.18) inset;
-}
-.tooth-num{
-  position:absolute; left:50%; top:8px;
-  font-size:11px; color:rgba(30,42,58,.8);
-  padding:3px 8px; border-radius:999px;
-  background: rgba(0,0,0,.04);
-  border:1px solid var(--line);
-  transform: translateX(-50%);
-  z-index: 3;
-  text-align:center;
-  min-width:36px;
-}
-.tooth-tile.lower-row .tooth-num{
-  top:auto;
-  bottom:8px;
 }
 .tooth-svg{
   width:100%;
@@ -136,6 +153,8 @@ select:focus{
   justify-content:center;
 }
 .tooth-svg svg{width:72px;height:122px; pointer-events:none}
+.tooth-tile.occl-view .tooth-svg{height:80px}
+.tooth-tile.occl-view .tooth-svg svg{width:64px;height:64px}
 .tooth-tile.tpl-14 .tooth-svg svg{width:68px;height:116px}
 .tooth-tile.tpl-11 .tooth-svg svg,
 .tooth-tile.tpl-13 .tooth-svg svg{width:60px;height:102px}
@@ -158,6 +177,10 @@ select:focus{
   flex-wrap:wrap;
   gap:6px;
   margin-top:8px;
+}
+.status-actions{
+  flex-wrap:wrap;
+  gap:6px;
 }
 .btn-icon{
   padding:6px 10px;
@@ -189,12 +212,39 @@ select:focus{
   padding:12px;
 }
 .card-title{font-weight:800; margin-bottom:8px}
+.card-title-row{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.card.collapsed .card-title{margin-bottom:0}
+.card.collapsed .card-body,
+.card.collapsed #statusCardBody{display:none}
+.icon-btn{
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.7);
+  color: var(--text);
+  border-radius:999px;
+  width:28px;
+  height:28px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  font-weight:700;
+  line-height:1;
+}
+.icon-btn .icon{width:16px;height:16px}
+.icon-btn:hover{background: rgba(59,123,255,.12)}
+.icon-btn-danger{
+  color:#d94545;
+  border-color: rgba(217,69,69,.4);
+  background: rgba(217,69,69,.08);
+}
+.icon-btn-danger:hover{background: rgba(217,69,69,.15)}
 .card-subtitle{font-weight:700; margin:6px 0}
 .hint{font-size:12px;color:var(--muted); margin:6px 0 10px}
 .row{display:flex; gap:10px; align-items:center; font-size:13px; padding:6px 2px}
 .contact-row{margin-bottom:6px}
-.bruxism-row{margin-top:6px}
+.bruxism-row{margin-top:6px; gap:8px}
 .fissure-row{margin-top:10px; justify-content:center; text-align:center}
+.bridge-pillar-row{margin-top:10px}
 .inline-checks{padding:0}
 .inline-checks label{display:flex; gap:10px; align-items:center; font-size:13px; padding:6px 10px; border-radius:12px; border:1px solid var(--line); background: rgba(0,0,0,.02); cursor:pointer}
 .inline-checks label:hover{background: rgba(59,123,255,.06)}

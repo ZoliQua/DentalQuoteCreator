@@ -16,11 +16,6 @@
       </div>
     </div>
     <div class="topbar-actions">
-      <button id="btnResetTooth" class="btn">Fog alaphelyzet</button>
-      <button id="btnResetAll" class="btn btn-ghost">Szájüreg alaphelyzet</button>
-      <button id="btnPrimaryDentition" class="btn btn-ghost">Tejfogazat</button>
-      <button id="btnMixedDentition" class="btn btn-ghost">Vegyes fogazat</button>
-      <button id="btnEdentulous" class="btn btn-toggle" aria-pressed="false">Fogatlan szájüreg</button>
       <button id="btnWisdomMissing" class="btn btn-toggle" aria-pressed="false">Bölcsesség hiány</button>
       <button id="btnBoneVisible" class="btn btn-toggle" aria-pressed="true">Csont látható</button>
     </div>
@@ -41,25 +36,73 @@
           <div class="panel-title">Vezérlők</div>
           <div class="panel-subtitle">Aktív fog: <span id="activeToothLabel" class="pill">—</span></div>
           <div class="panel-subtitle select-actions">
-            <button id="btnSelectAll" class="btn btn-ghost btn-icon" title="Összes fog">Összes fog</button>
+            <button id="btnSelectAll" class="btn btn-ghost btn-icon" title="Összes">Összes</button>
+            <button id="btnSelectAllPresent" class="btn btn-ghost btn-icon" title="Összes fog">Összes fog</button>
+            <button id="btnSelectAllMissing" class="btn btn-ghost btn-icon" title="Összes hiány">Összes hiány</button>
             <button id="btnSelectUpper" class="btn btn-ghost btn-icon" title="Felső">Felső</button>
+            <button id="btnSelectUpperFront" class="btn btn-ghost btn-icon" title="Felső 6 front">Felső 6 front</button>
             <button id="btnSelectLower" class="btn btn-ghost btn-icon" title="Alsó">Alsó</button>
-            <button id="btnSelectNone" class="btn btn-ghost btn-icon" title="Kijelölés törlése">Kijelölés törlése</button>
+            <button id="btnSelectLowerFront" class="btn btn-ghost btn-icon" title="Alsó 6 front">Alsó 6 front</button>
+            <button id="btnSelectNone" class="btn btn-ghost btn-icon btn-danger" title="Kijelölés törlése">Kijelölés törlése</button>
           </div>
         </div>
         <div id="warnings" class="warnings"></div>
       </div>
 
       <div class="panel-body">
+        <section class="card" id="statusCard">
+          <div class="card-title card-title-row">
+            <span>Státuszok</span>
+            <button id="btnToggleStatusCard" class="icon-btn" title="Státuszok összecsukása" aria-label="Státuszok összecsukása">
+              <span class="toggle-icon" aria-hidden="true">−</span>
+            </button>
+          </div>
+          <div class="row status-actions" id="statusCardBody">
+            <button id="btnResetAll" class="btn btn-ghost btn-sm">Szájüreg alaphelyzet</button>
+            <button id="btnPrimaryDentition" class="btn btn-ghost btn-sm">Tejfogazat</button>
+            <button id="btnMixedDentition" class="btn btn-ghost btn-sm">Vegyes fogazat</button>
+            <button id="btnEdentulous" class="btn btn-toggle btn-sm" aria-pressed="false">Fogatlan szájüreg</button>
+          </div>
+        </section>
+
         <section class="card">
-          <div class="card-title">Fog</div>
+          <div class="card-title card-title-row">
+            <span>Fog jellemzői</span>
+            <button id="btnResetTooth" class="icon-btn icon-btn-danger" title="Fog alaphelyzetbe állítása" aria-label="Fog alaphelyzetbe állítása">
+              <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636"/>
+              </svg>
+            </button>
+          </div>
           <div class="row">
             <span>Alap</span>
             <select id="toothSelect"></select>
           </div>
+          <div id="bridgeUnitRow" class="row">
+            <span>Fogpótlás</span>
+            <select id="bridgeUnitSelect"></select>
+          </div>
+          <label id="extractionRow" class="row">
+            <input type="checkbox" id="extractionWound" />
+            <span>friss extrakciós seb</span>
+          </label>
           <div id="crownRow" class="row">
             <span>Korona</span>
             <select id="crownSelect"></select>
+          </div>
+          <div id="brokenCrownRow" class="row inline-checks contact-row">
+            <label>
+              <input type="checkbox" id="brokenMesial" />
+              <span>mesial</span>
+            </label>
+            <label>
+              <input type="checkbox" id="brokenIncisal" />
+              <span>inicisal</span>
+            </label>
+            <label>
+              <input type="checkbox" id="brokenDistal" />
+              <span>distal</span>
+            </label>
           </div>
           <div id="contactPointRow" class="row inline-checks contact-row">
             <label>
@@ -71,32 +114,36 @@
               <span>distal kontakt hiány</span>
             </label>
           </div>
-          <label id="bruxismRow" class="row bruxism-row">
-            <input type="checkbox" id="bruxismWear" />
-            <span>Éli kopás</span>
+          <div id="bruxismRow" class="row inline-checks bruxism-row">
+            <label>
+              <input type="checkbox" id="bruxismWear" />
+              <span>Éli kopás</span>
+            </label>
+            <label>
+              <input type="checkbox" id="bruxismNeckWear" />
+              <span>Nyaki kopás</span>
+            </label>
+            <label id="extractionPlanRow" class="inline-check">
+              <input type="checkbox" id="extractionPlan" />
+              <span>Eltávolítandó</span>
+            </label>
+          </div>
+          <label id="bridgePillarRow" class="row bridge-pillar-row">
+            <input type="checkbox" id="bridgePillar" />
+            <span>Hídpillér</span>
           </label>
         </section>
 
         <section id="cariesSection" class="card">
           <div class="card-title">Fogszuvasodás</div>
-          <div class="hint">Restorations esetén a caries surface-ek tiltva vannak.</div>
+          <div class="hint">Jelöld ki a szuvasodás felületeit</div>
           <div id="cariesChecks" class="check-grid"></div>
         </section>
 
-        <section id="endoSection" class="card">
-          <div class="card-title">Foggyökér</div>
-          <div class="row">
-            <select id="endoSelect"></select>
-          </div>
-          <label class="row">
-            <input type="checkbox" id="pulpInflam" />
-            <span>Pulpitis</span>
-          </label>
-        </section>
-
         <section id="fillingSection" class="card">
-          <div class="card-title">Tömések</div>
+          <div class="card-title">Tömések és Konzerválás</div>
           <div class="row">
+            <span>Típusa</span>
             <select id="fillingSelect"></select>
           </div>
           <div id="fillingSurfaceChecks" class="check-grid hidden"></div>
@@ -104,6 +151,24 @@
             <input type="checkbox" id="fissureSealing" />
             <span>Barázdazárt</span>
           </label>
+        </section>
+
+        <section id="endoSection" class="card">
+          <div class="card-title">Foggyökér</div>
+          <div class="hint">Jelöld ki a foggyökér állapotát</div>
+          <div class="row">
+            <select id="endoSelect"></select>
+          </div>
+          <div class="row inline-checks">
+            <label>
+              <input type="checkbox" id="pulpInflam" />
+              <span>Pulpitis</span>
+            </label>
+            <label>
+              <input type="checkbox" id="endoResection" />
+              <span>Rezekált fog</span>
+            </label>
+          </div>
         </section>
 
         <section id="removableSection" class="card hidden">
@@ -114,7 +179,7 @@
         </section>
 
         <section id="inflammationSection" class="card">
-          <div class="card-title">Fogágy és Gyulladás</div>
+          <div class="card-title">Fogágy és Gyulladások</div>
           <div id="mobilityRow" class="row">
             <span>Mobilitás</span>
             <select id="mobilitySelect"></select>
