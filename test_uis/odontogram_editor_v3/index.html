@@ -15,17 +15,30 @@
         <div class="subtitle">Válassz fogat az odontogramon, majd állítsd be a rétegeket.</div>
       </div>
     </div>
-    <div class="topbar-actions">
-      <button id="btnWisdomMissing" class="btn btn-toggle" aria-pressed="false">Bölcsesség hiány</button>
-      <button id="btnBoneVisible" class="btn btn-toggle" aria-pressed="true">Csont látható</button>
-    </div>
+    <div class="topbar-actions"></div>
   </header>
 
   <main class="layout">
     <section class="chart">
       <div class="chart-header">
-        <div class="chart-title">Fogászati státusz</div>
-        <div class="chart-hint">Kattints egy fogra. Több fog kijelöléséhez a CMD/CTRL + kattintást válaszd.</div>
+        <div>
+          <div class="chart-title">Fogászati státusz</div>
+          <div class="chart-hint">Kattints egy fogra. Több fog kijelöléséhez a CMD/CTRL + kattintást válaszd.</div>
+        </div>
+        <div class="chart-actions">
+          <button id="btnOcclView" class="btn btn-toggle btn-icon" aria-pressed="true" title="Occlusális nézet" aria-label="Occlusális nézet">
+            <img class="icon-img" src="./svgs/icon_occl.svg" alt="" aria-hidden="true" />
+          </button>
+          <button id="btnWisdomMissing" class="btn btn-toggle btn-icon" aria-pressed="false" title="Bölcsességfog hiány" aria-label="Bölcsességfog hiány">
+            <img class="icon-img" src="./svgs/icon_8.svg" alt="" aria-hidden="true" />
+          </button>
+          <button id="btnBoneVisible" class="btn btn-toggle btn-icon" aria-pressed="true" title="Csont látható" aria-label="Csont látható">
+            <img class="icon-img" src="./svgs/icon_gum.svg" alt="" aria-hidden="true" />
+          </button>
+          <button id="btnSelectNoneChart" class="btn btn-ghost btn-icon" title="Kijelölés törlése" aria-label="Kijelölés törlése">
+            <img class="icon-img" src="./svgs/icon_no_selection.svg" alt="" aria-hidden="true" />
+          </button>
+        </div>
       </div>
       <div id="toothGrid" class="tooth-grid" aria-label="Tooth grid"></div>
     </section>
@@ -33,17 +46,28 @@
     <aside class="panel">
       <div class="panel-header">
         <div>
-          <div class="panel-title">Vezérlők</div>
+          <div class="panel-title-row">
+            <span class="panel-title">Vezérlők</span>
+            <button id="btnSelectNone" class="btn btn-ghost btn-icon btn-danger" title="Kijelölés törlése" aria-label="Kijelölés törlése">Kijelölés törlése</button>
+          </div>
           <div class="panel-subtitle">Aktív fog: <span id="activeToothLabel" class="pill">—</span></div>
           <div class="panel-subtitle select-actions">
-            <button id="btnSelectAll" class="btn btn-ghost btn-icon" title="Összes">Összes</button>
-            <button id="btnSelectAllPresent" class="btn btn-ghost btn-icon" title="Összes fog">Összes fog</button>
-            <button id="btnSelectAllMissing" class="btn btn-ghost btn-icon" title="Összes hiány">Összes hiány</button>
-            <button id="btnSelectUpper" class="btn btn-ghost btn-icon" title="Felső">Felső</button>
-            <button id="btnSelectUpperFront" class="btn btn-ghost btn-icon" title="Felső 6 front">Felső 6 front</button>
-            <button id="btnSelectLower" class="btn btn-ghost btn-icon" title="Alsó">Alsó</button>
-            <button id="btnSelectLowerFront" class="btn btn-ghost btn-icon" title="Alsó 6 front">Alsó 6 front</button>
-            <button id="btnSelectNone" class="btn btn-ghost btn-icon btn-danger" title="Kijelölés törlése">Kijelölés törlése</button>
+            <div class="select-actions-row">
+              <button id="btnSelectAll" class="btn btn-ghost btn-icon" title="Összes">Összes</button>
+              <button id="btnSelectAllPresent" class="btn btn-ghost btn-icon fade-toggle" title="Fogak">Fogak</button>
+              <button id="btnSelectPermanent" class="btn btn-ghost btn-icon fade-toggle" title="Maradók">Maradók</button>
+              <button id="btnSelectMilk" class="btn btn-ghost btn-icon fade-toggle" title="Tejfogak">Tejfogak</button>
+              <button id="btnSelectImplants" class="btn btn-ghost btn-icon fade-toggle" title="Implantok">Implantok</button>
+              <button id="btnSelectAllMissing" class="btn btn-ghost btn-icon fade-toggle" title="Hiányok">Hiányok</button>
+            </div>
+            <div class="select-actions-row">
+              <button id="btnSelectUpper" class="btn btn-ghost btn-icon" title="Felső">Felső</button>
+              <button id="btnSelectUpperFront" class="btn btn-ghost btn-icon" title="Felső 6 front">Felső 6 front</button>
+              <button id="btnSelectUpperMolar" class="btn btn-ghost btn-icon" title="Felső molár">Felső molár</button>
+              <button id="btnSelectLower" class="btn btn-ghost btn-icon" title="Alsó">Alsó</button>
+              <button id="btnSelectLowerFront" class="btn btn-ghost btn-icon" title="Alsó 6 front">Alsó 6 front</button>
+              <button id="btnSelectLowerMolar" class="btn btn-ghost btn-icon" title="Alsó molár">Alsó molár</button>
+            </div>
           </div>
         </div>
         <div id="warnings" class="warnings"></div>
@@ -62,6 +86,11 @@
             <button id="btnPrimaryDentition" class="btn btn-ghost btn-sm">Tejfogazat</button>
             <button id="btnMixedDentition" class="btn btn-ghost btn-sm">Vegyes fogazat</button>
             <button id="btnEdentulous" class="btn btn-toggle btn-sm" aria-pressed="false">Fogatlan szájüreg</button>
+          </div>
+          <div class="row status-extra-row">
+            <span>Hozzáadás:</span>
+            <select id="statusExtraSelect"></select>
+            <button id="statusExtraApply" class="btn btn-ghost btn-sm">OK</button>
           </div>
         </section>
 
@@ -123,15 +152,17 @@
               <input type="checkbox" id="bruxismNeckWear" />
               <span>Nyaki kopás</span>
             </label>
+          </div>
+          <div id="crownActionsRow" class="row inline-checks bridge-actions-row">
+            <label id="bridgePillarRow" class="inline-check">
+              <input type="checkbox" id="bridgePillar" />
+              <span>Hídpillér</span>
+            </label>
             <label id="extractionPlanRow" class="inline-check">
               <input type="checkbox" id="extractionPlan" />
               <span>Eltávolítandó</span>
             </label>
           </div>
-          <label id="bridgePillarRow" class="row bridge-pillar-row">
-            <input type="checkbox" id="bridgePillar" />
-            <span>Hídpillér</span>
-          </label>
         </section>
 
         <section id="cariesSection" class="card">
@@ -171,13 +202,6 @@
           </div>
         </section>
 
-        <section id="removableSection" class="card hidden">
-          <div class="card-title">Kivehető fogpótlás</div>
-          <div class="row">
-            <select id="removableSelect"></select>
-          </div>
-        </section>
-
         <section id="inflammationSection" class="card">
           <div class="card-title">Fogágy és Gyulladások</div>
           <div id="mobilityRow" class="row">
@@ -191,6 +215,7 @@
     </aside>
   </main>
 
+  <script src="./status_extras.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

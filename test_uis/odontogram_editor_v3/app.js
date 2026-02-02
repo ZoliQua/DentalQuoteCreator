@@ -62,7 +62,7 @@ const GROUPS = {
   endo: ["endo-medical-filling", "endo-filling", "endo-glass-pin", "endo-metal-pin", "endo-resection"],
   caries: ["caries-subcrown","caries-buccal","caries-lingual","caries-mesial","caries-distal","caries-occlusal"],
   fillingSurfaces: ["buccal","lingual","mesial","distal","occlusal"],
-  crownMaterial: ["zircon","metal","temporary","telescope"],
+  crownMaterial: ["zircon","metal","temporary","telescope","emax"],
 };
 
 const MILKTOOTH_BLOCKED = new Set([16,17,18,26,27,28,36,37,38,46,47,48]);
@@ -102,8 +102,7 @@ function defaultState(){
     bridgePillar: false,
     bridgeUnit: "none", // none | removable | zircon | metal | temporary
     mobility: "none", // none | m1 | m2 | m3
-    removable: "none", // none | prosthesis
-    crownMaterial: "natural",   // natural | zircon | metal | temporary | telescope
+    crownMaterial: "natural",   // natural | broken | emax | zircon | metal | temporary | telescope
   };
 }
 
@@ -216,6 +215,7 @@ let selectedTeeth = new Set();
 let edentulous = false;
 let wisdomMissing = false;
 let showBase = true;
+let occlusalVisible = true;
 let suppressEdentulousSync = false;
 
 // ---- UI builders ----
@@ -378,12 +378,15 @@ function getCrownOptions(isImplant){
       {value:"metal", label:"fémkerámia korona"},
       {value:"temporary", label:"ideiglenes korona"},
       {value:"locator", label:"lokátor"},
+      {value:"locator-prosthesis", label:"lokátor + műfog"},
       {value:"bar", label:"stéges implant"},
+      {value:"bar-prosthesis", label:"stég + műfog"},
     ];
   }
   return [
     {value:"natural", label:"teljes korona"},
     {value:"broken", label:"törött korona"},
+    {value:"emax", label:"préskerámia betét"},
     {value:"zircon", label:"cirkon korona"},
     {value:"metal", label:"fémkerámia korona"},
     {value:"temporary", label:"ideiglenes korona"},
@@ -412,7 +415,20 @@ function getBridgeUnitOptions(){
     {value:"zircon", label:"cirkon hídtag"},
     {value:"metal", label:"fémkerámia hídtag"},
     {value:"temporary", label:"ideiglenes hídtag"},
+    {value:"bar", label:"stég áthidalás"},
+    {value:"bar-prosthesis", label:"stég + műfog"},
   ];
+}
+
+function getStatusExtras(){
+  const data = window.STATUS_EXTRAS;
+  if(!data || !Array.isArray(data.options)) return [];
+  return data.options;
+}
+
+function getStatusExtrasMeta(){
+  const data = window.STATUS_EXTRAS;
+  return data && data.arches ? data.arches : null;
 }
 
 function getMobilityOptions(){
@@ -470,7 +486,7 @@ function applyStateToSvgSingle(toothNo, svg){
     }
   }
   // Restorations
-  for(const id of ["implant-base","implant-connector","implant-healing-abutment","implant-locator-screw","implant-bar","prosthesis","telescope","zircon","metal","temporary","zircon-crown","metal-crown","temporary-crown","telescope-crown-inside","telescope-crown-outside","extraction-plan","zircon-bridge-connector","metal-bridge-connector","temporary-bridge-connector","telescope-bridge-connector"]){
+  for(const id of ["implant-base","implant-connector","implant-healing-abutment","implant-locator-screw","implant-bar","prosthesis","prosthesis-implant","prosthesis-implant-crown","prosthesis-implant-gum","telescope","zircon","metal","temporary","emax-crown","zircon-crown","metal-crown","temporary-crown","telescope-crown-inside","telescope-crown-outside","extraction-plan","zircon-bridge-connector","metal-bridge-connector","temporary-bridge-connector","telescope-bridge-connector"]){
     setActive(svgGetById(svg,id), false);
   }
 
@@ -480,7 +496,7 @@ function applyStateToSvgSingle(toothNo, svg){
   const isMilktooth = state.toothSelection === "milktooth";
   const underGum = isUnderGum(state.toothSelection);
   const extraction = isExtraction(state.toothSelection) || (state.toothSelection === "none" && state.extractionWound);
-  const hasRemovable = state.toothSelection === "none" && state.removable !== "none";
+  const hasRemovable = state.toothSelection === "none" && state.bridgeUnit === "removable";
   const isNone = state.toothSelection === "none";
   const hasRestoration = hasCrown || hasRemovable;
   const fissureAllowed = state.toothSelection === "tooth-base" && FISSURE_ALLOWED.has(toothNo);
@@ -550,7 +566,7 @@ function applyStateToSvgSingle(toothNo, svg){
   }
 
   // 4) Removable prosthesis
-  if(hasRemovable && state.removable === "prosthesis"){
+  if(hasRemovable){
     setActive(svgGetById(svg, "prosthesis"), true);
     setActive(svgGetById(svg, "prosthesis-crown"), true);
     setActive(svgGetById(svg, "prosthesis-connector"), true);
@@ -567,12 +583,29 @@ function applyStateToSvgSingle(toothNo, svg){
       setActive(svgGetById(svg, "implant"), true);
       setActive(svgGetById(svg, "implant-connector"), true);
       setActive(svgGetById(svg, "implant-locator-screw"), true);
+    } else if(state.crownMaterial === "locator-prosthesis"){
+      setActive(svgGetById(svg, "restorations"), true);
+      setActive(svgGetById(svg, "implant"), true);
+      setActive(svgGetById(svg, "implant-connector"), true);
+      setActive(svgGetById(svg, "implant-locator-screw"), true);
+      setActive(svgGetById(svg, "prosthesis-implant"), true);
+      setActive(svgGetById(svg, "prosthesis-implant-crown"), true);
+      setActive(svgGetById(svg, "prosthesis-implant-gum"), true);
     } else if(state.crownMaterial === "bar"){
       setActive(svgGetById(svg, "restorations"), true);
       setActive(svgGetById(svg, "implant"), true);
       setActive(svgGetById(svg, "implant-connector"), true);
       setActive(svgGetById(svg, "implant-locator-screw"), true);
       setActive(svgGetById(svg, "implant-bar"), true);
+    } else if(state.crownMaterial === "bar-prosthesis"){
+      setActive(svgGetById(svg, "restorations"), true);
+      setActive(svgGetById(svg, "implant"), true);
+      setActive(svgGetById(svg, "implant-connector"), true);
+      setActive(svgGetById(svg, "implant-locator-screw"), true);
+      setActive(svgGetById(svg, "implant-bar"), true);
+      setActive(svgGetById(svg, "prosthesis-implant"), true);
+      setActive(svgGetById(svg, "prosthesis-implant-crown"), true);
+      setActive(svgGetById(svg, "prosthesis-implant-gum"), true);
     }
   }
   if(isNone){
@@ -589,13 +622,26 @@ function applyStateToSvgSingle(toothNo, svg){
       setActive(svgGetById(svg, "temporary"), true);
       setActive(svgGetById(svg, "temporary-crown"), true);
       setActive(svgGetById(svg, "temporary-bridge-connector"), true);
+    } else if(state.bridgeUnit === "bar"){
+      setActive(svgGetById(svg, "implant"), true);
+      setActive(svgGetById(svg, "implant-bar"), true);
+    } else if(state.bridgeUnit === "bar-prosthesis"){
+      setActive(svgGetById(svg, "implant"), true);
+      setActive(svgGetById(svg, "implant-bar"), true);
+      setActive(svgGetById(svg, "prosthesis-implant"), true);
+      setActive(svgGetById(svg, "prosthesis-implant-crown"), true);
+      setActive(svgGetById(svg, "prosthesis-implant-gum"), true);
     }
   }
-  if(hasCrown && !["healing-abutment","locator","bar"].includes(state.crownMaterial)){
+  if(hasCrown && !["healing-abutment","locator","locator-prosthesis","bar","bar-prosthesis"].includes(state.crownMaterial)){
     if(state.crownMaterial !== "broken"){
-      setActive(svgGetById(svg, state.crownMaterial), true);
+      if(["zircon","metal","temporary","telescope"].includes(state.crownMaterial)){
+        setActive(svgGetById(svg, state.crownMaterial), true);
+      }
     }
-    if(state.crownMaterial === "zircon"){
+    if(state.crownMaterial === "emax"){
+      setActive(svgGetById(svg, "emax-crown"), true);
+    } else if(state.crownMaterial === "zircon"){
       setActive(svgGetById(svg, "zircon-crown"), true);
     } else if(state.crownMaterial === "metal"){
       setActive(svgGetById(svg, "metal-crown"), true);
@@ -755,8 +801,6 @@ function syncControlsFromState(state){
   if($("#mobilitySelect").value !== state.mobility){
     state.mobility = $("#mobilitySelect").value;
   }
-  $("#removableSelect").value = state.removable;
-
   // mods
   $$("#modsChecks input[type=checkbox]").forEach(c => c.checked = state.mods.has(c.value));
 
@@ -768,7 +812,7 @@ function syncControlsFromState(state){
 
   // disable logic in UI
   const hasCrown = state.crownMaterial !== "natural";
-  const hasRemovable = state.toothSelection === "none" && state.removable !== "none";
+  const hasRemovable = state.toothSelection === "none" && state.bridgeUnit === "removable";
   const hasRestoration = hasCrown || hasRemovable;
   $$("#cariesChecks input[type=checkbox]").forEach(c => {
     if(c.value === "caries-subcrown") setDisabled(c, !hasCrown);
@@ -776,14 +820,6 @@ function syncControlsFromState(state){
   });
   const showFillingSurfaces = state.fillingMaterial !== "none" && !hasCrown;
   $("#fillingSurfaceChecks").classList.toggle("hidden", !showFillingSurfaces);
-
-  // removable section only if tooth base is none
-  const showRemovable = state.toothSelection === "none" && state.bridgeUnit === "removable";
-  $("#removableSection").classList.toggle("hidden", !showRemovable);
-  if(!showRemovable){
-    state.removable = "none";
-    $("#removableSelect").value = "none";
-  }
 
   // endo only if tooth present
   const endoDisabled = !isToothPresent(state.toothSelection) || underGum || extraction;
@@ -838,6 +874,31 @@ function syncControlsFromState(state){
   const crownRowHidden = $("#crownRow").classList.contains("hidden");
   const bridgePillarAllowed = !crownRowHidden && (state.crownMaterial === "zircon" || state.crownMaterial === "metal" || state.crownMaterial === "temporary" || state.crownMaterial === "telescope");
   $("#bridgePillarRow").classList.toggle("hidden", !bridgePillarAllowed);
+
+  const extractionPlanRow = $("#extractionPlanRow");
+  const brokenCrownRow = $("#brokenCrownRow");
+  const bruxismRow = $("#bruxismRow");
+  const crownActionsRow = $("#crownActionsRow");
+  if(extractionPlanRow && brokenCrownRow && bruxismRow && crownActionsRow){
+    const brokenMode = state.crownMaterial === "broken" && !crownRowHidden;
+    if(brokenMode){
+      if(extractionPlanRow.parentElement !== brokenCrownRow){
+        brokenCrownRow.appendChild(extractionPlanRow);
+      }
+      crownActionsRow.classList.add("hidden");
+    }else if(!bruxismRow.classList.contains("hidden")){
+      if(extractionPlanRow.parentElement !== bruxismRow){
+        bruxismRow.appendChild(extractionPlanRow);
+      }
+      crownActionsRow.classList.add("hidden");
+    }else{
+      if(extractionPlanRow.parentElement !== crownActionsRow){
+        crownActionsRow.appendChild(extractionPlanRow);
+      }
+      crownActionsRow.classList.toggle("hidden", !extractionPlanAllowed);
+    }
+    extractionPlanRow.classList.toggle("hidden", !extractionPlanAllowed);
+  }
   const periImplant = state.toothSelection === "implant" || implantSelected;
   const parodontLabel = $("#lbl-parodontal");
   if(parodontLabel){
@@ -877,6 +938,7 @@ function applyAndSync(toothNo){
   if(edentulous && !suppressEdentulousSync){
     setEdentulous(false);
   }
+  updateSelectionFilterButtons();
 }
 
 function applyToSelected(fn){
@@ -909,8 +971,33 @@ function updateActiveLabel(){
   }
 }
 
+function updateSelectionFilterButtons(){
+  let hasPresent = false;
+  let hasMissing = false;
+  let hasPermanent = false;
+  let hasMilk = false;
+  let hasImplant = false;
+  for(const toothNo of ALL_TEETH){
+    const sel = toothState.get(toothNo)?.toothSelection;
+    if(sel === "none"){
+      hasMissing = true;
+    }else{
+      hasPresent = true;
+    }
+    if(sel === "tooth-base") hasPermanent = true;
+    if(sel === "milktooth") hasMilk = true;
+    if(sel === "implant") hasImplant = true;
+  }
+  $("#btnSelectAllPresent")?.classList.toggle("is-hidden", !hasPresent);
+  $("#btnSelectAllMissing")?.classList.toggle("is-hidden", !hasMissing);
+  $("#btnSelectPermanent")?.classList.toggle("is-hidden", !hasPermanent);
+  $("#btnSelectMilk")?.classList.toggle("is-hidden", !hasMilk);
+  $("#btnSelectImplants")?.classList.toggle("is-hidden", !hasImplant);
+}
+
 function setControlsEnabled(enabled){
   $$(".panel-body input, .panel-body select").forEach(el => {
+    if(el.id === "statusExtraSelect") return;
     setDisabled(el, !enabled);
   });
 }
@@ -920,6 +1007,7 @@ function updateSelectionUI(){
     const toothNo = Number(t.dataset.tooth);
     t.classList.toggle("active", selectedTeeth.has(toothNo));
   });
+  updateSelectionFilterButtons();
   updateActiveLabel();
   if(activeTooth && selectedTeeth.has(activeTooth)){
     syncControlsFromState(toothState.get(activeTooth));
@@ -978,7 +1066,6 @@ function setEdentulous(on){
     for(const toothNo of ALL_TEETH){
       const s = defaultState();
       s.toothSelection = "none";
-      s.removable = "none";
       toothState.set(toothNo, s);
       applyStateToSvg(toothNo);
       updateToothTileNumber(toothNo);
@@ -1000,6 +1087,132 @@ function setShowBase(on){
   for(const toothNo of ALL_TEETH){
     applyStateToSvg(toothNo);
     updateToothTileNumber(toothNo);
+  }
+}
+
+function setOcclusalVisible(on){
+  occlusalVisible = !!on;
+  setToggleButton($("#btnOcclView"), occlusalVisible);
+  $$(".tooth-tile.occl-view").forEach(tile => {
+    tile.classList.toggle("occl-hidden", !occlusalVisible);
+  });
+}
+
+function applyStatusExtra(option){
+  if(!option) return;
+  const meta = getStatusExtrasMeta();
+  const archTeeth = (arch)=> meta?.[arch] || [];
+  const archWisdom = (arch)=> meta?.wisdom?.[arch] || [];
+
+  const applyChanges = (teeth, fn)=>{
+    for(const toothNo of teeth){
+      const s = toothState.get(toothNo) ?? defaultState();
+      const next = fn(s, toothNo) || s;
+      toothState.set(toothNo, next);
+      applyStateToSvg(toothNo);
+      updateToothTileNumber(toothNo);
+    }
+    if(activeTooth){
+      syncControlsFromState(toothState.get(activeTooth));
+    }
+    updateSelectionFilterButtons();
+  };
+
+  const setBridgeCrown = (s, material)=>{
+    s.crownMaterial = material;
+    s.bridgePillar = true;
+    s.brokenMesial = false;
+    s.brokenIncisal = false;
+    s.brokenDistal = false;
+  };
+
+  if(option.type === "span"){
+    applyChanges(option.teeth || [], (s)=>{
+      if(s.toothSelection === "tooth-base"){
+        setBridgeCrown(s, option.material);
+      }else if(s.toothSelection === "none"){
+        s.bridgeUnit = option.material;
+      }
+    });
+    return;
+  }
+
+  if(option.type === "arch-bridge"){
+    const teeth = archTeeth(option.arch);
+    const wisdom = new Set(archWisdom(option.arch));
+    const present = teeth.filter(t => toothState.get(t)?.toothSelection !== "none");
+    if(present.length >= 2){
+      const first = present[0];
+      const last = present[present.length - 1];
+      const startIdx = teeth.indexOf(first);
+      const endIdx = teeth.indexOf(last);
+      const between = startIdx < endIdx ? teeth.slice(startIdx + 1, endIdx) : [];
+      applyChanges(teeth, (s, t)=>{
+        if(wisdom.has(t)) return;
+        if(s.toothSelection === "tooth-base"){
+          setBridgeCrown(s, option.material);
+        }else if(s.toothSelection === "none" && between.includes(t)){
+          s.bridgeUnit = option.missingMaterial || option.material;
+        }
+      });
+    }else{
+      applyChanges(teeth, (s, t)=>{
+        if(wisdom.has(t)) return;
+        if(s.toothSelection === "tooth-base"){
+          setBridgeCrown(s, option.material);
+        }
+      });
+    }
+    return;
+  }
+
+  if(option.type === "partial-removable"){
+    const teeth = archTeeth(option.arch);
+    const wisdom = new Set(archWisdom(option.arch));
+    applyChanges(teeth, (s, t)=>{
+      if(wisdom.has(t)) return;
+      if(s.toothSelection === "none"){
+        s.bridgeUnit = "removable";
+      }
+    });
+    return;
+  }
+
+  if(option.type === "full-removable"){
+    const teeth = archTeeth(option.arch);
+    const wisdom = new Set(archWisdom(option.arch));
+    applyChanges(teeth, (_s, t)=>{
+      const next = defaultState();
+      next.toothSelection = "none";
+      next.bridgeUnit = wisdom.has(t) ? "none" : "removable";
+      return next;
+    });
+    return;
+  }
+
+  if(option.type === "bar-denture"){
+    const implantTeeth = option.implants || [];
+    const missingTeeth = option.missing || [];
+    const archTeeth = option.arch ? (getStatusExtrasMeta()?.[option.arch] || []) : [];
+    const sevenEight = archTeeth.filter(t => [7,8].includes(t % 10));
+    applyChanges(implantTeeth, (_s, t)=>{
+      const next = defaultState();
+      next.toothSelection = "implant";
+      next.crownMaterial = "bar-prosthesis";
+      return next;
+    });
+    applyChanges(missingTeeth, (_s, t)=>{
+      const next = defaultState();
+      next.toothSelection = "none";
+      next.bridgeUnit = "bar-prosthesis";
+      return next;
+    });
+    applyChanges(sevenEight, (_s, t)=>{
+      const next = defaultState();
+      next.toothSelection = "none";
+      next.bridgeUnit = "none";
+      return next;
+    });
   }
 }
 
@@ -1131,6 +1344,7 @@ async function buildGrid(){
   activeTooth = 11;
   updateSelectionUI();
   updateToothTileVisibility();
+  setOcclusalVisible(occlusalVisible);
 }
 
 // ---- Controls wiring ----
@@ -1210,9 +1424,6 @@ function wireControls(){
   buildSelect($("#bridgeUnitSelect"), getBridgeUnitOptions(), (value)=>{
     applyToSelected((s)=>{
       s.bridgeUnit = value;
-      if(value !== "none"){
-        s.removable = "none";
-      }
     });
   });
 
@@ -1339,16 +1550,6 @@ function wireControls(){
     });
   });
 
-  // Removable prosthesis dropdown
-  buildSelect($("#removableSelect"), [
-    {value:"none", label:"nincs fogpótlás"},
-    {value:"prosthesis", label:"kivehető fogpótlás fog"},
-  ], (val)=>{
-    applyToSelected((s)=>{
-      s.removable = val;
-    });
-  });
-
   // Reset buttons
   $("#btnResetTooth").addEventListener("click", ()=>{
     if(selectedTeeth.size === 0) return;
@@ -1415,6 +1616,19 @@ function wireControls(){
     if(activeTooth) syncControlsFromState(toothState.get(activeTooth));
   });
 
+  // Status extras
+  const statusExtras = getStatusExtras();
+  if(statusExtras.length){
+    const statusOptions = statusExtras.map((opt)=>({ value: opt.id, label: opt.label }));
+    buildSelect($("#statusExtraSelect"), statusOptions, ()=>{});
+    setSelectOptions($("#statusExtraSelect"), statusOptions, statusOptions[0]?.value);
+    $("#statusExtraApply").addEventListener("click", ()=>{
+      const id = $("#statusExtraSelect").value;
+      const option = statusExtras.find(o => o.id === id);
+      applyStatusExtra(option);
+    });
+  }
+
   $("#btnSelectAll").addEventListener("click", ()=>{
     selectedTeeth = new Set(ALL_TEETH);
     activeTooth = ALL_TEETH[0];
@@ -1424,6 +1638,24 @@ function wireControls(){
     const present = ALL_TEETH.filter(t => toothState.get(t)?.toothSelection !== "none");
     selectedTeeth = new Set(present);
     activeTooth = present[0] ?? null;
+    updateToothTileVisibility();
+  });
+  $("#btnSelectPermanent").addEventListener("click", ()=>{
+    const permanent = ALL_TEETH.filter(t => toothState.get(t)?.toothSelection === "tooth-base");
+    selectedTeeth = new Set(permanent);
+    activeTooth = permanent[0] ?? null;
+    updateToothTileVisibility();
+  });
+  $("#btnSelectMilk").addEventListener("click", ()=>{
+    const milk = ALL_TEETH.filter(t => toothState.get(t)?.toothSelection === "milktooth");
+    selectedTeeth = new Set(milk);
+    activeTooth = milk[0] ?? null;
+    updateToothTileVisibility();
+  });
+  $("#btnSelectImplants").addEventListener("click", ()=>{
+    const implants = ALL_TEETH.filter(t => toothState.get(t)?.toothSelection === "implant");
+    selectedTeeth = new Set(implants);
+    activeTooth = implants[0] ?? null;
     updateToothTileVisibility();
   });
   $("#btnSelectAllMissing").addEventListener("click", ()=>{
@@ -1443,6 +1675,12 @@ function wireControls(){
     activeTooth = front[0];
     updateToothTileVisibility();
   });
+  $("#btnSelectUpperMolar").addEventListener("click", ()=>{
+    const molars = [16,17,27,28];
+    selectedTeeth = new Set(molars);
+    activeTooth = molars[0];
+    updateToothTileVisibility();
+  });
   $("#btnSelectLower").addEventListener("click", ()=>{
     selectedTeeth = new Set(ALL_TEETH.filter(t => t >= 31 && t <= 48));
     activeTooth = 31;
@@ -1454,7 +1692,18 @@ function wireControls(){
     activeTooth = front[0];
     updateToothTileVisibility();
   });
+  $("#btnSelectLowerMolar").addEventListener("click", ()=>{
+    const molars = [36,37,46,47];
+    selectedTeeth = new Set(molars);
+    activeTooth = molars[0];
+    updateToothTileVisibility();
+  });
   $("#btnSelectNone").addEventListener("click", ()=>{
+    selectedTeeth = new Set();
+    activeTooth = null;
+    updateSelectionUI();
+  });
+  $("#btnSelectNoneChart").addEventListener("click", ()=>{
     selectedTeeth = new Set();
     activeTooth = null;
     updateSelectionUI();
@@ -1465,6 +1714,9 @@ function wireControls(){
   });
   $("#btnWisdomMissing").addEventListener("click", ()=>{
     setWisdomMissing(!wisdomMissing);
+  });
+  $("#btnOcclView").addEventListener("click", ()=>{
+    setOcclusalVisible(!occlusalVisible);
   });
   $("#btnBoneVisible").addEventListener("click", ()=>{
     setShowBase(!showBase);

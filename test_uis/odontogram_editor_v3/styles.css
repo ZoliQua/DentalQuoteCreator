@@ -97,9 +97,18 @@ select:focus{
 .chart-header{
   padding:12px 14px;
   border-bottom:1px solid var(--line);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
 }
 .chart-title{font-weight:700}
 .chart-hint{font-size:12px;color:var(--muted); margin-top:4px}
+.chart-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
 
 .tooth-grid{
   display:grid;
@@ -160,6 +169,7 @@ select:focus{
 .tooth-tile.tpl-13 .tooth-svg svg{width:60px;height:102px}
 .tooth-tile.wisdom-hidden{opacity:.45; pointer-events:none}
 .tooth-tile.wisdom-hidden .tooth-svg svg{opacity:0}
+.tooth-tile.occl-hidden{display:none !important}
 .tooth-svg [data-active="0"]{display:none !important}
 
 .panel{
@@ -174,17 +184,56 @@ select:focus{
 }
 .select-actions{
   display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin-top:8px;
+}
+.select-actions-row{
+  display:flex;
   flex-wrap:wrap;
   gap:6px;
-  margin-top:8px;
 }
 .status-actions{
   flex-wrap:wrap;
   gap:6px;
 }
+.status-extra-row{
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.status-extra-row select{
+  min-width: 220px;
+}
 .btn-icon{
-  padding:6px 10px;
+  padding:9px 15px;
   font-size:12px;
+}
+.btn-icon .icon,
+.btn-icon .icon-img{
+  width:32px;
+  height:32px;
+  display:block;
+}
+.fade-toggle{
+  transition: opacity 160ms ease, max-width 160ms ease, padding 160ms ease, margin 160ms ease, border-width 160ms ease, transform 160ms ease;
+  max-width: 200px;
+}
+.fade-toggle.is-hidden{
+  opacity:0;
+  pointer-events:none;
+  max-width:0;
+  padding-left:0;
+  padding-right:0;
+  margin:0;
+  border-width:0;
+  transform:scale(0.96);
+}
+.panel-title-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
 }
 .panel-title{font-weight:800}
 .panel-subtitle{font-size:12px;color:var(--muted); margin-top:4px}
