@@ -210,7 +210,8 @@ select:focus{
   font-size:12px;
 }
 .btn-icon .icon,
-.btn-icon .icon-img{
+.btn-icon .icon-img,
+.btn-icon svg{
   width:32px;
   height:32px;
   display:block;
@@ -234,6 +235,11 @@ select:focus{
   align-items:center;
   justify-content:space-between;
   gap:10px;
+}
+.panel-title-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
 }
 .panel-title{font-weight:800}
 .panel-subtitle{font-size:12px;color:var(--muted); margin-top:4px}
@@ -264,7 +270,12 @@ select:focus{
 .card-title-row{display:flex; align-items:center; justify-content:space-between; gap:8px}
 .card.collapsed .card-title{margin-bottom:0}
 .card.collapsed .card-body,
-.card.collapsed #statusCardBody{display:none}
+.card.collapsed #statusCardBody,
+.card.collapsed .status-extra-row,
+.card.collapsed .hint,
+.card.collapsed .row,
+.card.collapsed .check-grid,
+.card.collapsed label{display:none}
 .icon-btn{
   border:1px solid var(--line);
   background: rgba(255,255,255,.7);

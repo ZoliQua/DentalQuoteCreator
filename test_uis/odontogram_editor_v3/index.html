@@ -26,14 +26,13 @@
           <div class="chart-hint">Kattints egy fogra. Több fog kijelöléséhez a CMD/CTRL + kattintást válaszd.</div>
         </div>
         <div class="chart-actions">
-          <button id="btnOcclView" class="btn btn-toggle btn-icon" aria-pressed="true" title="Occlusális nézet" aria-label="Occlusális nézet">
-            <img class="icon-img" src="./svgs/icon_occl.svg" alt="" aria-hidden="true" />
+          <button id="btnOcclView" class="btn btn-toggle btn-icon" aria-pressed="true" title="Occlusios nézet láthatósága" aria-label="Occlusios nézet láthatósága" data-icon-src="./svgs/icon_occl.svg" data-xline="1">
           </button>
-          <button id="btnWisdomMissing" class="btn btn-toggle btn-icon" aria-pressed="false" title="Bölcsességfog hiány" aria-label="Bölcsességfog hiány">
-            <img class="icon-img" src="./svgs/icon_8.svg" alt="" aria-hidden="true" />
+          <button id="btnWisdomVisible" class="btn btn-toggle btn-icon" aria-pressed="true" title="Bölcsességfogak láthatósága" aria-label="Bölcsességfogak láthatósága" data-icon-src="./svgs/icon_8.svg" data-xline="1">
           </button>
-          <button id="btnBoneVisible" class="btn btn-toggle btn-icon" aria-pressed="true" title="Csont látható" aria-label="Csont látható">
-            <img class="icon-img" src="./svgs/icon_gum.svg" alt="" aria-hidden="true" />
+          <button id="btnBoneVisible" class="btn btn-toggle btn-icon" aria-pressed="true" title="Csont láthatósága" aria-label="Csont láthatósága" data-icon-src="./svgs/icon_gum.svg" data-xline="1">
+          </button>
+          <button id="btnPulpVisible" class="btn btn-toggle btn-icon" aria-pressed="true" title="Pulpa láthatósága" aria-label="Pulpa láthatósága" data-icon-src="./svgs/icon_pulp.svg" data-xline="1">
           </button>
           <button id="btnSelectNoneChart" class="btn btn-ghost btn-icon" title="Kijelölés törlése" aria-label="Kijelölés törlése">
             <img class="icon-img" src="./svgs/icon_no_selection.svg" alt="" aria-hidden="true" />
@@ -48,10 +47,15 @@
         <div>
           <div class="panel-title-row">
             <span class="panel-title">Vezérlők</span>
-            <button id="btnSelectNone" class="btn btn-ghost btn-icon btn-danger" title="Kijelölés törlése" aria-label="Kijelölés törlése">Kijelölés törlése</button>
+            <div class="panel-title-actions">
+              <button id="btnSelectNone" class="btn btn-ghost btn-icon btn-danger" title="Kijelölés törlése" aria-label="Kijelölés törlése">Kijelölés törlése</button>
+              <button id="btnToggleControlsCard" class="icon-btn" title="Vezérlők összecsukása" aria-label="Vezérlők összecsukása">
+                <span class="toggle-icon" aria-hidden="true">−</span>
+              </button>
+            </div>
           </div>
           <div class="panel-subtitle">Aktív fog: <span id="activeToothLabel" class="pill">—</span></div>
-          <div class="panel-subtitle select-actions">
+          <div id="controlsActions" class="panel-subtitle select-actions">
             <div class="select-actions-row">
               <button id="btnSelectAll" class="btn btn-ghost btn-icon" title="Összes">Összes</button>
               <button id="btnSelectAllPresent" class="btn btn-ghost btn-icon fade-toggle" title="Fogak">Fogak</button>
@@ -97,11 +101,7 @@
         <section class="card">
           <div class="card-title card-title-row">
             <span>Fog jellemzői</span>
-            <button id="btnResetTooth" class="icon-btn icon-btn-danger" title="Fog alaphelyzetbe állítása" aria-label="Fog alaphelyzetbe állítása">
-              <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636"/>
-              </svg>
-            </button>
+            <button id="btnResetTooth" class="btn btn-ghost btn-sm" title="Fog alaphelyzetbe állítása" aria-label="Fog alaphelyzetbe állítása">Alaphelyzet</button>
           </div>
           <div class="row">
             <span>Alap</span>
@@ -166,13 +166,23 @@
         </section>
 
         <section id="cariesSection" class="card">
-          <div class="card-title">Fogszuvasodás</div>
+          <div class="card-title card-title-row">
+            <span>Fogszuvasodás</span>
+            <button id="btnToggleCariesCard" class="icon-btn" title="Fogszuvasodás összecsukása" aria-label="Fogszuvasodás összecsukása">
+              <span class="toggle-icon" aria-hidden="true">−</span>
+            </button>
+          </div>
           <div class="hint">Jelöld ki a szuvasodás felületeit</div>
           <div id="cariesChecks" class="check-grid"></div>
         </section>
 
         <section id="fillingSection" class="card">
-          <div class="card-title">Tömések és Konzerválás</div>
+          <div class="card-title card-title-row">
+            <span>Tömések és Konzerválás</span>
+            <button id="btnToggleFillingCard" class="icon-btn" title="Tömések és Konzerválás összecsukása" aria-label="Tömések és Konzerválás összecsukása">
+              <span class="toggle-icon" aria-hidden="true">−</span>
+            </button>
+          </div>
           <div class="row">
             <span>Típusa</span>
             <select id="fillingSelect"></select>
@@ -185,7 +195,12 @@
         </section>
 
         <section id="endoSection" class="card">
-          <div class="card-title">Foggyökér</div>
+          <div class="card-title card-title-row">
+            <span>Foggyökér</span>
+            <button id="btnToggleEndoCard" class="icon-btn" title="Foggyökér összecsukása" aria-label="Foggyökér összecsukása">
+              <span class="toggle-icon" aria-hidden="true">−</span>
+            </button>
+          </div>
           <div class="hint">Jelöld ki a foggyökér állapotát</div>
           <div class="row">
             <select id="endoSelect"></select>
@@ -203,7 +218,12 @@
         </section>
 
         <section id="inflammationSection" class="card">
-          <div class="card-title">Fogágy és Gyulladások</div>
+          <div class="card-title card-title-row">
+            <span>Fogágy és Gyulladások</span>
+            <button id="btnToggleInflammationCard" class="icon-btn" title="Fogágy és Gyulladások összecsukása" aria-label="Fogágy és Gyulladások összecsukása">
+              <span class="toggle-icon" aria-hidden="true">−</span>
+            </button>
+          </div>
           <div id="mobilityRow" class="row">
             <span>Mobilitás</span>
             <select id="mobilitySelect"></select>

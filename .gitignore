@@ -9,6 +9,7 @@ pnpm-debug.log*
 build/
 dist/
 out/
+test_uis/odontogram_editor_v4/node_modules
 
 # === Env files ===
 .env

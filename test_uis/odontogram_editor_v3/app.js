@@ -213,9 +213,10 @@ const toothLabelLower = new Map(); // toothNo -> label element
 let activeTooth = null;
 let selectedTeeth = new Set();
 let edentulous = false;
-let wisdomMissing = false;
+let wisdomVisible = true;
 let showBase = true;
 let occlusalVisible = true;
+let showHealthyPulp = true;
 let suppressEdentulousSync = false;
 
 // ---- UI builders ----
@@ -241,7 +242,11 @@ function buildChecks(container, items, onToggle){
       el("input", { type:"checkbox", id, value:it.value }),
       el("span", { id: labelId, html: it.label })
     ]);
-    label.querySelector("input").addEventListener("change", (e)=>onToggle(it.value, e.target.checked));
+    const input = label.querySelector("input");
+    input.addEventListener("change", (e)=>onToggle(it.value, e.target.checked));
+    if(container.id === "cariesChecks" && it.value === "caries-subcrown"){
+      setDisabled(input, true);
+    }
     container.appendChild(label);
   }
 }
@@ -253,6 +258,34 @@ function buildSelect(selectEl, options, onChange){
     selectEl.appendChild(o);
   }
   selectEl.addEventListener("change", (e)=>onChange(e.target.value));
+}
+
+async function loadInlineIcon(button){
+  if(!button) return;
+  const src = button.dataset.iconSrc;
+  if(!src) return;
+  try{
+    const res = await fetch(src, { cache: "no-store" });
+    if(!res.ok) return;
+    const txt = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(txt, "image/svg+xml");
+    const svg = doc.documentElement;
+    svg.removeAttribute("width");
+    svg.removeAttribute("height");
+    svg.classList.add("icon-svg");
+    button.innerHTML = "";
+    button.appendChild(svg);
+  }catch(_e){
+    // ignore icon load failures
+  }
+}
+
+function syncIconXLine(button){
+  if(!button || !button.dataset.xline) return;
+  const pressed = button.getAttribute("aria-pressed") === "true";
+  const line = button.querySelector("#x-line");
+  if(line) line.style.display = pressed ? "none" : "";
 }
 
 function updateWarnings(state){
@@ -284,7 +317,9 @@ function setDisabled(control, disabled){
 }
 
 function setToggleButton(btn, on){
+  if(!btn) return;
   btn.setAttribute("aria-pressed", on ? "true" : "false");
+  syncIconXLine(btn);
 }
 
 function isToothPresent(sel){
@@ -516,7 +551,11 @@ function applyStateToSvgSingle(toothNo, svg){
   }else if(isMilktooth){
     setActive(svgGetById(svg, "milktooth-base"), true);
     setActive(svgGetById(svg, "milktooth-beauty"), true);
-    setActive(svgGetById(svg, state.pulpInflam ? "milktooth-inflam-pulp" : "milktooth-healthy-pulp"), true);
+    if(state.pulpInflam){
+      setActive(svgGetById(svg, "milktooth-inflam-pulp"), true);
+    }else if(showHealthyPulp){
+      setActive(svgGetById(svg, "milktooth-healthy-pulp"), true);
+    }
   }else if(isToothPresent(state.toothSelection)){
     if(state.toothSelection === "tooth-base"){
       setActive(svgGetById(svg, "tooth-base"), true);
@@ -525,7 +564,11 @@ function applyStateToSvgSingle(toothNo, svg){
     }
     if(!underGum && !extraction){
       // Pulpa: show when tooth is present
-      setActive(svgGetById(svg, state.pulpInflam ? "tooth-inflam-pulp" : "tooth-healthy-pulp"), true);
+      if(state.pulpInflam){
+        setActive(svgGetById(svg, "tooth-inflam-pulp"), true);
+      }else if(showHealthyPulp){
+        setActive(svgGetById(svg, "tooth-healthy-pulp"), true);
+      }
     }
   }
   if(brokenVariant && state.toothSelection === "tooth-base"){
@@ -1010,8 +1053,8 @@ function updateSelectionUI(){
   updateSelectionFilterButtons();
   updateActiveLabel();
   if(activeTooth && selectedTeeth.has(activeTooth)){
-    syncControlsFromState(toothState.get(activeTooth));
     setControlsEnabled(true);
+    syncControlsFromState(toothState.get(activeTooth));
   }else{
     syncControlsFromState(defaultState());
     setControlsEnabled(false);
@@ -1042,7 +1085,7 @@ function updateToothTileVisibility(){
   for(const toothNo of ALL_TEETH){
     const tiles = toothTile.get(toothNo);
     if(!tiles) continue;
-    const hide = wisdomMissing && hiddenSet.has(toothNo);
+    const hide = !wisdomVisible && hiddenSet.has(toothNo);
     for(const tile of tiles){
       tile.classList.toggle("wisdom-hidden", hide);
     }
@@ -1075,9 +1118,9 @@ function setEdentulous(on){
   }
 }
 
-function setWisdomMissing(on){
-  wisdomMissing = on;
-  setToggleButton($("#btnWisdomMissing"), wisdomMissing);
+function setWisdomVisible(on){
+  wisdomVisible = !!on;
+  setToggleButton($("#btnWisdomVisible"), wisdomVisible);
   updateToothTileVisibility();
 }
 
@@ -1096,6 +1139,15 @@ function setOcclusalVisible(on){
   $$(".tooth-tile.occl-view").forEach(tile => {
     tile.classList.toggle("occl-hidden", !occlusalVisible);
   });
+}
+
+function setHealthyPulpVisible(on){
+  showHealthyPulp = !!on;
+  setToggleButton($("#btnPulpVisible"), showHealthyPulp);
+  for(const toothNo of ALL_TEETH){
+    applyStateToSvg(toothNo);
+    updateToothTileNumber(toothNo);
+  }
 }
 
 function applyStatusExtra(option){
@@ -1140,7 +1192,7 @@ function applyStatusExtra(option){
   if(option.type === "arch-bridge"){
     const teeth = archTeeth(option.arch);
     const wisdom = new Set(archWisdom(option.arch));
-    const present = teeth.filter(t => toothState.get(t)?.toothSelection !== "none");
+    const present = teeth.filter(t => toothState.get(t)?.toothSelection === "tooth-base");
     if(present.length >= 2){
       const first = present[0];
       const last = present[present.length - 1];
@@ -1345,10 +1397,17 @@ async function buildGrid(){
   updateSelectionUI();
   updateToothTileVisibility();
   setOcclusalVisible(occlusalVisible);
+  setHealthyPulpVisible(showHealthyPulp);
 }
 
 // ---- Controls wiring ----
 function wireControls(){
+  const iconButtons = ["btnOcclView","btnWisdomVisible","btnBoneVisible","btnPulpVisible"];
+  iconButtons.forEach((id)=>{
+    const btn = $(`#${id}`);
+    if(btn) loadInlineIcon(btn).then(()=>syncIconXLine(btn));
+  });
+
   // Fog alap dropdown
   buildSelect($("#toothSelect"), [
     {value:"none", label:"foghiány"},
@@ -1712,14 +1771,17 @@ function wireControls(){
   $("#btnEdentulous").addEventListener("click", ()=>{
     setEdentulous(!edentulous);
   });
-  $("#btnWisdomMissing").addEventListener("click", ()=>{
-    setWisdomMissing(!wisdomMissing);
+  $("#btnWisdomVisible").addEventListener("click", ()=>{
+    setWisdomVisible(!wisdomVisible);
   });
   $("#btnOcclView").addEventListener("click", ()=>{
     setOcclusalVisible(!occlusalVisible);
   });
   $("#btnBoneVisible").addEventListener("click", ()=>{
     setShowBase(!showBase);
+  });
+  $("#btnPulpVisible").addEventListener("click", ()=>{
+    setHealthyPulpVisible(!showHealthyPulp);
   });
 
   const statusCard = $("#statusCard");
@@ -1733,6 +1795,37 @@ function wireControls(){
       if(icon) icon.textContent = collapsed ? "+" : "−";
     });
   }
+
+  const controlsToggle = $("#btnToggleControlsCard");
+  const controlsActions = $("#controlsActions");
+  if(controlsToggle && controlsActions){
+    controlsToggle.addEventListener("click", ()=>{
+      const collapsed = controlsActions.classList.toggle("hidden");
+      controlsToggle.setAttribute("title", collapsed ? "Vezérlők kinyitása" : "Vezérlők összecsukása");
+      controlsToggle.setAttribute("aria-label", collapsed ? "Vezérlők kinyitása" : "Vezérlők összecsukása");
+      const icon = $(".toggle-icon", controlsToggle);
+      if(icon) icon.textContent = collapsed ? "+" : "−";
+    });
+  }
+
+  const toggleCards = [
+    { card: "#cariesSection", btn: "#btnToggleCariesCard", label: "Fogszuvasodás" },
+    { card: "#fillingSection", btn: "#btnToggleFillingCard", label: "Tömések és Konzerválás" },
+    { card: "#endoSection", btn: "#btnToggleEndoCard", label: "Foggyökér" },
+    { card: "#inflammationSection", btn: "#btnToggleInflammationCard", label: "Fogágy és Gyulladások" },
+  ];
+  toggleCards.forEach(({card, btn, label})=>{
+    const cardEl = $(card);
+    const btnEl = $(btn);
+    if(!cardEl || !btnEl) return;
+    btnEl.addEventListener("click", ()=>{
+      const collapsed = cardEl.classList.toggle("collapsed");
+      btnEl.setAttribute("title", collapsed ? `${label} kinyitása` : `${label} összecsukása`);
+      btnEl.setAttribute("aria-label", collapsed ? `${label} kinyitása` : `${label} összecsukása`);
+      const icon = $(".toggle-icon", btnEl);
+      if(icon) icon.textContent = collapsed ? "+" : "−";
+    });
+  });
 }
 
 (async function init(){
