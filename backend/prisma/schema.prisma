@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Sex {
+  male
+  female
+  other
+}
+
+model Patient {
+  patientId   String   @id
+  lastName    String
+  firstName   String
+  sex         Sex
+  birthDate   DateTime
+  insuranceNum String?
+  phone       String?
+  email       String?
+  zipCode     String?
+  city        String?
+  street      String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isArchived  Boolean  @default(false)
+
+  quotes      Quote[]
+  snapshots   DentalStatusSnapshot[]
+}
+
+model Quote {
+  quoteId            String   @id
+  patientId          String
+  quoteStatus        String
+  createdAt          DateTime @default(now())
+  lastStatusChangeAt DateTime
+  isDeleted          Boolean  @default(false)
+  data               Json
+
+  patient Patient @relation(fields: [patientId], references: [patientId])
+
+  @@index([patientId])
+}
+
+model DentalStatusSnapshot {
+  snapshotId String   @id
+  patientId  String
+  takenAt    DateTime
+  note       String?
+  teeth      Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [patientId])
+
+  @@index([patientId])
+  @@index([takenAt])
+}
