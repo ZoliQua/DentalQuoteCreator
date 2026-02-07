@@ -10,13 +10,47 @@ const FDI_TOOTH_IDS = [
   '41', '42', '43', '44', '45', '46', '47', '48',
 ];
 
-const createHealthyTeeth = (now: string) =>
-  Object.fromEntries(
-    FDI_TOOTH_IDS.map((toothId) => [
-      toothId,
-      { state: 'healthy', updatedAt: now },
-    ])
+const createDefaultToothState = () => ({
+  toothSelection: 'tooth-base',
+  pulpInflam: false,
+  endoResection: false,
+  mods: [],
+  endo: 'none',
+  caries: [],
+  fillingMaterial: 'none',
+  fillingSurfaces: [],
+  fissureSealing: false,
+  contactMesial: false,
+  contactDistal: false,
+  bruxismWear: false,
+  bruxismNeckWear: false,
+  brokenMesial: false,
+  brokenIncisal: false,
+  brokenDistal: false,
+  extractionWound: false,
+  extractionPlan: false,
+  bridgePillar: false,
+  bridgeUnit: 'none',
+  mobility: 'none',
+  crownMaterial: 'natural',
+});
+
+const createDefaultOdontogramPayload = () => {
+  const teeth = Object.fromEntries(
+    FDI_TOOTH_IDS.map((toothId) => [toothId, createDefaultToothState()])
   );
+  return {
+    version: '1.1',
+    globals: {
+      wisdomVisible: true,
+      showBase: true,
+      occlusalVisible: true,
+      showHealthyPulp: true,
+      edentulous: false,
+    },
+    teeth,
+  };
+};
 
 const server = Fastify({
   logger: true,
@@ -186,7 +220,12 @@ server.post('/patients/:patientId/snapshots', async (request, reply) => {
   const body = request.body as {
     note?: string;
     takenAt?: string;
-    teeth?: Record<string, { state: string; surfaceNote?: string; comment?: string; updatedAt?: string }>;
+    teeth?: Record<string, unknown>;
+    payload?: {
+      version?: string;
+      globals?: Record<string, unknown>;
+      teeth?: Record<string, unknown>;
+    };
     baseSnapshotId?: string;
   };
 
@@ -195,13 +234,13 @@ server.post('/patients/:patientId/snapshots', async (request, reply) => {
     return reply.code(404).send({ message: 'Patient not found' });
   }
 
-  let teeth = body.teeth;
-  if (!teeth && body.baseSnapshotId) {
+  let payload = body.payload ?? (body.teeth ? { teeth: body.teeth } : undefined);
+  if (!payload && body.baseSnapshotId) {
     const base = await prisma.dentalStatusSnapshot.findFirst({
       where: { patientId, snapshotId: body.baseSnapshotId },
     });
     if (base?.teeth) {
-      teeth = base.teeth as Record<string, { state: string; surfaceNote?: string; comment?: string; updatedAt?: string }>;
+      payload = base.teeth as { version?: string; globals?: Record<string, unknown>; teeth?: Record<string, unknown> };
     }
   }
 
@@ -217,7 +256,7 @@ server.post('/patients/:patientId/snapshots', async (request, reply) => {
       patientId,
       takenAt,
       note: body.note,
-      teeth: teeth ?? createHealthyTeeth(now.toISOString()),
+      teeth: payload ?? createDefaultOdontogramPayload(),
     },
   });
 
@@ -230,11 +269,19 @@ server.patch('/patients/:patientId/snapshots/:snapshotId', async (request, reply
     note?: string;
     takenAt?: string;
     teeth?: Record<string, unknown>;
+    payload?: {
+      version?: string;
+      globals?: Record<string, unknown>;
+      teeth?: Record<string, unknown>;
+    };
   };
 
   const data: Record<string, unknown> = {};
   if (body.note !== undefined) data.note = body.note;
-  if (body.teeth !== undefined) data.teeth = body.teeth;
+  if (body.payload !== undefined) data.teeth = body.payload;
+  if (body.payload === undefined && body.teeth !== undefined) {
+    data.teeth = { teeth: body.teeth };
+  }
   if (body.takenAt !== undefined) {
     const takenAt = new Date(body.takenAt);
     if (Number.isNaN(takenAt.getTime())) {
