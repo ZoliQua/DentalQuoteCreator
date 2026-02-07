@@ -1,0 +1,3 @@
+[submodule "test_uis/odontogram_editor_v4"]
+	path = test_uis/odontogram_editor_v4
+	url = https://github.com/ZoliQua/React-Odontogram-Modul.git
