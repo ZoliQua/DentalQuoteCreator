@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
-import { useDentalStatus, usePatients, useQuotes } from '../hooks';
+import { usePatients, useQuotes } from '../hooks';
 import {
   Button,
   Card,
@@ -10,35 +10,32 @@ import {
   EmptyState,
   EmptyQuoteIcon,
   ConfirmModal,
-  Select,
-  TextArea,
 } from '../components/common';
-import { createHealthyTeethRecord, formatDate, formatCurrency, formatPatientName, formatQuoteId, getCurrentDateString } from '../utils';
+import { formatDate, formatCurrency, formatPatientName, formatQuoteId } from '../utils';
 import { calculateQuoteTotals } from '../utils/calculations';
-import { useEffect, useMemo, useState } from 'react';
-import { DentalStatusSnapshot, FDITooth, ToothStatus } from '../types';
-import { Odontogram } from '../components/odontogram/Odontogram';
-import { ToothStatusEditor } from '../components/odontogram/ToothStatusEditor';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { OdontogramHost, OdontogramHostHandle } from '../modules/odontogram/OdontogramHost';
+import {
+  listHistoryIndex,
+  loadCurrent,
+  restoreDailySnapshotAsCurrent,
+} from '../modules/odontogram/odontogramStorage';
+import { useOdontogramAutosave } from '../modules/odontogram/useOdontogramAutosave';
+import type { OdontogramHistoryIndexEntry, OdontogramState } from '../modules/odontogram/types';
 
 export function PatientDetailPage() {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
   const { t } = useSettings();
+  const hostRef = useRef<OdontogramHostHandle | null>(null);
   const { getPatient, duplicatePatient, archivePatient, deletePatient } = usePatients();
   const { getQuotesByPatient, createQuote, deleteQuote, duplicateQuote } = useQuotes();
-  const {
-    snapshots,
-    latestSnapshot,
-    createSnapshot,
-    saveSnapshot,
-    updateTooth,
-  } = useDentalStatus(patientId);
-
   const [deleteQuoteConfirm, setDeleteQuoteConfirm] = useState<string | null>(null);
   const [deletePatientConfirm, setDeletePatientConfirm] = useState(false);
-  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
-  const [draftSnapshot, setDraftSnapshot] = useState<DentalStatusSnapshot | null>(null);
-  const [selectedTooth, setSelectedTooth] = useState<FDITooth | undefined>(undefined);
+  const [odontogramMode, setOdontogramMode] = useState<'view' | 'edit'>('view');
+  const [initialOdontogramState, setInitialOdontogramState] = useState<OdontogramState | null>(null);
+  const [odontogramState, setOdontogramState] = useState<OdontogramState | null>(null);
+  const [timelineEntries, setTimelineEntries] = useState<OdontogramHistoryIndexEntry[]>([]);
 
   const patient = patientId ? getPatient(patientId) : undefined;
   const quotes = patientId ? getQuotesByPatient(patientId) : [];
@@ -46,9 +43,9 @@ export function PatientDetailPage() {
   if (!patient) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-gray-900">Páciens nem található</h2>
+        <h2 className="text-xl font-semibold text-gray-900">{t.patients.notFound}</h2>
         <Link to="/patients" className="text-dental-600 hover:text-dental-700 mt-4 inline-block">
-          Vissza a páciensekhez
+          {t.patients.backToPatients}
         </Link>
       </div>
     );
@@ -93,81 +90,57 @@ export function PatientDetailPage() {
     (a, b) => new Date(b.lastStatusChangeAt).getTime() - new Date(a.lastStatusChangeAt).getTime()
   );
 
-  const sortedSnapshots = useMemo(() => {
-    return [...snapshots].sort((a, b) => new Date(b.takenAt).getTime() - new Date(a.takenAt).getTime());
-  }, [snapshots]);
-
   useEffect(() => {
-    if (!patientId || !patient || snapshots.length > 0) return;
-    const created = createSnapshot({ persist: true });
-    if (created) {
-      setSelectedSnapshotId(created.snapshotId);
-    }
-  }, [patientId, patient, snapshots.length, createSnapshot]);
+    if (!patient?.patientId) return;
+    const stored = loadCurrent(patient.patientId);
+    setInitialOdontogramState(stored?.state ?? null);
+    setOdontogramState(stored?.state ?? null);
+    setTimelineEntries(listHistoryIndex(patient.patientId));
+  }, [patient?.patientId]);
 
-  useEffect(() => {
-    if (draftSnapshot || !latestSnapshot) return;
-    setSelectedSnapshotId((current) => current || latestSnapshot.snapshotId);
-  }, [draftSnapshot, latestSnapshot]);
-
-  const activeSnapshot = useMemo(() => {
-    if (draftSnapshot) return draftSnapshot;
-    if (selectedSnapshotId) {
-      return sortedSnapshots.find((snapshot) => snapshot.snapshotId === selectedSnapshotId);
-    }
-    return latestSnapshot;
-  }, [draftSnapshot, selectedSnapshotId, sortedSnapshots, latestSnapshot]);
-
-  const isEditingSnapshot = Boolean(draftSnapshot);
-  const fallbackTeeth = useMemo(() => createHealthyTeethRecord(getCurrentDateString()), []);
-
-  const handleStartSnapshot = (mode: 'copy' | 'clean') => {
-    const base = mode === 'copy' ? latestSnapshot : undefined;
-    const draft = createSnapshot({ base, persist: false });
-    if (draft) {
-      setDraftSnapshot(draft);
-      setSelectedSnapshotId(draft.snapshotId);
-      setSelectedTooth(undefined);
-    }
-  };
-
-  const handleSaveSnapshot = () => {
-    if (!draftSnapshot) return;
-    saveSnapshot(draftSnapshot);
-    setDraftSnapshot(null);
-    setSelectedSnapshotId(draftSnapshot.snapshotId);
-  };
-
-  const handleCancelSnapshot = () => {
-    setDraftSnapshot(null);
-    setSelectedTooth(undefined);
-    if (latestSnapshot) {
-      setSelectedSnapshotId(latestSnapshot.snapshotId);
-    }
-  };
-
-  const handleToothUpdate = (next: ToothStatus) => {
-    if (!draftSnapshot || !selectedTooth) return;
-    setDraftSnapshot(updateTooth(draftSnapshot, selectedTooth, next));
-  };
-
-  const handleSnapshotNoteChange = (value: string) => {
-    if (!draftSnapshot) return;
-    setDraftSnapshot({ ...draftSnapshot, note: value });
-  };
-
-  const snapshotSelectOptions = sortedSnapshots.map((snapshot) => {
-    const takenAt = new Date(snapshot.takenAt);
-    const timeLabel = takenAt.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
-    return {
-      value: snapshot.snapshotId,
-      label: `${formatDate(snapshot.takenAt, 'long')} ${timeLabel}`,
-    };
+  useOdontogramAutosave({
+    patientId: patient?.patientId ?? '',
+    state: odontogramState,
+    enabled: Boolean(patient?.patientId),
   });
+
+  useEffect(() => {
+    if (!patient?.patientId) return;
+    setTimelineEntries(listHistoryIndex(patient.patientId));
+  }, [odontogramState, patient?.patientId]);
+
+  const timelineRows = useMemo(() => {
+    return timelineEntries.map((entry) => ({
+      ...entry,
+      formatted: new Date(entry.updatedAt).toLocaleString(),
+    }));
+  }, [timelineEntries]);
+
+  const handleSwitchToView = async () => {
+    setOdontogramMode('view');
+    await hostRef.current?.syncViewMode();
+    if (!patient?.patientId) return;
+    const current = loadCurrent(patient.patientId);
+    if (!current?.state) return;
+    setInitialOdontogramState(current.state);
+    setOdontogramState(current.state);
+    await hostRef.current?.importState(current.state);
+  };
+
+  const handleRestoreTimeline = async (dateKey: string) => {
+    if (!patient?.patientId) return;
+    const restored = restoreDailySnapshotAsCurrent(patient.patientId, dateKey);
+    if (!restored) return;
+    setInitialOdontogramState(restored.state);
+    setOdontogramState(restored.state);
+    setOdontogramMode('view');
+    await hostRef.current?.importState(restored.state);
+    await hostRef.current?.syncViewMode();
+    setTimelineEntries(listHistoryIndex(patient.patientId));
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
@@ -202,7 +175,6 @@ export function PatientDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Patient Info */}
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold">{t.patients.patientDetails}</h2>
@@ -236,7 +208,7 @@ export function PatientDetailPage() {
             )}
             {(patient.zipCode || patient.city || patient.street) && (
               <div>
-                <label className="text-sm text-gray-500">Lakcím</label>
+                <label className="text-sm text-gray-500">{t.patients.address}</label>
                 <p className="font-medium">
                   {[patient.zipCode, patient.city].filter(Boolean).join(' ')}
                   {(patient.zipCode || patient.city) && patient.street ? ', ' : ''}
@@ -258,7 +230,6 @@ export function PatientDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Quotes */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">{t.quotes.title}</h2>
@@ -281,7 +252,7 @@ export function PatientDetailPage() {
                 <EmptyState
                   icon={<EmptyQuoteIcon />}
                   title={t.quotes.noQuotes}
-                  description="Készítsen új árajánlatot a páciensnek"
+                  description={t.patients.createQuotePrompt}
                   actionLabel={t.quotes.newQuote}
                   onAction={handleNewQuote}
                 />
@@ -310,19 +281,24 @@ export function PatientDetailPage() {
                                   quote.quoteStatus === 'draft'
                                     ? 'warning'
                                     : quote.quoteStatus === 'completed'
-                                    ? 'default'
-                                    : quote.quoteStatus === 'rejected'
-                                    ? 'danger'
-                                    : 'success'
+                                      ? 'default'
+                                      : quote.quoteStatus === 'rejected'
+                                        ? 'danger'
+                                        : 'success'
                                 }
                                 size="sm"
                               >
-                                {quote.quoteStatus === 'draft' ? t.quotes.statusDraft :
-                                 quote.quoteStatus === 'closed_pending' ? t.quotes.statusClosedPending :
-                                 quote.quoteStatus === 'accepted_in_progress' ? t.quotes.statusAcceptedInProgress :
-                                 quote.quoteStatus === 'rejected' ? t.quotes.statusRejected :
-                                 quote.quoteStatus === 'started' ? t.quotes.statusStarted :
-                                 t.quotes.statusCompleted}
+                                {quote.quoteStatus === 'draft'
+                                  ? t.quotes.statusDraft
+                                  : quote.quoteStatus === 'closed_pending'
+                                    ? t.quotes.statusClosedPending
+                                    : quote.quoteStatus === 'accepted_in_progress'
+                                      ? t.quotes.statusAcceptedInProgress
+                                      : quote.quoteStatus === 'rejected'
+                                        ? t.quotes.statusRejected
+                                        : quote.quoteStatus === 'started'
+                                          ? t.quotes.statusStarted
+                                          : t.quotes.statusCompleted}
                               </Badge>
                             </div>
                           </div>
@@ -330,17 +306,17 @@ export function PatientDetailPage() {
                       </Link>
                       <div className="flex items-center gap-4">
                         <div className="text-right">
-                          <p className="font-semibold text-gray-900">
-                            {formatCurrency(totals.total)}
+                          <p className="font-semibold text-gray-900">{formatCurrency(totals.total)}</p>
+                          <p className="text-sm text-gray-500">
+                            {t.quotes.itemsCount.replace('{count}', String(quote.items.length))}
                           </p>
-                          <p className="text-sm text-gray-500">{quote.items.length} tétel</p>
                         </div>
                         <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={(e) => {
-                              e.preventDefault();
+                            onClick={(event) => {
+                              event.preventDefault();
                               handleDuplicateQuote(quote.quoteId);
                             }}
                           >
@@ -349,8 +325,8 @@ export function PatientDetailPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={(e) => {
-                              e.preventDefault();
+                            onClick={(event) => {
+                              event.preventDefault();
                               setDeleteQuoteConfirm(quote.quoteId);
                             }}
                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
@@ -368,121 +344,59 @@ export function PatientDetailPage() {
         </div>
       </div>
 
-      {/* Dental Status */}
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-lg font-semibold">Státusz</h2>
-              <p className="text-sm text-gray-500">
-                Legutóbbi státusz: {latestSnapshot ? formatDate(latestSnapshot.takenAt, 'long') : '—'}
-              </p>
+              <h2 className="text-lg font-semibold">{t.patients.dentalStatusTitle}</h2>
+              <p className="text-sm text-gray-500">{t.patients.odontogramAutosaveHint}</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => handleStartSnapshot('copy')}
-                disabled={!latestSnapshot || isEditingSnapshot}
-              >
-                Új státuszfelvétel
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => handleStartSnapshot('clean')}
-                disabled={isEditingSnapshot}
-              >
-                Tiszta státusz
-              </Button>
-              {isEditingSnapshot && (
-                <>
-                  <Button onClick={handleSaveSnapshot}>Mentés</Button>
-                  <Button variant="ghost" onClick={handleCancelSnapshot}>
-                    Mégse
-                  </Button>
-                </>
+              {odontogramMode === 'view' ? (
+                <Button variant="secondary" onClick={() => setOdontogramMode('edit')}>
+                  {t.common.edit}
+                </Button>
+              ) : (
+                <Button onClick={handleSwitchToView}>{t.common.finish}</Button>
               )}
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <Select
-              label="Korábbi státuszok"
-              options={snapshotSelectOptions.length > 0 ? snapshotSelectOptions : [{ value: '', label: 'Nincs mentett státusz' }]}
-              value={isEditingSnapshot ? '' : selectedSnapshotId || ''}
-              onChange={(event) => {
-                setSelectedSnapshotId(event.target.value || null);
-                setSelectedTooth(undefined);
-              }}
-              disabled={isEditingSnapshot || snapshotSelectOptions.length === 0}
-              className="w-72"
-            />
-            {isEditingSnapshot && (
-              <Badge variant="warning" size="sm">
-                Szerkesztés folyamatban
-              </Badge>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-4">
-              <Odontogram
-                teeth={activeSnapshot?.teeth || fallbackTeeth}
-                selectedTooth={selectedTooth}
-                onSelect={setSelectedTooth}
-              />
-              <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-rose-500" />
-                  Szuvas
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-sky-500" />
-                  Tömött
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-purple-500" />
-                  Gyökérkezelt
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-400" />
-                  Korona
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-slate-400" />
-                  Implantátum
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Protézis
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-gray-400" />
-                  Hiány
-                </span>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <ToothStatusEditor
-                toothId={selectedTooth}
-                status={selectedTooth && activeSnapshot ? activeSnapshot.teeth[selectedTooth] : undefined}
-                readOnly={!isEditingSnapshot}
-                onChange={handleToothUpdate}
-              />
-              <TextArea
-                label="Státusz megjegyzés"
-                value={activeSnapshot?.note || ''}
-                onChange={(event) => handleSnapshotNoteChange(event.target.value)}
-                rows={3}
-                disabled={!isEditingSnapshot}
-                placeholder="Opcionális megjegyzés a státuszhoz"
-              />
+        <CardContent>
+          <OdontogramHost
+            ref={hostRef}
+            patientId={patient.patientId}
+            mode={odontogramMode}
+            initialState={initialOdontogramState}
+            onChange={setOdontogramState}
+          />
+          <div className="mt-6 border-t border-gray-200 pt-4">
+            <h3 className="text-base font-semibold text-gray-900">{t.patients.statusTimeline}</h3>
+            <div className="mt-3 space-y-2">
+              {timelineRows.length === 0 ? (
+                <p className="text-sm text-gray-500">{t.patients.noStatusHistory}</p>
+              ) : (
+                timelineRows.map((entry) => (
+                  <div
+                    key={entry.dateKey}
+                    className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2"
+                  >
+                    <span className="text-sm text-gray-700">{entry.formatted}</span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleRestoreTimeline(entry.dateKey)}
+                    >
+                      {t.common.restore}
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Delete Quote Confirmation */}
       <ConfirmModal
         isOpen={deleteQuoteConfirm !== null}
         onClose={() => setDeleteQuoteConfirm(null)}
@@ -494,7 +408,6 @@ export function PatientDetailPage() {
         variant="danger"
       />
 
-      {/* Delete Patient Confirmation */}
       <ConfirmModal
         isOpen={deletePatientConfirm}
         onClose={() => setDeletePatientConfirm(false)}

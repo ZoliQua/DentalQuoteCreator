@@ -11,7 +11,7 @@ interface SearchInputProps {
 export function SearchInput({
   value,
   onChange,
-  placeholder = 'Keresés...',
+  placeholder = '',
   debounceMs = 300,
   className = '',
 }: SearchInputProps) {

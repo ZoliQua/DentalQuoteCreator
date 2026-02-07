@@ -5,7 +5,15 @@ import { Settings, Doctor } from '../types';
 import { Button, Card, CardContent, CardHeader, Input, TextArea, Select, ConfirmModal } from '../components/common';
 
 export function SettingsPage() {
-  const { t, settings, updateSettings } = useSettings();
+  const {
+    t,
+    settings,
+    updateSettings,
+    appLanguage,
+    setAppLanguage,
+    odontogramNumbering,
+    setOdontogramNumbering,
+  } = useSettings();
   const { getQuoteStatistics } = useQuotes();
   const [formData, setFormData] = useState<Settings>(settings);
   const [saved, setSaved] = useState(false);
@@ -18,7 +26,7 @@ export function SettingsPage() {
   }, [settings]);
 
   const handleSave = () => {
-    updateSettings(formData);
+    updateSettings({ ...formData, language: appLanguage });
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
@@ -77,7 +85,7 @@ export function SettingsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t.settings.title}</h1>
-          <p className="text-gray-500 mt-1">Rendelő és PDF beállítások kezelése</p>
+          <p className="text-gray-500 mt-1">{t.settings.subtitle}</p>
         </div>
         <div className="flex items-center gap-3">
           {saved && (
@@ -155,7 +163,7 @@ export function SettingsPage() {
                   label={`${t.settings.doctorName} ${index + 1}`}
                   value={doctor.name}
                   onChange={(e) => handleDoctorChange(doctor.id, 'name', e.target.value)}
-                  placeholder="Dr. Név"
+                  placeholder={t.settings.doctorNamePlaceholder}
                 />
               </div>
               <div className="w-32">
@@ -198,14 +206,14 @@ export function SettingsPage() {
             value={formData.pdf.footerText}
             onChange={(e) => handlePdfChange('footerText', e.target.value)}
             rows={3}
-            helperText="Ez a szöveg jelenik meg a PDF láblécében"
+            helperText={t.settings.footerTextHelp}
           />
           <TextArea
             label={t.settings.warrantyText}
             value={formData.pdf.warrantyText}
             onChange={(e) => handlePdfChange('warrantyText', e.target.value)}
             rows={20}
-            helperText="A garancia feltételek szövege (2. oldal)"
+            helperText={t.settings.warrantyTextHelp}
             className="font-mono text-sm"
           />
         </CardContent>
@@ -355,11 +363,12 @@ export function SettingsPage() {
         <CardContent className="space-y-4">
           <Select
             label={t.settings.language}
-            value={formData.language}
-            onChange={(e) => setFormData({ ...formData, language: e.target.value as 'hu' | 'en' })}
+            value={appLanguage}
+            onChange={(e) => setAppLanguage(e.target.value as 'hu' | 'en' | 'de')}
             options={[
               { value: 'hu', label: t.settings.hungarian },
               { value: 'en', label: t.settings.english },
+              { value: 'de', label: t.settings.german },
             ]}
           />
           <Input
@@ -374,7 +383,27 @@ export function SettingsPage() {
             }
             min={1}
             max={365}
-            helperText="Az árajánlatok alapértelmezett érvényességi ideje napokban"
+            helperText={t.settings.defaultValidityDaysHelp}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">{t.settings.odontogramSettings}</h2>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Select
+            label={t.settings.odontogramNumbering}
+            value={odontogramNumbering}
+            onChange={(e) =>
+              setOdontogramNumbering(e.target.value as 'FDI' | 'UNIVERSAL' | 'PALMER')
+            }
+            options={[
+              { value: 'FDI', label: t.settings.odontogramNumberingFdi },
+              { value: 'UNIVERSAL', label: t.settings.odontogramNumberingUniversal },
+              { value: 'PALMER', label: t.settings.odontogramNumberingPalmer },
+            ]}
           />
         </CardContent>
       </Card>

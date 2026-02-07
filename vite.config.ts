@@ -7,6 +7,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@odontogram-shell': path.resolve(
+        __dirname,
+        './test_uis/odontogram_editor_v4/src/App.tsx'
+      ),
     },
   },
 })

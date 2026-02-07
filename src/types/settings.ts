@@ -28,6 +28,6 @@ export interface Settings {
   doctors: Doctor[];
   pdf: PdfSettings;
   quote: QuoteSettings; // New: quote numbering settings
-  language: 'hu' | 'en';
+  language: 'hu' | 'en' | 'de';
   defaultValidityDays: number;
 }

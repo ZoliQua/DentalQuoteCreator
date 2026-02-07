@@ -1,4 +1,3 @@
-import React from 'react';
 import { FDITooth, ToothState, ToothStatus } from '../../types';
 
 const TOOTH_ICON_FILES = import.meta.glob('../../assets/teeth/*.svg', {

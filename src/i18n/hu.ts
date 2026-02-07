@@ -7,6 +7,7 @@ export const hu = {
     catalog: 'Árlista',
     settings: 'Beállítások',
     dataManagement: 'Adatkezelés',
+    lab: 'Teszt felület',
   },
 
   // Common
@@ -33,6 +34,7 @@ export const hu = {
     duplicate: 'Másolás',
     archive: 'Archiválás',
     restore: 'Visszaállítás',
+    finish: 'Befejezés',
   },
 
   // Patients
@@ -60,6 +62,14 @@ export const hu = {
     noPatients: 'Nincs még páciens felvéve.',
     deleteConfirm: 'Biztosan törölni szeretné ezt a pácienst?',
     searchPlaceholder: 'Keresés név, TAJ, telefon vagy email alapján...',
+    notFound: 'Páciens nem található',
+    backToPatients: 'Vissza a páciensekhez',
+    address: 'Lakcím',
+    createQuotePrompt: 'Készítsen új árajánlatot a páciensnek',
+    dentalStatusTitle: 'Státusz',
+    odontogramAutosaveHint: 'Odontogram mentés: automatikus (localStorage)',
+    statusTimeline: 'Státusz idővonal',
+    noStatusHistory: 'Nincs még mentett státusz előzmény.',
   },
 
   // Quotes
@@ -147,6 +157,7 @@ export const hu = {
     eventCompleted: 'Árajánlat befejezve',
     eventCompletionRevoked: 'Árajánlat befejezése visszavonva',
     eventDeleted: 'Árajánlat törölve',
+    itemsCount: '{count} tétel',
   },
 
   // Catalog
@@ -177,6 +188,7 @@ export const hu = {
   // Settings
   settings: {
     title: 'Beállítások',
+    subtitle: 'Rendelő és PDF beállítások kezelése',
     clinicSettings: 'Rendelő adatai',
     clinicName: 'Rendelő neve',
     clinicAddress: 'Cím',
@@ -185,13 +197,16 @@ export const hu = {
     clinicWebsite: 'Weboldal',
     doctorsSettings: 'Orvosok',
     doctorName: 'Orvos neve',
+    doctorNamePlaceholder: 'Dr. Név',
     doctorStampNumber: 'Pecsétszám',
     stampNumberInvalid: 'A mező kitöltése nem megfelelő',
     addDoctor: 'Új orvos hozzáadása',
     removeDoctor: 'Orvos törlése',
     pdfSettings: 'PDF beállítások',
     footerText: 'Lábléc szöveg',
+    footerTextHelp: 'Ez a szöveg jelenik meg a PDF láblécében',
     warrantyText: 'Garancia feltételek',
+    warrantyTextHelp: 'A garancia feltételek szövege (2. oldal)',
     // Quote settings
     quoteSettings: 'Árajánlat Beállítások',
     quoteStatistics: 'Statisztikák',
@@ -215,8 +230,31 @@ export const hu = {
     language: 'Nyelv',
     hungarian: 'Magyar',
     english: 'English',
+    german: 'Deutsch',
     defaultValidityDays: 'Alapértelmezett érvényesség (nap)',
+    defaultValidityDaysHelp: 'Az árajánlatok alapértelmezett érvényességi ideje napokban',
+    odontogramSettings: 'Odontogram beállítások',
+    odontogramLanguage: 'Odontogram nyelv',
+    odontogramNumbering: 'Fogszámozás',
+    odontogramNumberingFdi: 'FDI - ISO 3950',
+    odontogramNumberingUniversal: 'Universal - USA',
+    odontogramNumberingPalmer: 'Zsigmondy-Palmer',
     saved: 'Beállítások mentve!',
+  },
+
+  lab: {
+    subtitle: 'Odontogram lab a beágyazás és a JSON export/import gyors ellenőrzéséhez.',
+    odontogramTitle: 'Odontogram',
+    defaultModeEdit: 'Alap mód: szerkesztés',
+    debugPanelTitle: 'Debug panel',
+    exportJson: 'Export JSON',
+    importJson: 'Import JSON',
+    importPlaceholder: 'Illeszd be ide a JSON-t importhoz.',
+    noExportableState: 'Nincs exportálható állapot.',
+    exportCopied: 'JSON export másolva a vágólapra.',
+    exportCopyFailed: 'Nem sikerült a vágólapra másolni.',
+    importSuccess: 'JSON import sikeres.',
+    importInvalidJson: 'Érvénytelen JSON.',
   },
 
   // Data Management

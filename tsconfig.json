@@ -17,7 +17,8 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@odontogram-shell": ["src/modules/odontogram/vendor/odontogram-shell"]
     }
   },
   "include": ["src"]

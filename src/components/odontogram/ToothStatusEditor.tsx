@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { TextArea } from '../common';
 import { FDITooth, ToothState, ToothStatus } from '../../types';
 import { getCurrentDateString } from '../../utils';

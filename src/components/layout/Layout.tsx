@@ -7,7 +7,7 @@ interface LayoutProps {
 }
 
 export function Layout({ children }: LayoutProps) {
-  const { t, settings, updateSettings } = useSettings();
+  const { t, appLanguage, setAppLanguage } = useSettings();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const location = useLocation();
 
@@ -102,14 +102,27 @@ export function Layout({ children }: LayoutProps) {
         </svg>
       ),
     },
+    {
+      to: '/odontogram-lab',
+      label: t.nav.lab,
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 3h6m-6 0a2 2 0 00-2 2v2a2 2 0 002 2h6a2 2 0 002-2V5a2 2 0 00-2-2m-6 0v2m6-2v2M7 11h10m-9 4h8m-7 4h6"
+          />
+        </svg>
+      ),
+    },
   ];
 
-  const toggleLanguage = () => {
-    updateSettings({
-      ...settings,
-      language: settings.language === 'hu' ? 'en' : 'hu',
-    });
-  };
+  const languageLabel = appLanguage === 'hu'
+    ? t.settings.hungarian
+    : appLanguage === 'en'
+      ? t.settings.english
+      : t.settings.german;
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -179,11 +192,23 @@ export function Layout({ children }: LayoutProps) {
 
         {/* Language Toggle */}
         <div className="p-4 border-t border-gray-200">
-          <button
-            onClick={toggleLanguage}
-            className="flex items-center gap-2 px-4 py-2 w-full rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
-            title={isSidebarOpen ? undefined : settings.language === 'hu' ? 'English' : 'Magyar'}
-          >
+          <div className="w-full">
+            <label className="sr-only" htmlFor="app-language-selector">
+              {t.settings.language}
+            </label>
+            <select
+              id="app-language-selector"
+              value={appLanguage}
+              onChange={(event) => setAppLanguage(event.target.value as 'hu' | 'en' | 'de')}
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-dental-500"
+              title={!isSidebarOpen ? languageLabel : undefined}
+            >
+              <option value="hu">{t.settings.hungarian}</option>
+              <option value="en">{t.settings.english}</option>
+              <option value="de">{t.settings.german}</option>
+            </select>
+          </div>
+          {!isSidebarOpen && (
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"
@@ -192,10 +217,7 @@ export function Layout({ children }: LayoutProps) {
                 d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
               />
             </svg>
-            {isSidebarOpen && (
-              <span>{settings.language === 'hu' ? 'English' : 'Magyar'}</span>
-            )}
-          </button>
+          )}
         </div>
       </aside>
 

@@ -106,8 +106,8 @@ export function ConfirmModal({
   onConfirm,
   title,
   message,
-  confirmText = 'Igen',
-  cancelText = 'Mégse',
+  confirmText = 'Yes',
+  cancelText = 'Cancel',
   variant = 'danger',
 }: ConfirmModalProps) {
   const handleConfirm = () => {

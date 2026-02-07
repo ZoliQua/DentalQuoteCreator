@@ -1,0 +1,29 @@
+.odontogram-host {
+  position: relative;
+}
+
+.odontogram-host__content {
+  position: relative;
+  z-index: 1;
+}
+
+.odontogram-host--embedded .topbar {
+  display: none;
+}
+
+.odontogram-host--view .panel {
+  display: none;
+}
+
+.odontogram-host--view .layout {
+  position: relative;
+}
+
+.odontogram-host--view .layout::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: all;
+  background: transparent;
+}

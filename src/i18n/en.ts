@@ -9,6 +9,7 @@ export const en: TranslationKeys = {
     catalog: 'Price List',
     settings: 'Settings',
     dataManagement: 'Data Management',
+    lab: 'Test Lab',
   },
 
   // Common
@@ -35,6 +36,7 @@ export const en: TranslationKeys = {
     duplicate: 'Duplicate',
     archive: 'Archive',
     restore: 'Restore',
+    finish: 'Finish',
   },
 
   // Patients
@@ -62,6 +64,14 @@ export const en: TranslationKeys = {
     noPatients: 'No patients yet.',
     deleteConfirm: 'Are you sure you want to delete this patient?',
     searchPlaceholder: 'Search by name, insurance number, phone or email...',
+    notFound: 'Patient not found',
+    backToPatients: 'Back to patients',
+    address: 'Address',
+    createQuotePrompt: 'Create a new quote for this patient',
+    dentalStatusTitle: 'Status',
+    odontogramAutosaveHint: 'Odontogram save: automatic (localStorage)',
+    statusTimeline: 'Status timeline',
+    noStatusHistory: 'No saved status history yet.',
   },
 
   // Quotes
@@ -149,6 +159,7 @@ export const en: TranslationKeys = {
     eventCompleted: 'Treatment completed',
     eventCompletionRevoked: 'Completion revoked',
     eventDeleted: 'Quote deleted',
+    itemsCount: '{count} items',
   },
 
   // Catalog
@@ -179,6 +190,7 @@ export const en: TranslationKeys = {
   // Settings
   settings: {
     title: 'Settings',
+    subtitle: 'Manage clinic and PDF settings',
     clinicSettings: 'Clinic Information',
     clinicName: 'Clinic Name',
     clinicAddress: 'Address',
@@ -187,13 +199,16 @@ export const en: TranslationKeys = {
     clinicWebsite: 'Website',
     doctorsSettings: 'Doctors',
     doctorName: 'Doctor Name',
+    doctorNamePlaceholder: 'Dr. Name',
     doctorStampNumber: 'Stamp Number',
     stampNumberInvalid: 'Invalid stamp number format',
     addDoctor: 'Add New Doctor',
     removeDoctor: 'Remove Doctor',
     pdfSettings: 'PDF Settings',
     footerText: 'Footer Text',
+    footerTextHelp: 'This text appears in the PDF footer',
     warrantyText: 'Warranty Terms',
+    warrantyTextHelp: 'Warranty terms text (page 2)',
     // Quote settings
     quoteSettings: 'Quote Settings',
     quoteStatistics: 'Statistics',
@@ -217,8 +232,31 @@ export const en: TranslationKeys = {
     language: 'Language',
     hungarian: 'Magyar',
     english: 'English',
+    german: 'Deutsch',
     defaultValidityDays: 'Default Validity (days)',
+    defaultValidityDaysHelp: 'Default validity period for quotes in days',
+    odontogramSettings: 'Odontogram Settings',
+    odontogramLanguage: 'Odontogram Language',
+    odontogramNumbering: 'Tooth Numbering',
+    odontogramNumberingFdi: 'FDI - ISO 3950',
+    odontogramNumberingUniversal: 'Universal - USA',
+    odontogramNumberingPalmer: 'Zsigmondy-Palmer',
     saved: 'Settings saved!',
+  },
+
+  lab: {
+    subtitle: 'Odontogram lab for quick embedding and JSON export/import checks.',
+    odontogramTitle: 'Odontogram',
+    defaultModeEdit: 'Default mode: edit',
+    debugPanelTitle: 'Debug panel',
+    exportJson: 'Export JSON',
+    importJson: 'Import JSON',
+    importPlaceholder: 'Paste JSON here to import.',
+    noExportableState: 'No exportable state available.',
+    exportCopied: 'JSON export copied to clipboard.',
+    exportCopyFailed: 'Could not copy to clipboard.',
+    importSuccess: 'JSON import successful.',
+    importInvalidJson: 'Invalid JSON.',
   },
 
   // Data Management

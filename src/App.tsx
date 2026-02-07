@@ -8,6 +8,7 @@ import { QuoteEditorPage } from './pages/QuoteEditorPage';
 import { CatalogPage } from './pages/CatalogPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DataManagementPage } from './pages/DataManagementPage';
+import { OdontogramLabPage } from './pages/OdontogramLabPage';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
         <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/data" element={<DataManagementPage />} />
+        <Route path="/odontogram-lab" element={<OdontogramLabPage />} />
       </Routes>
     </Layout>
   );
