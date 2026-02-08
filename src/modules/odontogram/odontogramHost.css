@@ -11,15 +11,33 @@
   display: none;
 }
 
-.odontogram-host--view .panel {
+.odontogram-host--embedded .layout {
+  padding: 0;
+}
+
+.odontogram-host--no-panel .layout {
+  grid-template-columns: 1fr;
+}
+
+.odontogram-host--no-panel .panel {
   display: none;
 }
 
-.odontogram-host--view .layout {
+.odontogram-host--view .panel-header,
+.odontogram-host--view .panel-body {
+  display: none;
+}
+
+.odontogram-host__panel-slot {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 14px;
+}
+
+.odontogram-host--view #toothGrid {
   position: relative;
 }
 
-.odontogram-host--view .layout::after {
+.odontogram-host--view #toothGrid::after {
   content: '';
   position: absolute;
   inset: 0;

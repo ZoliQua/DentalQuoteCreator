@@ -65,6 +65,8 @@ export const de: TranslationKeys = {
     createQuotePrompt: 'Erstellen Sie einen neuen Kostenvoranschlag für den Patienten',
     dentalStatusTitle: 'Status',
     odontogramAutosaveHint: 'Odontogramm-Speicherung: automatisch (localStorage)',
+    statusTimestampLabel: 'Statuszeitpunkt',
+    statusTimestampEmpty: 'Kein gespeicherter Zeitpunkt',
     statusTimeline: 'Status-Zeitleiste',
     noStatusHistory: 'Noch keine gespeicherte Statushistorie.',
   },

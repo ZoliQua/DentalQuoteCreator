@@ -28,6 +28,9 @@ import {
   calculateLineDiscountAmount,
 } from '../utils';
 import { generateQuotePdf } from '../components/pdf/QuotePdfGenerator';
+import { OdontogramHost } from '../modules/odontogram/OdontogramHost';
+import { loadCurrent } from '../modules/odontogram/odontogramStorage';
+import type { OdontogramState } from '../modules/odontogram/types';
 
 // Per-line discount preset type
 type LineDiscountPreset = 'none' | '10' | '20' | '30' | '40' | '50' | 'custom';
@@ -67,6 +70,7 @@ export function QuoteEditorPage() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [lineDiscountPreset, setLineDiscountPreset] = useState<LineDiscountPreset>('none');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [initialOdontogramState, setInitialOdontogramState] = useState<OdontogramState | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const patient = patientId ? getPatient(patientId) : undefined;
@@ -81,6 +85,12 @@ export function QuoteEditorPage() {
   }, [patientId, quoteId, patient, createQuote, navigate]);
 
   const quote = quoteId ? getQuote(quoteId) : undefined;
+
+  useEffect(() => {
+    if (!patientId) return;
+    const stored = loadCurrent(patientId);
+    setInitialOdontogramState(stored?.state ?? null);
+  }, [patientId]);
 
   // Keep per-line discounts in sync with the selected preset (also applies to newly added items)
   useEffect(() => {
@@ -453,6 +463,21 @@ export function QuoteEditorPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Items List */}
         <div className="lg:col-span-2 space-y-4">
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold">{t.patients.dentalStatusTitle}</h2>
+            </CardHeader>
+            <CardContent noPadding>
+              <OdontogramHost
+                patientId={patient.patientId}
+                mode="view"
+                initialState={initialOdontogramState}
+                onChange={() => {}}
+                hidePanel
+              />
+            </CardContent>
+          </Card>
+
           {/* Doctor and Expected Treatments Section */}
           <Card>
             <CardContent>

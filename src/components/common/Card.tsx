@@ -36,10 +36,11 @@ export function CardHeader({ children, className = '' }: CardHeaderProps) {
 interface CardContentProps {
   children: React.ReactNode;
   className?: string;
+  noPadding?: boolean;
 }
 
-export function CardContent({ children, className = '' }: CardContentProps) {
-  return <div className={`px-6 py-4 ${className}`}>{children}</div>;
+export function CardContent({ children, className = '', noPadding = false }: CardContentProps) {
+  return <div className={`${noPadding ? '' : 'px-6 py-4'} ${className}`.trim()}>{children}</div>;
 }
 
 interface CardFooterProps {

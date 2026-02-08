@@ -68,6 +68,8 @@ export const hu = {
     createQuotePrompt: 'Készítsen új árajánlatot a páciensnek',
     dentalStatusTitle: 'Státusz',
     odontogramAutosaveHint: 'Odontogram mentés: automatikus (localStorage)',
+    statusTimestampLabel: 'Státusz időpontja',
+    statusTimestampEmpty: 'Nincs mentett időpont',
     statusTimeline: 'Státusz idővonal',
     noStatusHistory: 'Nincs még mentett státusz előzmény.',
   },

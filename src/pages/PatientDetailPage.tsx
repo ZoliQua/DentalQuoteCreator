@@ -10,8 +10,19 @@ import {
   EmptyState,
   EmptyQuoteIcon,
   ConfirmModal,
+  Modal,
+  Input,
+  Select,
+  TextArea,
 } from '../components/common';
-import { formatDate, formatCurrency, formatPatientName, formatQuoteId } from '../utils';
+import {
+  formatDate,
+  formatCurrency,
+  formatPatientName,
+  formatQuoteId,
+  formatInsuranceNum,
+  getTajValidationState,
+} from '../utils';
 import { calculateQuoteTotals } from '../utils/calculations';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { OdontogramHost, OdontogramHostHandle } from '../modules/odontogram/OdontogramHost';
@@ -22,16 +33,18 @@ import {
 } from '../modules/odontogram/odontogramStorage';
 import { useOdontogramAutosave } from '../modules/odontogram/useOdontogramAutosave';
 import type { OdontogramHistoryIndexEntry, OdontogramState } from '../modules/odontogram/types';
+import type { Patient, PatientFormData } from '../types';
 
 export function PatientDetailPage() {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
   const { t } = useSettings();
   const hostRef = useRef<OdontogramHostHandle | null>(null);
-  const { getPatient, duplicatePatient, archivePatient, deletePatient } = usePatients();
+  const { getPatient, editPatient, duplicatePatient, archivePatient, deletePatient } = usePatients();
   const { getQuotesByPatient, createQuote, deleteQuote, duplicateQuote } = useQuotes();
   const [deleteQuoteConfirm, setDeleteQuoteConfirm] = useState<string | null>(null);
   const [deletePatientConfirm, setDeletePatientConfirm] = useState(false);
+  const [editPatientModalOpen, setEditPatientModalOpen] = useState(false);
   const [odontogramMode, setOdontogramMode] = useState<'view' | 'edit'>('view');
   const [initialOdontogramState, setInitialOdontogramState] = useState<OdontogramState | null>(null);
   const [odontogramState, setOdontogramState] = useState<OdontogramState | null>(null);
@@ -71,6 +84,11 @@ export function PatientDetailPage() {
   const handleDeletePatient = () => {
     deletePatient(patient.patientId);
     navigate('/patients');
+  };
+
+  const handleEditPatient = (data: PatientFormData) => {
+    editPatient(patient.patientId, data);
+    setEditPatientModalOpen(false);
   };
 
   const handleDuplicateQuote = (quoteId: string) => {
@@ -163,6 +181,9 @@ export function PatientDetailPage() {
           <Button variant="secondary" onClick={handleDuplicatePatient}>
             {t.common.duplicate}
           </Button>
+          <Button variant="secondary" onClick={() => setEditPatientModalOpen(true)}>
+            {t.common.edit}
+          </Button>
           {!patient.isArchived && (
             <Button variant="secondary" onClick={handleArchivePatient}>
               {t.common.archive}
@@ -173,6 +194,55 @@ export function PatientDetailPage() {
           </Button>
         </div>
       </div>
+
+      <OdontogramHost
+        ref={hostRef}
+        patientId={patient.patientId}
+        mode={odontogramMode}
+        initialState={initialOdontogramState}
+        onChange={setOdontogramState}
+        panelContent={
+          <details className="rounded-lg border border-gray-200 bg-gray-50" open>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+              <span className="text-sm font-semibold text-gray-900">{t.patients.statusTimeline}</span>
+            </summary>
+            <div className="border-t border-gray-200 px-4 py-3">
+              <div className="space-y-2">
+                {timelineRows.length === 0 ? (
+                  <p className="text-sm text-gray-500">{t.patients.noStatusHistory}</p>
+                ) : (
+                  timelineRows.map((entry) => (
+                    <div
+                      key={entry.dateKey}
+                      className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2"
+                    >
+                      <span className="text-sm text-gray-700">{entry.formatted}</span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => handleRestoreTimeline(entry.dateKey)}
+                        >
+                          {t.common.restore}
+                        </Button>
+                        {odontogramMode === 'view' ? (
+                          <Button size="sm" variant="secondary" onClick={() => setOdontogramMode('edit')}>
+                            {t.common.edit}
+                          </Button>
+                        ) : (
+                          <Button size="sm" onClick={handleSwitchToView}>
+                            {t.common.finish}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </details>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card>
@@ -344,59 +414,6 @@ export function PatientDetailPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">{t.patients.dentalStatusTitle}</h2>
-              <p className="text-sm text-gray-500">{t.patients.odontogramAutosaveHint}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {odontogramMode === 'view' ? (
-                <Button variant="secondary" onClick={() => setOdontogramMode('edit')}>
-                  {t.common.edit}
-                </Button>
-              ) : (
-                <Button onClick={handleSwitchToView}>{t.common.finish}</Button>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <OdontogramHost
-            ref={hostRef}
-            patientId={patient.patientId}
-            mode={odontogramMode}
-            initialState={initialOdontogramState}
-            onChange={setOdontogramState}
-          />
-          <div className="mt-6 border-t border-gray-200 pt-4">
-            <h3 className="text-base font-semibold text-gray-900">{t.patients.statusTimeline}</h3>
-            <div className="mt-3 space-y-2">
-              {timelineRows.length === 0 ? (
-                <p className="text-sm text-gray-500">{t.patients.noStatusHistory}</p>
-              ) : (
-                timelineRows.map((entry) => (
-                  <div
-                    key={entry.dateKey}
-                    className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2"
-                  >
-                    <span className="text-sm text-gray-700">{entry.formatted}</span>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => handleRestoreTimeline(entry.dateKey)}
-                    >
-                      {t.common.restore}
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <ConfirmModal
         isOpen={deleteQuoteConfirm !== null}
         onClose={() => setDeleteQuoteConfirm(null)}
@@ -418,6 +435,178 @@ export function PatientDetailPage() {
         cancelText={t.common.cancel}
         variant="danger"
       />
+
+      <PatientEditModal
+        isOpen={editPatientModalOpen}
+        patient={patient}
+        onClose={() => setEditPatientModalOpen(false)}
+        onSubmit={handleEditPatient}
+      />
     </div>
+  );
+}
+
+type PatientEditModalProps = {
+  isOpen: boolean;
+  patient: Patient;
+  onClose: () => void;
+  onSubmit: (data: PatientFormData) => void;
+};
+
+function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditModalProps) {
+  const { t } = useSettings();
+  const [formData, setFormData] = useState<PatientFormData>({
+    lastName: '',
+    firstName: '',
+    sex: 'male',
+    birthDate: '',
+    insuranceNum: '',
+    phone: '',
+    email: '',
+    zipCode: '',
+    city: '',
+    street: '',
+    notes: '',
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setFormData({
+      lastName: patient.lastName,
+      firstName: patient.firstName,
+      sex: patient.sex,
+      birthDate: patient.birthDate,
+      insuranceNum: patient.insuranceNum || '',
+      phone: patient.phone || '',
+      email: patient.email || '',
+      zipCode: patient.zipCode || '',
+      city: patient.city || '',
+      street: patient.street || '',
+      notes: patient.notes || '',
+    });
+    setErrors({});
+  }, [isOpen, patient]);
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const nextErrors: Record<string, string> = {};
+    if (!formData.lastName.trim()) nextErrors.lastName = t.validation.required;
+    if (!formData.firstName.trim()) nextErrors.firstName = t.validation.required;
+    if (!formData.birthDate) nextErrors.birthDate = t.validation.required;
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+    onSubmit(formData);
+  };
+
+  const tajValidationState = getTajValidationState(formData.insuranceNum || '');
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={t.patients.editPatient} size="lg">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label={t.patients.lastName}
+            value={formData.lastName}
+            onChange={(event) => setFormData({ ...formData, lastName: event.target.value })}
+            error={errors.lastName}
+            required
+          />
+          <Input
+            label={t.patients.firstName}
+            value={formData.firstName}
+            onChange={(event) => setFormData({ ...formData, firstName: event.target.value })}
+            error={errors.firstName}
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Select
+            label={t.patients.sex}
+            value={formData.sex}
+            onChange={(event) =>
+              setFormData({ ...formData, sex: event.target.value as PatientFormData['sex'] })
+            }
+            options={[
+              { value: 'male', label: t.patients.male },
+              { value: 'female', label: t.patients.female },
+              { value: 'other', label: t.patients.other },
+            ]}
+          />
+          <Input
+            type="date"
+            label={t.patients.birthDate}
+            value={formData.birthDate}
+            onChange={(event) => setFormData({ ...formData, birthDate: event.target.value })}
+            error={errors.birthDate}
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label={t.patients.insuranceNum}
+            value={formData.insuranceNum}
+            onChange={(event) =>
+              setFormData({ ...formData, insuranceNum: formatInsuranceNum(event.target.value) })
+            }
+            placeholder={t.patients.insuranceNumPlaceholder}
+            maxLength={11}
+            error={
+              formData.insuranceNum && tajValidationState !== 'valid'
+                ? t.validation.invalidInsuranceNum
+                : undefined
+            }
+          />
+          <Input
+            label={t.patients.phone}
+            value={formData.phone}
+            onChange={(event) => setFormData({ ...formData, phone: event.target.value })}
+          />
+        </div>
+
+        <Input
+          type="email"
+          label={t.patients.email}
+          value={formData.email}
+          onChange={(event) => setFormData({ ...formData, email: event.target.value })}
+        />
+
+        <div className="grid grid-cols-3 gap-4">
+          <Input
+            label={t.patients.zipCode}
+            value={formData.zipCode}
+            onChange={(event) => setFormData({ ...formData, zipCode: event.target.value })}
+          />
+          <Input
+            label={t.patients.city}
+            value={formData.city}
+            onChange={(event) => setFormData({ ...formData, city: event.target.value })}
+          />
+          <Input
+            label={t.patients.street}
+            value={formData.street}
+            onChange={(event) => setFormData({ ...formData, street: event.target.value })}
+          />
+        </div>
+
+        <TextArea
+          label={t.patients.notes}
+          value={formData.notes}
+          onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
+          rows={3}
+        />
+
+        <div className="flex justify-end gap-2 pt-4">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            {t.common.cancel}
+          </Button>
+          <Button type="submit">{t.common.save}</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

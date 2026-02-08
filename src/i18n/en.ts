@@ -70,6 +70,8 @@ export const en: TranslationKeys = {
     createQuotePrompt: 'Create a new quote for this patient',
     dentalStatusTitle: 'Status',
     odontogramAutosaveHint: 'Odontogram save: automatic (localStorage)',
+    statusTimestampLabel: 'Status timestamp',
+    statusTimestampEmpty: 'No saved timestamp',
     statusTimeline: 'Status timeline',
     noStatusHistory: 'No saved status history yet.',
   },
