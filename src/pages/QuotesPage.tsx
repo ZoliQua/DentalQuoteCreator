@@ -12,7 +12,7 @@ import {
   EmptySearchIcon,
   ConfirmModal,
 } from '../components/common';
-import { formatDate, formatCurrency, calculateQuoteTotals } from '../utils';
+import { formatDate, formatDateTime, formatCurrency, calculateQuoteTotals } from '../utils';
 
 type FilterTab = 'all' | 'draft' | 'in_progress' | 'completed';
 
@@ -410,7 +410,7 @@ export function QuotesPage() {
                       {formatDate(quote.createdAt)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
-                      {formatDate(quote.lastStatusChangeAt)}
+                      {formatDateTime(quote.lastStatusChangeAt)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
                       {formatDate(quote.validUntil)}

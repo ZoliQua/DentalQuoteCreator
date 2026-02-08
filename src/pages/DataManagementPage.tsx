@@ -1,8 +1,173 @@
 import { useState, useRef } from 'react';
+import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { useApp } from '../context/AppContext';
 import { useCatalog } from '../hooks';
+import { defaultCatalog } from '../data/defaultCatalog';
+import { defaultSettings } from '../data/defaultSettings';
+import type { ExportData } from '../repositories/StorageRepository';
+import type { CatalogItem, Patient, Quote, QuoteItem, QuoteStatus } from '../types';
+import type { OdontogramState, OdontogramToothState } from '../modules/odontogram/types';
+import { getBudapestDateKey, saveCurrent, saveDailySnapshot } from '../modules/odontogram/odontogramStorage';
 import { Button, Card, CardContent, CardHeader, ConfirmModal } from '../components/common';
+
+const FDI_TEETH = [
+  '18', '17', '16', '15', '14', '13', '12', '11',
+  '21', '22', '23', '24', '25', '26', '27', '28',
+  '48', '47', '46', '45', '44', '43', '42', '41',
+  '31', '32', '33', '34', '35', '36', '37', '38',
+];
+
+const randomInt = (min: number, max: number) => {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+};
+
+const shuffle = <T,>(items: T[]) => {
+  const next = [...items];
+  for (let i = next.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [next[i], next[j]] = [next[j], next[i]];
+  }
+  return next;
+};
+
+const includesAny = (source: string, needles: string[]) => needles.some((needle) => source.includes(needle));
+
+const createDefaultToothState = (): OdontogramToothState => ({
+  toothSelection: 'tooth-base',
+  pulpInflam: false,
+  endoResection: false,
+  mods: [],
+  endo: 'none',
+  caries: [],
+  fillingMaterial: 'none',
+  fillingSurfaces: [],
+  fissureSealing: false,
+  contactMesial: false,
+  contactDistal: false,
+  bruxismWear: false,
+  bruxismNeckWear: false,
+  brokenMesial: false,
+  brokenIncisal: false,
+  brokenDistal: false,
+  extractionWound: false,
+  extractionPlan: false,
+  bridgePillar: false,
+  bridgeUnit: 'none',
+  mobility: 'none',
+  crownMaterial: 'natural',
+});
+
+const addUnique = (items: string[], value: string) => {
+  if (!items.includes(value)) {
+    items.push(value);
+  }
+};
+
+const createOdontogramStateFromQuotes = (quotes: Quote[]): OdontogramState => {
+  const teeth: Record<string, OdontogramToothState> = {};
+  let hasVisibleChanges = false;
+
+  FDI_TEETH.forEach((toothNo) => {
+    teeth[toothNo] = createDefaultToothState();
+  });
+
+  const getTooth = (toothNum: string) => {
+    if (!teeth[toothNum]) return createDefaultToothState();
+    return teeth[toothNum];
+  };
+
+  quotes.forEach((quote) => {
+    quote.items.forEach((item) => {
+      if (!item.toothNum) return;
+      const tooth = getTooth(item.toothNum);
+      const title = item.quoteName.toLowerCase();
+
+      if (includesAny(title, ['húzás', 'extract', 'extrakció', 'fogeltávolítás'])) {
+        tooth.toothSelection = 'none';
+        tooth.extractionPlan = true;
+        tooth.extractionWound = true;
+        hasVisibleChanges = true;
+      } else if (includesAny(title, ['implant'])) {
+        tooth.toothSelection = 'implant';
+        hasVisibleChanges = true;
+      } else {
+        tooth.toothSelection = 'tooth-base';
+      }
+
+      if (includesAny(title, ['gyökér', 'gyökértömés', 'endo', 'trepanálás'])) {
+        tooth.endo = 'endo-filling';
+        hasVisibleChanges = true;
+      }
+
+      if (includesAny(title, ['szuvas', 'caries'])) {
+        addUnique(tooth.caries, 'caries-mesial');
+      }
+
+      if (includesAny(title, ['tömés', 'filling', 'restaur', 'felépítése'])) {
+        tooth.fillingMaterial = 'composite';
+        addUnique(tooth.fillingSurfaces, 'occlusal');
+        addUnique(tooth.fillingSurfaces, 'mesial');
+        hasVisibleChanges = true;
+      }
+
+      if (includesAny(title, ['korona', 'crown', 'cirkónium', 'fém-kerámia', 'e.max'])) {
+        tooth.crownMaterial = 'zircon';
+        hasVisibleChanges = true;
+      }
+
+      if (includesAny(title, ['parod', 'fogkő', 'higién'])) {
+        addUnique(tooth.mods, 'parodontal');
+        hasVisibleChanges = true;
+      }
+    });
+  });
+
+  // Always keep a clearly visible baseline demo pattern, then let quote-derived data extend it.
+  const tooth14 = getTooth('14');
+  if (tooth14.fillingMaterial === 'none') {
+    tooth14.fillingMaterial = 'composite';
+    tooth14.fillingSurfaces = ['occlusal', 'mesial'];
+    hasVisibleChanges = true;
+  }
+
+  const tooth16 = getTooth('16');
+  if (tooth16.endo === 'none') {
+    tooth16.endo = 'endo-filling';
+    hasVisibleChanges = true;
+  }
+
+  const tooth26 = getTooth('26');
+  if (tooth26.toothSelection === 'tooth-base') {
+    tooth26.toothSelection = 'implant';
+    hasVisibleChanges = true;
+  }
+
+  const tooth46 = getTooth('46');
+  if (tooth46.toothSelection === 'tooth-base') {
+    tooth46.toothSelection = 'none';
+    tooth46.extractionPlan = true;
+    tooth46.extractionWound = true;
+    hasVisibleChanges = true;
+  }
+
+  if (!hasVisibleChanges) {
+    const tooth24 = getTooth('24');
+    tooth24.crownMaterial = 'zircon';
+  }
+
+  return {
+    version: '1.0.0',
+    globals: {
+      wisdomVisible: true,
+      showBase: true,
+      occlusalVisible: true,
+      showHealthyPulp: true,
+      edentulous: false,
+    },
+    teeth,
+  };
+};
 
 export function DataManagementPage() {
   const { t } = useSettings();
@@ -13,9 +178,214 @@ export function DataManagementPage() {
   const catalogCsvInputRef = useRef<HTMLInputElement>(null);
 
   const [importConfirm, setImportConfirm] = useState(false);
+  const [clearAllConfirm, setClearAllConfirm] = useState(false);
   const [pendingImportData, setPendingImportData] = useState<string | null>(null);
   const [pendingCatalogImport, setPendingCatalogImport] = useState<{ format: 'json' | 'csv'; data: string } | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const clearOdontogramStorageKeys = () => {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (
+        key.startsWith('odontogram:patient:') ||
+        key.startsWith('settings:odontogram:') ||
+        key === 'settings:language'
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  };
+
+  const createMockPatients = (): Patient[] => {
+    const now = new Date().toISOString();
+    const entries: Array<{ firstName: string; lastName: string; sex: 'male' | 'female'; birthDate: string }> = [
+      { firstName: 'Ádám', lastName: 'Nagy', sex: 'male', birthDate: '1988-02-17' },
+      { firstName: 'Gábor', lastName: 'Kovács', sex: 'male', birthDate: '1979-11-03' },
+      { firstName: 'Márk', lastName: 'Tóth', sex: 'male', birthDate: '1994-06-25' },
+      { firstName: 'Eszter', lastName: 'Szabó', sex: 'female', birthDate: '1986-09-14' },
+      { firstName: 'Réka', lastName: 'Kiss', sex: 'female', birthDate: '1991-04-09' },
+      { firstName: 'Lilla', lastName: 'Farkas', sex: 'female', birthDate: '1983-12-01' },
+    ];
+
+    return entries.map((entry) => ({
+      patientId: nanoid(),
+      firstName: entry.firstName,
+      lastName: entry.lastName,
+      sex: entry.sex,
+      birthDate: entry.birthDate,
+      insuranceNum: '',
+      phone: '',
+      email: '',
+      zipCode: '',
+      city: 'Budapest',
+      street: '',
+      notes: '',
+      createdAt: now,
+      updatedAt: now,
+      isArchived: false,
+    }));
+  };
+
+  const createMockQuotes = (patients: Patient[]): Quote[] => {
+    const statuses: QuoteStatus[] = [
+      'draft',
+      'closed_pending',
+      'accepted_in_progress',
+      'rejected',
+      'started',
+      'completed',
+    ];
+    const doctorId = defaultSettings.doctors[0]?.id || 'doc-1';
+    const doctorName = defaultSettings.doctors[0]?.name || 'Dr. Demo';
+    const pickStatus = () => statuses[Math.floor(Math.random() * statuses.length)];
+
+    const activeCatalog = defaultCatalog.filter((item) => item.isActive);
+    const toQuoteItems = (quoteCatalog: CatalogItem[]): QuoteItem[] =>
+      quoteCatalog.map((catalogItem) => {
+        const itemName = catalogItem.catalogName.toLowerCase();
+        const quoteUnitPriceGross =
+          catalogItem.catalogPrice > 0
+            ? Math.round(catalogItem.catalogPrice * (0.9 + Math.random() * 0.2))
+            : catalogItem.catalogPrice;
+        const quoteQty = catalogItem.catalogUnit === 'db' || catalogItem.catalogUnit === 'fog'
+          ? randomInt(1, 2)
+          : 1;
+        const lineDiscount = Math.random() < 0.25 ? randomInt(5, 15) : 0;
+        const isToothSpecific =
+          !catalogItem.isFullMouth &&
+          !catalogItem.isArch &&
+          (includesAny(itemName, [
+            'fog', 'töm', 'korona', 'inlay', 'onlay', 'implant', 'gyökér', 'endo', 'húzás',
+          ]) || Math.random() < 0.65);
+        const selectedTooth = isToothSpecific
+          ? FDI_TEETH[Math.floor(Math.random() * FDI_TEETH.length)]
+          : undefined;
+
+        return {
+          lineId: nanoid(),
+          catalogItemId: catalogItem.catalogItemId,
+          quoteName: catalogItem.catalogName,
+          quoteUnit: catalogItem.catalogUnit,
+          quoteUnitPriceGross,
+          quoteUnitPriceCurrency: catalogItem.catalogPriceCurrency,
+          quoteQty,
+          quoteLineDiscountType: 'percent',
+          quoteLineDiscountValue: lineDiscount,
+          toothType: selectedTooth ? 'tooth' : undefined,
+          toothNum: selectedTooth,
+          jaw: !selectedTooth && catalogItem.isArch ? (Math.random() < 0.5 ? 'upper' : 'lower') : undefined,
+          treatedArea: catalogItem.isFullMouth
+            ? 'Teljes száj'
+            : catalogItem.isArch
+              ? 'Állcsont'
+              : selectedTooth
+                ? `Fog ${selectedTooth}`
+                : undefined,
+          treatmentSession: randomInt(1, 3),
+        };
+      });
+
+    return patients.flatMap((patient, patientIndex) => {
+      const patientQuotes: Quote[] = [0, 1].map((quoteIndex) => {
+        const created = new Date();
+        created.setDate(created.getDate() - (patientIndex * 2 + quoteIndex));
+        const createdAt = created.toISOString();
+        const quoteItemCount = randomInt(5, Math.min(15, activeCatalog.length));
+        const selectedCatalog = shuffle(activeCatalog).slice(0, quoteItemCount);
+        const items = toQuoteItems(selectedCatalog);
+
+        return {
+          quoteId: nanoid(),
+          quoteNumber: `MOCK-${String(patientIndex * 2 + quoteIndex + 1).padStart(4, '0')}`,
+          patientId: patient.patientId,
+          doctorId,
+          quoteName: `Próba árajánlat ${quoteIndex + 1}`,
+          createdAt,
+          lastStatusChangeAt: createdAt,
+          validUntil: new Date(created.getTime() + 1000 * 60 * 60 * 24 * 60).toISOString(),
+          quoteStatus: pickStatus(),
+          currency: 'HUF',
+          items,
+          globalDiscountType: 'percent',
+          globalDiscountValue: Math.random() < 0.35 ? randomInt(5, 12) : 0,
+          commentToPatient: '',
+          internalNotes: '',
+          expectedTreatments: randomInt(1, 4),
+          events: [
+            {
+              id: nanoid(),
+              timestamp: createdAt,
+              type: 'created',
+              doctorName,
+            },
+          ],
+          isDeleted: false,
+        };
+      });
+
+      return patientQuotes;
+    });
+  };
+
+  const handleLoadMockData = () => {
+    const patients = createMockPatients();
+    const quotes = createMockQuotes(patients);
+    const patientOdontogramStates = new Map<string, OdontogramState>();
+    patients.forEach((patient) => {
+      const patientQuotes = quotes.filter((quote) => quote.patientId === patient.patientId);
+      patientOdontogramStates.set(patient.patientId, createOdontogramStateFromQuotes(patientQuotes));
+    });
+    const payload: ExportData = {
+      version: '1.0.0',
+      exportedAt: new Date().toISOString(),
+      patients,
+      catalog: defaultCatalog,
+      quotes,
+      settings: defaultSettings,
+      dentalStatusSnapshots: [],
+    };
+
+    clearOdontogramStorageKeys();
+    const success = importData(JSON.stringify(payload));
+    if (success) {
+      const dateKey = getBudapestDateKey();
+      patientOdontogramStates.forEach((state, patientId) => {
+        saveCurrent(patientId, state);
+        saveDailySnapshot(patientId, state, dateKey);
+      });
+      refreshData();
+      setMessage({ type: 'success', text: t.dataManagement.databaseOnly.mockLoadSuccess });
+    } else {
+      setMessage({ type: 'error', text: t.dataManagement.importError });
+    }
+    setTimeout(() => setMessage(null), 5000);
+  };
+
+  const handleClearAllData = () => {
+    const payload: ExportData = {
+      version: '1.0.0',
+      exportedAt: new Date().toISOString(),
+      patients: [],
+      catalog: [],
+      quotes: [],
+      settings: defaultSettings,
+      dentalStatusSnapshots: [],
+    };
+
+    clearOdontogramStorageKeys();
+    const success = importData(JSON.stringify(payload));
+    if (success) {
+      refreshData();
+      setMessage({ type: 'success', text: t.dataManagement.databaseOnly.clearAllSuccess });
+    } else {
+      setMessage({ type: 'error', text: t.dataManagement.importError });
+    }
+    setClearAllConfirm(false);
+    setTimeout(() => setMessage(null), 5000);
+  };
 
   const downloadFile = (content: string, filename: string, mimeType: string) => {
     const blob = new Blob([content], { type: mimeType });
@@ -33,7 +403,7 @@ export function DataManagementPage() {
     const data = exportData();
     downloadFile(data, `dental_quote_backup_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
 
-    setMessage({ type: 'success', text: 'Adatok sikeresen exportálva!' });
+    setMessage({ type: 'success', text: t.dataManagement.exportSuccess });
     setTimeout(() => setMessage(null), 3000);
   };
 
@@ -133,7 +503,7 @@ export function DataManagementPage() {
     <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">{t.dataManagement.title}</h1>
-        <p className="text-gray-500 mt-1">Adatok mentése és visszaállítása</p>
+        <p className="text-gray-500 mt-1">{t.dataManagement.subtitle}</p>
       </div>
 
       {/* Warning Banner */}
@@ -211,91 +581,58 @@ export function DataManagementPage() {
             className="hidden"
             onChange={(event) => handleCatalogFileSelect(event, 'csv')}
           />
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
-              <p className="text-sm font-semibold text-gray-800">
-                {t.dataManagement.catalogOnly.exportJson}
-              </p>
-              <p className="text-xs text-gray-500">
-                {t.dataManagement.catalogOnly.exportJsonDescription}
-              </p>
-              <Button size="sm" onClick={handleCatalogExportJson}>
-                {t.dataManagement.catalogOnly.exportJson}
-              </Button>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-gray-200 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.export}</p>
+                  <p className="text-xs text-gray-500">{t.dataManagement.catalogOnly.exportDescription}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" onClick={handleCatalogExportJson}>
+                    JSON
+                  </Button>
+                  <Button size="sm" onClick={handleCatalogExportCsv}>
+                    CSV
+                  </Button>
+                </div>
+              </div>
             </div>
-            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
-              <p className="text-sm font-semibold text-gray-800">
-                {t.dataManagement.catalogOnly.exportCsv}
-              </p>
-              <p className="text-xs text-gray-500">
-                {t.dataManagement.catalogOnly.exportCsvDescription}
-              </p>
-              <Button size="sm" onClick={handleCatalogExportCsv}>
-                {t.dataManagement.catalogOnly.exportCsv}
-              </Button>
-            </div>
-            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
-              <p className="text-sm font-semibold text-gray-800">
-                {t.dataManagement.catalogOnly.importJson}
-              </p>
-              <p className="text-xs text-gray-500">
-                {t.dataManagement.catalogOnly.importJsonDescription}
-              </p>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => catalogJsonInputRef.current?.click()}
-              >
-                {t.dataManagement.catalogOnly.importJson}
-              </Button>
-            </div>
-            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
-              <p className="text-sm font-semibold text-gray-800">
-                {t.dataManagement.catalogOnly.importCsv}
-              </p>
-              <p className="text-xs text-gray-500">
-                {t.dataManagement.catalogOnly.importCsvDescription}
-              </p>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => catalogCsvInputRef.current?.click()}
-              >
-                {t.dataManagement.catalogOnly.importCsv}
-              </Button>
+
+            <div className="rounded-lg border border-gray-200 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.import}</p>
+                  <p className="text-xs text-gray-500">{t.dataManagement.catalogOnly.importDescription}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => catalogJsonInputRef.current?.click()}
+                  >
+                    JSON
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => catalogCsvInputRef.current?.click()}
+                  >
+                    CSV
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Export Card */}
+      {/* Full Database Card */}
       <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold">{t.dataManagement.export}</h2>
+          <h2 className="text-lg font-semibold">{t.dataManagement.databaseOnly.title}</h2>
         </CardHeader>
         <CardContent>
-          <p className="text-gray-600 mb-4">{t.dataManagement.exportDescription}</p>
-          <Button onClick={handleExport}>
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              />
-            </svg>
-            {t.dataManagement.exportButton}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Import Card */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold">{t.dataManagement.import}</h2>
-        </CardHeader>
-        <CardContent>
-          <p className="text-gray-600 mb-4">{t.dataManagement.importDescription}</p>
           <input
             ref={fileInputRef}
             type="file"
@@ -303,24 +640,69 @@ export function DataManagementPage() {
             onChange={handleFileSelect}
             className="hidden"
           />
-          <Button variant="secondary" onClick={handleImportClick}>
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-              />
-            </svg>
-            {t.dataManagement.importButton}
-          </Button>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-gray-200 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.export}</p>
+                  <p className="text-xs text-gray-500">{t.dataManagement.databaseOnly.exportDescription}</p>
+                </div>
+                <Button size="sm" onClick={handleExport}>
+                  JSON
+                </Button>
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.import}</p>
+                  <p className="text-xs text-gray-500">{t.dataManagement.databaseOnly.importDescription}</p>
+                </div>
+                <Button size="sm" variant="secondary" onClick={handleImportClick}>
+                  JSON
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-gray-200 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">
+                    {t.dataManagement.databaseOnly.mockLoadTitle}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {t.dataManagement.databaseOnly.mockLoadDescription}
+                  </p>
+                </div>
+                <Button size="sm" onClick={handleLoadMockData}>
+                  {t.dataManagement.databaseOnly.mockLoadButton}
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-red-200 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-red-700">
+                    {t.dataManagement.databaseOnly.clearAllTitle}
+                  </p>
+                  <p className="text-xs text-red-600">
+                    {t.dataManagement.databaseOnly.clearAllDescription}
+                  </p>
+                </div>
+                <Button size="sm" variant="danger" onClick={() => setClearAllConfirm(true)}>
+                  {t.dataManagement.databaseOnly.clearAllButton}
+                </Button>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       {/* Storage Info */}
       <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold">Tárolási információ</h2>
+          <h2 className="text-lg font-semibold">{t.dataManagement.storageInfoTitle}</h2>
         </CardHeader>
         <CardContent>
           <StorageInfo />
@@ -357,11 +739,23 @@ export function DataManagementPage() {
         cancelText={t.common.cancel}
         variant="danger"
       />
+
+      <ConfirmModal
+        isOpen={clearAllConfirm}
+        onClose={() => setClearAllConfirm(false)}
+        onConfirm={handleClearAllData}
+        title={t.common.confirm}
+        message={t.dataManagement.databaseOnly.clearAllConfirm}
+        confirmText={t.dataManagement.databaseOnly.clearAllButton}
+        cancelText={t.common.cancel}
+        variant="danger"
+      />
     </div>
   );
 }
 
 function StorageInfo() {
+  const { t } = useSettings();
   const { patients, quotes, catalog } = useApp();
 
   const storageUsed = (() => {
@@ -381,19 +775,19 @@ function StorageInfo() {
   return (
     <div className="space-y-3">
       <div className="flex justify-between py-2 border-b">
-        <span className="text-gray-600">Páciensek száma</span>
+        <span className="text-gray-600">{t.dataManagement.storagePatientsCount}</span>
         <span className="font-medium">{patients.length}</span>
       </div>
       <div className="flex justify-between py-2 border-b">
-        <span className="text-gray-600">Árajánlatok száma</span>
+        <span className="text-gray-600">{t.dataManagement.storageQuotesCount}</span>
         <span className="font-medium">{quotes.length}</span>
       </div>
       <div className="flex justify-between py-2 border-b">
-        <span className="text-gray-600">Katalógus tételek</span>
+        <span className="text-gray-600">{t.dataManagement.storageCatalogItems}</span>
         <span className="font-medium">{catalog.length}</span>
       </div>
       <div className="flex justify-between py-2">
-        <span className="text-gray-600">Tárhely használat</span>
+        <span className="text-gray-600">{t.dataManagement.storageUsage}</span>
         <span className="font-medium">{storageUsed} KB</span>
       </div>
     </div>

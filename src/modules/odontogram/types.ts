@@ -87,3 +87,8 @@ export type OdontogramHistoryIndexEntry = {
   dateKey: string;
   updatedAt: string;
 };
+
+export type OdontogramTimelineEntry = {
+  snapshotId: string;
+  updatedAt: string;
+};

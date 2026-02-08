@@ -32,14 +32,33 @@ const TOGGLE_TARGETS: Record<string, { selector: string; collapsedClass: string 
   btnToggleInflammationCard: { selector: '#inflammationSection', collapsedClass: 'collapsed' },
 };
 
-const waitForElement = async (
-  root: HTMLElement | null,
-  selector: string,
-  attempts = 12
-) => {
+const waitForElement = async (root: HTMLElement | null, selector: string, attempts = 12) => {
   for (let i = 0; i < attempts; i += 1) {
     if (root?.querySelector(selector)) return;
     await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+};
+
+const waitForImportReadiness = async (root: HTMLElement | null, attempts = 180) => {
+  for (let i = 0; i < attempts; i += 1) {
+    const input = root?.querySelector(`#${IMPORT_INPUT_ID}`) as HTMLInputElement | null;
+    const exportBtn = root?.querySelector(`#${EXPORT_BUTTON_ID}`) as HTMLButtonElement | null;
+    if (input && typeof input.onchange === 'function' && typeof exportBtn?.onclick === 'function') {
+      return input;
+    }
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+  return null;
+};
+
+const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+const areStatesEqual = (a: OdontogramState | null, b: OdontogramState | null) => {
+  if (!a || !b) return false;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
   }
 };
 
@@ -76,16 +95,31 @@ const captureExportState = async (root: HTMLElement | null): Promise<OdontogramS
 };
 
 const importStateIntoOdontogram = async (root: HTMLElement | null, state: OdontogramState) => {
-  await waitForElement(root, `#${IMPORT_INPUT_ID}`);
-  const input = root?.querySelector(`#${IMPORT_INPUT_ID}`) as HTMLInputElement | null;
+  await waitForElement(root, `#${IMPORT_INPUT_ID}`, 180);
+  const input = await waitForImportReadiness(root, 180);
   if (!input) return;
+
   const file = new File([JSON.stringify(state)], 'odontogram.json', {
     type: 'application/json',
   });
-  const dataTransfer = new DataTransfer();
-  dataTransfer.items.add(file);
-  input.files = dataTransfer.files;
-  input.dispatchEvent(new Event('change', { bubbles: true }));
+  try {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+    try {
+      input.files = dataTransfer.files;
+    } catch {
+      Object.defineProperty(input, 'files', {
+        configurable: true,
+        value: dataTransfer.files,
+      });
+    }
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    if (typeof input.onchange === 'function') {
+      input.onchange(new Event('change'));
+    }
+  } catch {
+    // Ignore import failures; host falls back to default submodule state.
+  }
 };
 
 const setToggleIcon = (button: HTMLElement, collapsed: boolean) => {
@@ -144,10 +178,6 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
           if (!root) return;
           const clearButton = root.querySelector('#btnSelectNoneChart') as HTMLButtonElement | null;
           clearButton?.click();
-          const state = await captureExportState(root);
-          if (state) {
-            await importStateIntoOdontogram(root, state);
-          }
         },
       }),
       []
@@ -162,11 +192,19 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
       let cancelled = false;
       suppressMutationsRef.current = true;
       const run = async () => {
-        await importStateIntoOdontogram(rootRef.current, initialState);
+        for (let i = 0; i < 6; i += 1) {
+          if (cancelled) return;
+          await importStateIntoOdontogram(rootRef.current, initialState);
+          await sleep(120);
+          const exported = await captureExportState(rootRef.current);
+          if (areStatesEqual(exported, initialState)) {
+            break;
+          }
+        }
         if (!cancelled) {
           window.setTimeout(() => {
             suppressMutationsRef.current = false;
-          }, 0);
+          }, 50);
         }
       };
       run();
@@ -210,15 +248,11 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
 
     useEffect(() => {
       if (mode !== 'view') return;
-      const clearSelection = async () => {
+      const clearSelection = () => {
         const root = rootRef.current;
         if (!root) return;
         const clearButton = root.querySelector('#btnSelectNoneChart') as HTMLButtonElement | null;
         clearButton?.click();
-        const state = await captureExportState(root);
-        if (state) {
-          await importStateIntoOdontogram(root, state);
-        }
       };
       clearSelection();
     }, [mode]);

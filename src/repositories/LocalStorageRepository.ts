@@ -288,6 +288,14 @@ export class LocalStorageRepository implements StorageRepository {
         needsSave = true;
       }
 
+      if (!parsed.dateFormat) {
+        parsed.dateFormat = defaultSettings.dateFormat;
+        needsSave = true;
+      } else if (!String(parsed.dateFormat).includes('HH:MM:SS')) {
+        parsed.dateFormat = `${parsed.dateFormat} HH:MM:SS`;
+        needsSave = true;
+      }
+
       if (needsSave) {
         localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(parsed));
       }

@@ -17,6 +17,7 @@ import {
 } from '../components/common';
 import {
   formatDate,
+  formatDateTime,
   formatCurrency,
   formatPatientName,
   formatQuoteId,
@@ -25,15 +26,144 @@ import {
 } from '../utils';
 import { calculateQuoteTotals } from '../utils/calculations';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import iconFemale from '../assets/icon-svgs/symbol-female.svg';
+import iconMale from '../assets/icon-svgs/symbol-male.svg';
 import { OdontogramHost, OdontogramHostHandle } from '../modules/odontogram/OdontogramHost';
 import {
-  listHistoryIndex,
   loadCurrent,
-  restoreDailySnapshotAsCurrent,
 } from '../modules/odontogram/odontogramStorage';
-import { useOdontogramAutosave } from '../modules/odontogram/useOdontogramAutosave';
-import type { OdontogramHistoryIndexEntry, OdontogramState } from '../modules/odontogram/types';
+import {
+  applyTimelineSnapshotAsCurrent,
+  createTimelineSnapshot,
+  deleteTimelineSnapshot,
+  duplicateLatestSnapshot,
+  ensureTimelineInitialized,
+  listTimelineEntries,
+  loadTimelineSnapshot,
+  updateTimelineSnapshot,
+} from '../modules/odontogram/odontogramTimelineStorage';
+import type { OdontogramState, OdontogramTimelineEntry } from '../modules/odontogram/types';
 import type { Patient, PatientFormData } from '../types';
+
+type TimelineEditorModalProps = {
+  isOpen: boolean;
+  patientId: string;
+  snapshotState: OdontogramState | null;
+  onClose: () => void;
+  onSave: (state: OdontogramState) => Promise<void>;
+};
+
+function TimelineEditorModal({
+  isOpen,
+  patientId,
+  snapshotState,
+  onClose,
+  onSave,
+}: TimelineEditorModalProps) {
+  const { t } = useSettings();
+  const hostRef = useRef<OdontogramHostHandle | null>(null);
+  const [draftState, setDraftState] = useState<OdontogramState | null>(snapshotState);
+
+  useEffect(() => {
+    setDraftState(snapshotState);
+  }, [snapshotState]);
+
+  const handleSave = async () => {
+    const exported = await hostRef.current?.exportState();
+    const next = exported ?? draftState;
+    if (!next) return;
+    await onSave(next);
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t.patients.statusTimelineEditorTitle}
+      size="full"
+    >
+      <div className="space-y-4">
+        <OdontogramHost
+          ref={hostRef}
+          patientId={patientId}
+          mode="edit"
+          initialState={draftState}
+          onChange={setDraftState}
+        />
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            {t.common.cancel}
+          </Button>
+          <Button onClick={handleSave}>{t.common.save}</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function TimelineActionButtons({
+  onEdit,
+  onDelete,
+  editTitle,
+  deleteTitle,
+}: {
+  onEdit: () => void;
+  onDelete: () => void;
+  editTitle: string;
+  deleteTitle: string;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        className="rounded-md border border-gray-200 p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+        onClick={(event) => {
+          event.stopPropagation();
+          onEdit();
+        }}
+        title={editTitle}
+        aria-label={editTitle}
+      >
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 20h9" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.5 3.5a2.121 2.121 0 013 3L8 18l-4 1 1-4 11.5-11.5z" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className="rounded-md border border-gray-200 p-2 text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
+        onClick={(event) => {
+          event.stopPropagation();
+          onDelete();
+        }}
+        title={deleteTitle}
+        aria-label={deleteTitle}
+      >
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-1 13H6L5 7" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 11v6M14 11v6" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7V4h6v3M4 7h16" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+function TimelinePlusButton({ onClick, title }: { onClick: () => void; title: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className="rounded-md border border-gray-200 p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+    >
+      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+      </svg>
+    </button>
+  );
+}
 
 export function PatientDetailPage() {
   const { patientId } = useParams<{ patientId: string }>();
@@ -45,10 +175,13 @@ export function PatientDetailPage() {
   const [deleteQuoteConfirm, setDeleteQuoteConfirm] = useState<string | null>(null);
   const [deletePatientConfirm, setDeletePatientConfirm] = useState(false);
   const [editPatientModalOpen, setEditPatientModalOpen] = useState(false);
-  const [odontogramMode, setOdontogramMode] = useState<'view' | 'edit'>('view');
   const [initialOdontogramState, setInitialOdontogramState] = useState<OdontogramState | null>(null);
-  const [odontogramState, setOdontogramState] = useState<OdontogramState | null>(null);
-  const [timelineEntries, setTimelineEntries] = useState<OdontogramHistoryIndexEntry[]>([]);
+  const [timelineEntries, setTimelineEntries] = useState<OdontogramTimelineEntry[]>([]);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingSnapshotId, setEditingSnapshotId] = useState<string | null>(null);
+  const [editingSnapshotState, setEditingSnapshotState] = useState<OdontogramState | null>(null);
+  const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null);
+  const [pendingDeleteSnapshotId, setPendingDeleteSnapshotId] = useState<string | null>(null);
 
   const patient = patientId ? getPatient(patientId) : undefined;
   const quotes = patientId ? getQuotesByPatient(patientId) : [];
@@ -108,148 +241,230 @@ export function PatientDetailPage() {
     (a, b) => new Date(b.lastStatusChangeAt).getTime() - new Date(a.lastStatusChangeAt).getTime()
   );
 
+  const refreshTimeline = (targetPatientId: string) => {
+    const entries = listTimelineEntries(targetPatientId);
+    setTimelineEntries(entries);
+    return entries;
+  };
+
+  const loadSnapshotForView = async (snapshotId: string) => {
+    if (!patient?.patientId) return;
+    const applied = applyTimelineSnapshotAsCurrent(patient.patientId, snapshotId);
+    if (!applied?.state) return;
+    setInitialOdontogramState(applied.state);
+    setActiveSnapshotId(snapshotId);
+    await hostRef.current?.importState(applied.state);
+    await hostRef.current?.syncViewMode();
+  };
+
+  const handleAddTimelineStatus = async () => {
+    if (!patient?.patientId) return;
+    const exported = await hostRef.current?.exportState();
+    const created = duplicateLatestSnapshot(patient.patientId, exported ?? initialOdontogramState);
+    if (!created) {
+      if (exported) {
+        const entry = createTimelineSnapshot(patient.patientId, exported);
+        refreshTimeline(patient.patientId);
+        await loadSnapshotForView(entry.snapshotId);
+      }
+      return;
+    }
+    refreshTimeline(patient.patientId);
+    await loadSnapshotForView(created.snapshotId);
+  };
+
+  const handleOpenEditSnapshot = (snapshotId: string) => {
+    if (!patient?.patientId) return;
+    const snapshot = loadTimelineSnapshot(patient.patientId, snapshotId);
+    if (!snapshot?.state) return;
+    setEditingSnapshotId(snapshotId);
+    setEditingSnapshotState(snapshot.state);
+    setEditorOpen(true);
+  };
+
+  const handleSaveEditedSnapshot = async (state: OdontogramState) => {
+    if (!patient?.patientId || !editingSnapshotId) return;
+    const updated = updateTimelineSnapshot(patient.patientId, editingSnapshotId, state);
+    if (!updated) return;
+    refreshTimeline(patient.patientId);
+    setEditorOpen(false);
+    setEditingSnapshotId(null);
+    setEditingSnapshotState(null);
+    await loadSnapshotForView(updated.snapshotId);
+  };
+
+  const handleDeleteTimelineSnapshot = async (snapshotId: string) => {
+    if (!patient?.patientId) return;
+    const success = deleteTimelineSnapshot(patient.patientId, snapshotId);
+    if (!success) return;
+    const entries = refreshTimeline(patient.patientId);
+    if (activeSnapshotId === snapshotId) {
+      const next = entries[0];
+      if (next?.snapshotId) {
+        await loadSnapshotForView(next.snapshotId);
+      } else {
+        setActiveSnapshotId(null);
+      }
+    }
+  };
+
   useEffect(() => {
     if (!patient?.patientId) return;
+    const entries = ensureTimelineInitialized(patient.patientId);
+    setTimelineEntries(entries);
+    const latest = entries[0];
+    if (latest?.snapshotId) {
+      const latestSnapshot = loadTimelineSnapshot(patient.patientId, latest.snapshotId);
+      if (latestSnapshot?.state) {
+        setInitialOdontogramState(latestSnapshot.state);
+        setActiveSnapshotId(latest.snapshotId);
+        return;
+      }
+    }
     const stored = loadCurrent(patient.patientId);
     setInitialOdontogramState(stored?.state ?? null);
-    setOdontogramState(stored?.state ?? null);
-    setTimelineEntries(listHistoryIndex(patient.patientId));
   }, [patient?.patientId]);
 
-  useOdontogramAutosave({
-    patientId: patient?.patientId ?? '',
-    state: odontogramState,
-    enabled: Boolean(patient?.patientId),
-  });
-
   useEffect(() => {
-    if (!patient?.patientId) return;
-    setTimelineEntries(listHistoryIndex(patient.patientId));
-  }, [odontogramState, patient?.patientId]);
+    if (!initialOdontogramState) return;
+    const frame = window.requestAnimationFrame(() => {
+      hostRef.current?.syncViewMode();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialOdontogramState]);
 
   const timelineRows = useMemo(() => {
     return timelineEntries.map((entry) => ({
       ...entry,
-      formatted: new Date(entry.updatedAt).toLocaleString(),
+      formatted: formatDateTime(entry.updatedAt),
     }));
   }, [timelineEntries]);
 
-  const handleSwitchToView = async () => {
-    setOdontogramMode('view');
-    await hostRef.current?.syncViewMode();
-    if (!patient?.patientId) return;
-    const current = loadCurrent(patient.patientId);
-    if (!current?.state) return;
-    setInitialOdontogramState(current.state);
-    setOdontogramState(current.state);
-    await hostRef.current?.importState(current.state);
-  };
-
-  const handleRestoreTimeline = async (dateKey: string) => {
-    if (!patient?.patientId) return;
-    const restored = restoreDailySnapshotAsCurrent(patient.patientId, dateKey);
-    if (!restored) return;
-    setInitialOdontogramState(restored.state);
-    setOdontogramState(restored.state);
-    setOdontogramMode('view');
-    await hostRef.current?.importState(restored.state);
-    await hostRef.current?.syncViewMode();
-    setTimelineEntries(listHistoryIndex(patient.patientId));
-  };
+  const patientAge = useMemo(() => {
+    if (!patient?.birthDate) return null;
+    const birth = new Date(patient.birthDate);
+    if (Number.isNaN(birth.getTime())) return null;
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const monthDiff = now.getMonth() - birth.getMonth();
+    const dayDiff = now.getDate() - birth.getDate();
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+      age -= 1;
+    }
+    return age < 0 ? null : age;
+  }, [patient?.birthDate]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+    <div id="patientDetailPage" className="space-y-6">
+      <div id="patientHeader" className="flex items-start justify-between">
+        <div id="patientTitleBlock">
+          <div id="patientBreadcrumb" className="flex items-center gap-2 text-sm text-gray-500 mb-2">
             <Link to="/patients" className="hover:text-dental-600">
               {t.patients.title}
             </Link>
             <span>/</span>
             <span>{formatPatientName(patient.lastName, patient.firstName)}</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 id="patientNameDisplay" className="text-2xl font-bold text-gray-900">
             {formatPatientName(patient.lastName, patient.firstName)}
+            {patientAge !== null && (
+              <span className="ml-2 align-middle text-base font-medium text-gray-500">
+                ({patientAge}
+                {(patient.sex === 'male' || patient.sex === 'female') && (
+                  <img
+                    src={patient.sex === 'male' ? iconMale : iconFemale}
+                    alt={t.patients[patient.sex]}
+                    className="ml-1 inline-block h-4 w-4 align-middle"
+                  />
+                )}
+                )
+              </span>
+            )}
           </h1>
           {patient.isArchived && (
-            <Badge variant="warning" size="sm">
-              {t.common.archived}
-            </Badge>
+            <div id="patientArchivedBadge">
+              <Badge variant="warning" size="sm">
+                {t.common.archived}
+              </Badge>
+            </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={handleDuplicatePatient}>
+        <div id="patientActions" className="flex items-center gap-2">
+          <Button id="patientDuplicateBtn" variant="secondary" onClick={handleDuplicatePatient}>
             {t.common.duplicate}
           </Button>
-          <Button variant="secondary" onClick={() => setEditPatientModalOpen(true)}>
+          <Button id="patientEditBtn" variant="secondary" onClick={() => setEditPatientModalOpen(true)}>
             {t.common.edit}
           </Button>
           {!patient.isArchived && (
-            <Button variant="secondary" onClick={handleArchivePatient}>
+            <Button id="patientArchiveBtn" variant="secondary" onClick={handleArchivePatient}>
               {t.common.archive}
             </Button>
           )}
-          <Button variant="danger" onClick={() => setDeletePatientConfirm(true)}>
+          <Button id="patientDeleteBtn" variant="danger" onClick={() => setDeletePatientConfirm(true)}>
             {t.common.delete}
           </Button>
         </div>
       </div>
 
-      <OdontogramHost
-        ref={hostRef}
-        patientId={patient.patientId}
-        mode={odontogramMode}
-        initialState={initialOdontogramState}
-        onChange={setOdontogramState}
-        panelContent={
-          <details className="rounded-lg border border-gray-200 bg-gray-50" open>
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
-              <span className="text-sm font-semibold text-gray-900">{t.patients.statusTimeline}</span>
-            </summary>
-            <div className="border-t border-gray-200 px-4 py-3">
-              <div className="space-y-2">
-                {timelineRows.length === 0 ? (
-                  <p className="text-sm text-gray-500">{t.patients.noStatusHistory}</p>
-                ) : (
-                  timelineRows.map((entry) => (
-                    <div
-                      key={entry.dateKey}
-                      className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2"
-                    >
-                      <span className="text-sm text-gray-700">{entry.formatted}</span>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleRestoreTimeline(entry.dateKey)}
-                        >
-                          {t.common.restore}
-                        </Button>
-                        {odontogramMode === 'view' ? (
-                          <Button size="sm" variant="secondary" onClick={() => setOdontogramMode('edit')}>
-                            {t.common.edit}
-                          </Button>
-                        ) : (
-                          <Button size="sm" onClick={handleSwitchToView}>
-                            {t.common.finish}
-                          </Button>
-                        )}
+      {!editorOpen && (
+        <div id="patientOdontogramSection">
+          <OdontogramHost
+            ref={hostRef}
+            patientId={patient.patientId}
+            mode="view"
+            initialState={initialOdontogramState}
+            onChange={() => {}}
+            panelContent={
+              <div className="rounded-lg border border-gray-200 bg-gray-50">
+                <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+                  <span className="text-sm font-semibold text-gray-900">{t.patients.statusTimeline}</span>
+                  <TimelinePlusButton
+                    onClick={handleAddTimelineStatus}
+                    title={t.patients.statusTimelineAdd}
+                  />
+                </div>
+                <div className="space-y-2 px-4 py-3">
+                  {timelineRows.length === 0 ? (
+                    <p className="text-sm text-gray-500">{t.patients.noStatusHistory}</p>
+                  ) : (
+                    timelineRows.map((entry) => (
+                      <div
+                        key={entry.snapshotId}
+                        className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 ${
+                          activeSnapshotId === entry.snapshotId
+                            ? 'border-dental-300 bg-dental-50'
+                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                        }`}
+                        onClick={() => loadSnapshotForView(entry.snapshotId)}
+                      >
+                        <span className="text-sm text-gray-700">{entry.formatted}</span>
+                        <TimelineActionButtons
+                          onEdit={() => handleOpenEditSnapshot(entry.snapshotId)}
+                          onDelete={() => setPendingDeleteSnapshotId(entry.snapshotId)}
+                          editTitle={t.patients.statusTimelineEdit}
+                          deleteTitle={t.common.delete}
+                        />
                       </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          </details>
-        }
-      />
+            }
+          />
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader>
-            <h2 className="text-lg font-semibold">{t.patients.patientDetails}</h2>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <div id="patientContentGrid" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div id="patientDataCard">
+          <Card>
+            <div id="patientDataCardHeader">
+              <CardHeader>
+                <h2 className="text-lg font-semibold">{t.patients.patientDetails}</h2>
+              </CardHeader>
+            </div>
+            <div id="patientDataCardContent">
+              <CardContent className="space-y-4">
             <div>
               <label className="text-sm text-gray-500">{t.patients.birthDate}</label>
               <p className="font-medium">{formatDate(patient.birthDate, 'long')}</p>
@@ -297,13 +512,15 @@ export function PatientDetailPage() {
                 {t.patients.createdAt}: {formatDate(patient.createdAt)}
               </p>
             </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </div>
+          </Card>
+        </div>
 
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
+        <div id="patientQuotesSection" className="lg:col-span-2 space-y-4">
+          <div id="patientQuotesHeader" className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">{t.quotes.title}</h2>
-            <Button onClick={handleNewQuote}>
+            <Button id="patientNewQuoteBtn" onClick={handleNewQuote}>
               <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
@@ -341,10 +558,11 @@ export function PatientDetailPage() {
                       >
                         <div className="flex items-center gap-4">
                           <div>
-                            <h3 className="font-semibold text-gray-900">
-                              {formatQuoteId(quote.quoteId)}
-                            </h3>
+                            <h3 className="font-semibold text-gray-900">{quote.quoteName}</h3>
                             <div className="flex items-center gap-3 text-sm text-gray-500">
+                              <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-600">
+                                {quote.quoteNumber || formatQuoteId(quote.quoteId)}
+                              </span>
                               <span>{formatDate(quote.createdAt)}</span>
                               <Badge
                                 variant={
@@ -414,6 +632,18 @@ export function PatientDetailPage() {
         </div>
       </div>
 
+      <TimelineEditorModal
+        isOpen={editorOpen}
+        patientId={patient.patientId}
+        snapshotState={editingSnapshotState}
+        onClose={() => {
+          setEditorOpen(false);
+          setEditingSnapshotId(null);
+          setEditingSnapshotState(null);
+        }}
+        onSave={handleSaveEditedSnapshot}
+      />
+
       <ConfirmModal
         isOpen={deleteQuoteConfirm !== null}
         onClose={() => setDeleteQuoteConfirm(null)}
@@ -431,6 +661,22 @@ export function PatientDetailPage() {
         onConfirm={handleDeletePatient}
         title={t.common.confirm}
         message={t.patients.deleteConfirm}
+        confirmText={t.common.delete}
+        cancelText={t.common.cancel}
+        variant="danger"
+      />
+
+      <ConfirmModal
+        isOpen={pendingDeleteSnapshotId !== null}
+        onClose={() => setPendingDeleteSnapshotId(null)}
+        onConfirm={() => {
+          if (pendingDeleteSnapshotId) {
+            handleDeleteTimelineSnapshot(pendingDeleteSnapshotId);
+          }
+          setPendingDeleteSnapshotId(null);
+        }}
+        title={t.common.confirm}
+        message={t.patients.statusTimelineDeleteConfirm}
         confirmText={t.common.delete}
         cancelText={t.common.cancel}
         variant="danger"

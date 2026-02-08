@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
 import { usePatients } from '../hooks';
 import { Patient, PatientFormData } from '../types';
+import iconFemale from '../assets/icon-svgs/symbol-female.svg';
+import iconMale from '../assets/icon-svgs/symbol-male.svg';
 import {
   Button,
   Card,
@@ -59,6 +61,19 @@ export function PatientsPage() {
   const handleDelete = (patientId: string) => {
     deletePatient(patientId);
     setDeleteConfirm(null);
+  };
+
+  const getPatientAge = (birthDate: string): number | null => {
+    const birth = new Date(birthDate);
+    if (Number.isNaN(birth.getTime())) return null;
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const monthDiff = now.getMonth() - birth.getMonth();
+    const dayDiff = now.getDate() - birth.getDate();
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+      age -= 1;
+    }
+    return age < 0 ? null : age;
   };
 
   return (
@@ -143,6 +158,19 @@ export function PatientsPage() {
                   <div>
                     <h3 className="font-semibold text-gray-900">
                       {formatPatientName(patient.lastName, patient.firstName)}
+                      {getPatientAge(patient.birthDate) !== null && (
+                        <span className="ml-2 text-sm font-medium text-gray-500">
+                          ({getPatientAge(patient.birthDate)}
+                          {(patient.sex === 'male' || patient.sex === 'female') && (
+                            <img
+                              src={patient.sex === 'male' ? iconMale : iconFemale}
+                              alt={t.patients[patient.sex]}
+                              className="ml-1 inline-block h-4 w-4 align-middle"
+                            />
+                          )}
+                          )
+                        </span>
+                      )}
                     </h3>
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       <span>{formatDate(patient.birthDate)}</span>

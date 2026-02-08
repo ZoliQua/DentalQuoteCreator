@@ -23,6 +23,7 @@ import {
   formatPatientName,
   formatQuoteId,
   formatDate,
+  formatDateTime,
   calculateQuoteTotals,
   calculateLineTotal,
   calculateLineDiscountAmount,
@@ -329,7 +330,7 @@ export function QuoteEditorPage() {
             </div>
             <div className="text-gray-500 text-sm ml-auto text-right">
               {t.quotes.createdAt}: {formatDate(quote.createdAt)} | {t.quotes.modifiedAt}:{' '}
-              {formatDate(quote.lastStatusChangeAt)} | {t.quotes.validUntil}:{' '}
+              {formatDateTime(quote.lastStatusChangeAt)} | {t.quotes.validUntil}:{' '}
               {formatDate(quote.validUntil)}
             </div>
           </div>
@@ -821,7 +822,7 @@ export function QuoteEditorPage() {
               {[...quote.events].reverse().map((event) => (
                 <div key={event.id} className="flex items-center justify-between text-sm py-2 border-b last:border-0">
                   <div className="flex items-center gap-3">
-                    <span className="text-gray-500">{formatDate(event.timestamp)}</span>
+                    <span className="text-gray-500">{formatDateTime(event.timestamp)}</span>
                     <span className="font-medium">
                       {event.type === 'created' ? t.quotes.eventCreated :
                        event.type === 'closed' ? t.quotes.eventClosed :

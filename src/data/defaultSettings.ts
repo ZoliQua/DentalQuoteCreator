@@ -59,4 +59,5 @@ Kérjük, figyelmesen olvassa, és kérdés esetén forduljon hozzánk, majd al�
   },
   language: 'hu',
   defaultValidityDays: 60,
+  dateFormat: 'YYYY-MM-DD HH:MM:SS',
 };

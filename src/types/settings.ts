@@ -23,6 +23,15 @@ export interface QuoteSettings {
   deletedCount: number; // Count of deleted quotes
 }
 
+export type DateFormat =
+  | 'YYYY-MM-DD HH:MM:SS'
+  | 'YYYY/MM/DD HH:MM:SS'
+  | 'YYYY.MM.DD HH:MM:SS'
+  | 'DD.MM.YYYY HH:MM:SS'
+  | 'DD/MM/YYYY HH:MM:SS'
+  | 'MM.DD.YYYY HH:MM:SS'
+  | 'MM/DD/YYYY HH:MM:SS';
+
 export interface Settings {
   clinic: ClinicSettings;
   doctors: Doctor[];
@@ -30,4 +39,5 @@ export interface Settings {
   quote: QuoteSettings; // New: quote numbering settings
   language: 'hu' | 'en' | 'de';
   defaultValidityDays: number;
+  dateFormat: DateFormat;
 }

@@ -6,7 +6,7 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
   showCloseButton?: boolean;
 }
 
@@ -52,6 +52,7 @@ export function Modal({
     md: 'max-w-md',
     lg: 'max-w-lg',
     xl: 'max-w-2xl',
+    full: 'max-w-[96vw]',
   };
 
   return (
@@ -62,7 +63,7 @@ export function Modal({
           onClick={onClose}
         />
         <div
-          className={`relative bg-white rounded-xl shadow-xl w-full ${sizeClasses[size]} transform transition-all`}
+          className={`relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-xl ${sizeClasses[size]} transform transition-all`}
         >
           <div className="flex items-center justify-between px-6 py-4 border-b">
             <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
@@ -82,7 +83,7 @@ export function Modal({
               </button>
             )}
           </div>
-          <div className="px-6 py-4">{children}</div>
+          <div className="overflow-auto px-6 py-4">{children}</div>
         </div>
       </div>
     </div>

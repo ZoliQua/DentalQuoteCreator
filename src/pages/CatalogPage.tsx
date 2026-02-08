@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useCatalog } from '../hooks';
 import {
@@ -488,11 +488,22 @@ function CatalogItemFormModal({
   title,
 }: CatalogItemFormModalProps) {
   const { t } = useSettings();
+  const formatGroupedNumber = (value: number): string => {
+    const normalized = Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
+    return normalized.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  };
+
+  const parseGroupedNumber = (value: string): number => {
+    const digits = value.replace(/\s+/g, '').replace(/[^\d]/g, '');
+    if (!digits) return 0;
+    return Number(digits);
+  };
+
   const [formData, setFormData] = useState<CatalogItemFormData>({
     catalogCode: item?.catalogCode || '',
     catalogName: item?.catalogName || '',
     catalogUnit: item?.catalogUnit || 'alkalom',
-    catalogPrice: item?.catalogPrice || 0,
+    catalogPrice: item?.catalogPrice ?? 10000,
     catalogPriceCurrency: item?.catalogPriceCurrency || 'HUF',
     catalogVatRate: item?.catalogVatRate || 0,
     catalogTechnicalPrice: item?.catalogTechnicalPrice || 0,
@@ -505,7 +516,34 @@ function CatalogItemFormModal({
     isArch: item?.isArch ?? false,
     isActive: item?.isActive ?? true,
   });
+  const [catalogPriceInput, setCatalogPriceInput] = useState<string>(
+    formatGroupedNumber(item?.catalogPrice ?? 10000)
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const nextPrice = item?.catalogPrice ?? 10000;
+    setFormData({
+      catalogCode: item?.catalogCode || '',
+      catalogName: item?.catalogName || '',
+      catalogUnit: item?.catalogUnit || 'alkalom',
+      catalogPrice: nextPrice,
+      catalogPriceCurrency: item?.catalogPriceCurrency || 'HUF',
+      catalogVatRate: item?.catalogVatRate || 0,
+      catalogTechnicalPrice: item?.catalogTechnicalPrice || 0,
+      catalogCategory: item?.catalogCategory || 'Diagnosztika',
+      hasTechnicalPrice:
+        item?.catalogTechnicalPrice !== undefined
+          ? (item.catalogTechnicalPrice ?? 0) > 0
+          : item?.hasTechnicalPrice ?? false,
+      isFullMouth: item?.isFullMouth ?? false,
+      isArch: item?.isArch ?? false,
+      isActive: item?.isActive ?? true,
+    });
+    setCatalogPriceInput(formatGroupedNumber(nextPrice));
+    setErrors({});
+  }, [isOpen, item]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -564,42 +602,101 @@ function CatalogItemFormModal({
           placeholder="pl. Konzultáció"
         />
 
-        <div className="grid grid-cols-3 gap-4">
-          <Input
-            label={t.catalog.price}
-            type="number"
-            value={formData.catalogPrice}
-            onChange={(e) =>
-              setFormData({ ...formData, catalogPrice: parseFloat(e.target.value) || 0 })
-            }
-            error={errors.catalogPrice}
-            min={0}
-            required
-          />
-          <Select
-            label={t.catalog.currency}
-            value={formData.catalogPriceCurrency}
-            onChange={(e) =>
-              setFormData({
-                ...formData,
-                catalogPriceCurrency: e.target.value as 'HUF' | 'EUR',
-              })
-            }
-            options={[
-              { value: 'HUF', label: 'HUF' },
-              { value: 'EUR', label: 'EUR' },
-            ]}
-          />
-          <Select
-            label={t.catalog.unit}
-            value={formData.catalogUnit}
-            onChange={(e) =>
-              setFormData({ ...formData, catalogUnit: e.target.value as CatalogUnit })
-            }
-            options={CATALOG_UNITS.map((unit) => ({ value: unit, label: unit }))}
-            error={errors.catalogUnit}
-            required
-          />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
+          <div className="md:col-span-5">
+            <div className="w-full">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {t.catalog.price}
+                <span className="text-red-500 ml-1">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={catalogPriceInput}
+                  onChange={(e) => {
+                    const parsed = parseGroupedNumber(e.target.value);
+                    setCatalogPriceInput(formatGroupedNumber(parsed));
+                    setFormData({ ...formData, catalogPrice: parsed });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                    e.preventDefault();
+                    const step = formData.catalogPriceCurrency === 'HUF' ? 1000 : 10;
+                    const direction = e.key === 'ArrowUp' ? 1 : -1;
+                    const next = Math.max(0, formData.catalogPrice + direction * step);
+                    setCatalogPriceInput(formatGroupedNumber(next));
+                    setFormData({ ...formData, catalogPrice: next });
+                  }}
+                  className="w-full px-3 py-2 pr-10 text-right tabular-nums border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                  required
+                />
+                <div className="absolute inset-y-0 right-1 flex flex-col justify-center gap-0.5">
+                  <button
+                    type="button"
+                    className="h-4 w-6 rounded text-gray-500 hover:bg-gray-100"
+                    onClick={() => {
+                      const step = formData.catalogPriceCurrency === 'HUF' ? 1000 : 10;
+                      const next = Math.max(0, formData.catalogPrice + step);
+                      setCatalogPriceInput(formatGroupedNumber(next));
+                      setFormData({ ...formData, catalogPrice: next });
+                    }}
+                    aria-label="Increase price"
+                  >
+                    <svg viewBox="0 0 20 20" fill="currentColor" className="mx-auto h-3 w-3">
+                      <path d="M5.25 11.25 10 6.5l4.75 4.75h-9.5Z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="h-4 w-6 rounded text-gray-500 hover:bg-gray-100"
+                    onClick={() => {
+                      const step = formData.catalogPriceCurrency === 'HUF' ? 1000 : 10;
+                      const next = Math.max(0, formData.catalogPrice - step);
+                      setCatalogPriceInput(formatGroupedNumber(next));
+                      setFormData({ ...formData, catalogPrice: next });
+                    }}
+                    aria-label="Decrease price"
+                  >
+                    <svg viewBox="0 0 20 20" fill="currentColor" className="mx-auto h-3 w-3">
+                      <path d="m5.25 8.75 4.75 4.75 4.75-4.75h-9.5Z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              {errors.catalogPrice && <p className="mt-1 text-sm text-red-600">{errors.catalogPrice}</p>}
+            </div>
+          </div>
+          <div className="md:col-span-3">
+            <Select
+              label={t.catalog.currency}
+              value={formData.catalogPriceCurrency}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  catalogPriceCurrency: e.target.value as 'HUF' | 'EUR',
+                })
+              }
+              style={{ minWidth: 0 }}
+              options={[
+                { value: 'HUF', label: 'HUF' },
+                { value: 'EUR', label: 'EUR' },
+              ]}
+            />
+          </div>
+          <div className="md:col-span-4">
+            <Select
+              label={t.catalog.unit}
+              value={formData.catalogUnit}
+              onChange={(e) =>
+                setFormData({ ...formData, catalogUnit: e.target.value as CatalogUnit })
+              }
+              style={{ minWidth: 0 }}
+              options={CATALOG_UNITS.map((unit) => ({ value: unit, label: unit }))}
+              error={errors.catalogUnit}
+              required
+            />
+          </div>
         </div>
 
         <Input

@@ -1,3 +1,84 @@
+import type { DateFormat } from '../types';
+
+const SETTINGS_STORAGE_KEY = 'dental_quote_settings';
+const DEFAULT_DATE_FORMAT: DateFormat = 'YYYY-MM-DD HH:MM:SS';
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+const DATE_ONLY_PATTERNS = [
+  'YYYY-MM-DD',
+  'YYYY/MM/DD',
+  'YYYY.MM.DD',
+  'DD.MM.YYYY',
+  'DD/MM/YYYY',
+  'MM.DD.YYYY',
+  'MM/DD/YYYY',
+] as const;
+
+type DateOnlyPattern = (typeof DATE_ONLY_PATTERNS)[number];
+
+const isDateOnlyPattern = (value: string): value is DateOnlyPattern => {
+  return DATE_ONLY_PATTERNS.includes(value as DateOnlyPattern);
+};
+
+const normalizeDateFormat = (value?: string): DateFormat => {
+  if (!value) return DEFAULT_DATE_FORMAT;
+  if (value.endsWith(' HH:MM:SS')) {
+    return value as DateFormat;
+  }
+  if (isDateOnlyPattern(value)) {
+    return `${value} HH:MM:SS` as DateFormat;
+  }
+  return DEFAULT_DATE_FORMAT;
+};
+
+const getDatePatternFromDateTime = (pattern: DateFormat): DateOnlyPattern => {
+  const [datePattern] = pattern.split(' ');
+  if (isDateOnlyPattern(datePattern)) return datePattern;
+  return 'YYYY-MM-DD';
+};
+
+export function formatDateWithPattern(date: Date, pattern: DateOnlyPattern): string {
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+
+  switch (pattern) {
+    case 'YYYY/MM/DD':
+      return `${year}/${month}/${day}`;
+    case 'YYYY.MM.DD':
+      return `${year}.${month}.${day}`;
+    case 'DD.MM.YYYY':
+      return `${day}.${month}.${year}`;
+    case 'DD/MM/YYYY':
+      return `${day}/${month}/${year}`;
+    case 'MM.DD.YYYY':
+      return `${month}.${day}.${year}`;
+    case 'MM/DD/YYYY':
+      return `${month}/${day}/${year}`;
+    case 'YYYY-MM-DD':
+    default:
+      return `${year}-${month}-${day}`;
+    }
+}
+
+export function getSelectedDateFormat(): DateFormat {
+  try {
+    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!raw) return DEFAULT_DATE_FORMAT;
+    const parsed = JSON.parse(raw) as { dateFormat?: string };
+    return normalizeDateFormat(parsed?.dateFormat);
+  } catch {
+    return DEFAULT_DATE_FORMAT;
+  }
+}
+
+export function formatDateTimeWithPattern(date: Date, pattern: DateFormat): string {
+  const datePart = formatDateWithPattern(date, getDatePatternFromDateTime(pattern));
+  const timePart = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return `${datePart} ${timePart}`;
+}
+
 export function formatCurrency(amount: number, currency: 'HUF' | 'EUR' = 'HUF'): string {
   if (currency === 'EUR') {
     return new Intl.NumberFormat('hu-HU', {
@@ -22,19 +103,23 @@ export function formatNumber(num: number): string {
 
 export function formatDate(dateString: string, format: 'short' | 'long' = 'short'): string {
   const date = new Date(dateString);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
 
   if (format === 'long') {
+    const year = date.getFullYear();
+    const day = pad(date.getDate());
     const monthNames = [
       'január', 'február', 'március', 'április', 'május', 'június',
       'július', 'augusztus', 'szeptember', 'október', 'november', 'december'
     ];
     return `${year}. ${monthNames[date.getMonth()]} ${day}.`;
   }
-  // Format: YYYY.MM.DD
-  return `${year}.${month}.${day}`;
+
+  return formatDateWithPattern(date, getDatePatternFromDateTime(getSelectedDateFormat()));
+}
+
+export function formatDateTime(dateString: string): string {
+  const date = new Date(dateString);
+  return formatDateTimeWithPattern(date, getSelectedDateFormat());
 }
 
 export function formatDateForInput(dateString: string): string {

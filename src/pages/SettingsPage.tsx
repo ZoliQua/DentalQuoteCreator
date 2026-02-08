@@ -1,8 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useQuotes } from '../hooks';
-import { Settings, Doctor } from '../types';
+import { Settings, Doctor, DateFormat } from '../types';
 import { Button, Card, CardContent, CardHeader, Input, TextArea, Select, ConfirmModal } from '../components/common';
+import { formatDateTimeWithPattern } from '../utils';
+
+const DATE_FORMAT_OPTIONS: DateFormat[] = [
+  'YYYY-MM-DD HH:MM:SS',
+  'YYYY/MM/DD HH:MM:SS',
+  'YYYY.MM.DD HH:MM:SS',
+  'DD.MM.YYYY HH:MM:SS',
+  'DD/MM/YYYY HH:MM:SS',
+  'MM.DD.YYYY HH:MM:SS',
+  'MM/DD/YYYY HH:MM:SS',
+];
 
 export function SettingsPage() {
   const {
@@ -20,6 +31,7 @@ export function SettingsPage() {
   const [resetCounterConfirm, setResetCounterConfirm] = useState(false);
 
   const quoteStats = getQuoteStatistics();
+  const today = new Date();
 
   useEffect(() => {
     setFormData(settings);
@@ -384,6 +396,20 @@ export function SettingsPage() {
             min={1}
             max={365}
             helperText={t.settings.defaultValidityDaysHelp}
+          />
+          <Select
+            label={t.settings.dateFormat}
+            value={formData.dateFormat}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                dateFormat: e.target.value as DateFormat,
+              })
+            }
+            options={DATE_FORMAT_OPTIONS.map((format) => ({
+              value: format,
+              label: `${formatDateTimeWithPattern(today, format)}`,
+            }))}
           />
         </CardContent>
       </Card>
