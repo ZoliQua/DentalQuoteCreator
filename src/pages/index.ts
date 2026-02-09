@@ -6,3 +6,5 @@ export * from './QuoteEditorPage';
 export * from './CatalogPage';
 export * from './SettingsPage';
 export * from './DataManagementPage';
+export * from './InvoicesPage';
+export * from './InvoiceDetailPage';

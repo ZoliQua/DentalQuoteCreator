@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { usePatients, useQuotes, useCatalog } from '../hooks';
 import { QuoteItem, CatalogItem, CatalogCategory, DiscountType } from '../types';
@@ -32,6 +33,9 @@ import { generateQuotePdf } from '../components/pdf/QuotePdfGenerator';
 import { OdontogramHost } from '../modules/odontogram/OdontogramHost';
 import { loadCurrent } from '../modules/odontogram/odontogramStorage';
 import type { OdontogramState } from '../modules/odontogram/types';
+import { previewInvoice, createInvoice } from '../modules/invoicing/api';
+import { saveInvoice, getInvoicesByQuote } from '../modules/invoicing/storage';
+import type { InvoiceRecord } from '../types/invoice';
 
 // Per-line discount preset type
 type LineDiscountPreset = 'none' | '10' | '20' | '30' | '40' | '50' | 'custom';
@@ -72,6 +76,29 @@ export function QuoteEditorPage() {
   const [lineDiscountPreset, setLineDiscountPreset] = useState<LineDiscountPreset>('none');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [initialOdontogramState, setInitialOdontogramState] = useState<OdontogramState | null>(null);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [invoicePreviewXml, setInvoicePreviewXml] = useState('');
+  const [invoicePreviewTotals, setInvoicePreviewTotals] = useState<{ net: number; vat: number; gross: number } | null>(null);
+  const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const [invoiceForm, setInvoiceForm] = useState({
+    buyerName: '',
+    buyerZip: '',
+    buyerCity: '',
+    buyerAddress: '',
+    buyerEmail: '',
+    paymentMethod: 'atutalas',
+    fulfillmentDate: '',
+    dueDate: '',
+    issueDate: '',
+  });
+  const [invoiceItems, setInvoiceItems] = useState<
+    { name: string; unit: string; qty: number; unitPriceNet: number; vatRate: number }[]
+  >([]);
+  const [invoiceComment, setInvoiceComment] = useState('');
+  const [quoteInvoices, setQuoteInvoices] = useState<InvoiceRecord[]>([]);
+  const [invoiceDraggedIndex, setInvoiceDraggedIndex] = useState<number | null>(null);
+  const [invoiceDragOverIndex, setInvoiceDragOverIndex] = useState<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const patient = patientId ? getPatient(patientId) : undefined;
@@ -79,7 +106,7 @@ export function QuoteEditorPage() {
   // Create quote if it doesn't exist
   useEffect(() => {
     if (patientId && !quoteId && patient) {
-      const patientName = formatPatientName(patient.lastName, patient.firstName);
+      const patientName = formatPatientName(patient.lastName, patient.firstName, patient.title);
       const newQuote = createQuote(patientId, patientName);
       navigate(`/patients/${patientId}/quotes/${newQuote.quoteId}`, { replace: true });
     }
@@ -92,6 +119,15 @@ export function QuoteEditorPage() {
     const stored = loadCurrent(patientId);
     setInitialOdontogramState(stored?.state ?? null);
   }, [patientId]);
+
+  // Load invoices for this quote
+  const refreshQuoteInvoices = () => {
+    if (quoteId) setQuoteInvoices(getInvoicesByQuote(quoteId));
+  };
+  useEffect(() => {
+    refreshQuoteInvoices();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteId]);
 
   // Keep per-line discounts in sync with the selected preset (also applies to newly added items)
   useEffect(() => {
@@ -133,6 +169,24 @@ export function QuoteEditorPage() {
     if (!quote) return { subtotal: 0, lineDiscounts: 0, globalDiscount: 0, total: 0 };
     return calculateQuoteTotals(quote);
   }, [quote]);
+
+  // Invoicing amounts
+  const invoicedAmount = useMemo(() => {
+    return quoteInvoices
+      .filter((inv) => inv.status !== 'storno')
+      .reduce((sum, inv) => sum + (inv.totalGross || 0), 0);
+  }, [quoteInvoices]);
+  const remainingAmount = Math.max(0, totals.total - invoicedAmount);
+
+  const canInvoice = (quote?.quoteStatus === 'accepted_in_progress' || quote?.quoteStatus === 'started') && remainingAmount > 0;
+
+  const invoiceDisabledReason = (() => {
+    if (!quote) return '';
+    if (quote.quoteStatus === 'completed') return t.invoices.quoteSettled;
+    if (quote.quoteStatus !== 'accepted_in_progress' && quote.quoteStatus !== 'started') return t.invoices.quoteNotAccepted;
+    if (remainingAmount <= 0) return t.invoices.quoteFullyInvoiced;
+    return '';
+  })();
 
   const filteredCatalogItems = useMemo(() => {
     let items = activeItems;
@@ -274,6 +328,163 @@ export function QuoteEditorPage() {
 
   const categories = Object.keys(itemsByCategory) as CatalogCategory[];
 
+  const buildInvoicePayload = () => {
+    return {
+      seller: {
+        name: settings.clinic.name,
+        email: settings.clinic.email,
+      },
+      buyer: {
+        name: invoiceForm.buyerName,
+        zip: invoiceForm.buyerZip,
+        city: invoiceForm.buyerCity,
+        address: invoiceForm.buyerAddress,
+        email: invoiceForm.buyerEmail,
+      },
+      invoice: {
+        paymentMethod: invoiceForm.paymentMethod,
+        fulfillmentDate: invoiceForm.fulfillmentDate,
+        dueDate: invoiceForm.dueDate,
+        issueDate: invoiceForm.issueDate,
+        currency: quote.currency,
+        comment: invoiceComment,
+        eInvoice: settings.invoice?.invoiceType === 'electronic',
+      },
+      items: invoiceItems,
+    };
+  };
+
+  const handleOpenInvoiceModal = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const dueDate = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    setInvoiceForm({
+      buyerName: formatPatientName(patient.lastName, patient.firstName, patient.title),
+      buyerZip: patient.zipCode || '',
+      buyerCity: patient.city || '',
+      buyerAddress: patient.street || '',
+      buyerEmail: patient.email || '',
+      paymentMethod: 'atutalas',
+      fulfillmentDate: today,
+      dueDate,
+      issueDate: today,
+    });
+    // Initialize invoice items from quote items using settings VAT rate
+    const vatRate = settings.invoice?.defaultVatRate ?? 0;
+    setInvoiceItems(
+      quote.items.map((item) => {
+        const grossUnit = Number(item.quoteUnitPriceGross || 0);
+        const unitPriceNet = vatRate > 0 ? Number((grossUnit / (1 + vatRate / 100)).toFixed(2)) : grossUnit;
+        return {
+          name: item.quoteName,
+          unit: item.quoteUnit,
+          qty: Number(item.quoteQty || 1),
+          unitPriceNet,
+          vatRate,
+        };
+      })
+    );
+    // Pre-fill comment from settings + quote number
+    const defaultComment = settings.invoice?.defaultComment || '';
+    setInvoiceComment(
+      defaultComment
+        ? `${defaultComment} - ${quote.quoteNumber} - ${quote.quoteName}`
+        : `${quote.quoteNumber} - ${quote.quoteName}`
+    );
+    setInvoicePreviewXml('');
+    setInvoicePreviewTotals(null);
+    setInvoiceError(null);
+    setInvoiceModalOpen(true);
+  };
+
+  const handlePreviewInvoice = async () => {
+    setInvoiceSubmitting(true);
+    setInvoiceError(null);
+    try {
+      const response = await previewInvoice(buildInvoicePayload());
+      setInvoicePreviewXml(response.xml);
+      setInvoicePreviewTotals(response.totals);
+    } catch (error) {
+      setInvoiceError(error instanceof Error ? error.message : t.invoices.errorGeneric);
+    } finally {
+      setInvoiceSubmitting(false);
+    }
+  };
+
+  const handleCreateInvoice = async () => {
+    setInvoiceSubmitting(true);
+    setInvoiceError(null);
+    try {
+      const payload = buildInvoicePayload();
+      const response = await createInvoice(payload);
+      if (response.mode === 'live' && !response.success) {
+        throw new Error(response.message || t.invoices.errorGeneric);
+      }
+      // Always calculate totals from items
+      const calculatedTotals = payload.items.reduce((acc, item) => {
+        const net = item.qty * item.unitPriceNet;
+        const vat = (net * item.vatRate) / 100;
+        return { net: acc.net + net, vat: acc.vat + vat, gross: acc.gross + net + vat };
+      }, { net: 0, vat: 0, gross: 0 });
+      const totalGross = Math.round((calculatedTotals.gross + Number.EPSILON) * 100) / 100;
+      const isActuallySent = response.mode === 'live' && response.success;
+      saveInvoice({
+        id: nanoid(),
+        patientId: patient.patientId,
+        quoteId: quote.quoteId,
+        quoteNumber: quote.quoteNumber,
+        quoteName: quote.quoteName,
+        patientName: formatPatientName(patient.lastName, patient.firstName, patient.title),
+        szamlazzInvoiceNumber: response.invoiceNumber || undefined,
+        status: isActuallySent ? 'sent' : 'draft',
+        totalGross,
+        currency: quote.currency,
+        createdAt: new Date().toISOString(),
+        paymentMethod: invoiceForm.paymentMethod,
+        fulfillmentDate: invoiceForm.fulfillmentDate,
+        dueDate: invoiceForm.dueDate,
+        buyer: {
+          name: invoiceForm.buyerName,
+          zip: invoiceForm.buyerZip,
+          city: invoiceForm.buyerCity,
+          address: invoiceForm.buyerAddress,
+          email: invoiceForm.buyerEmail,
+        },
+        items: payload.items.map((item) => {
+          const net = Number((item.qty * item.unitPriceNet).toFixed(2));
+          const vat = Number((net * (item.vatRate / 100)).toFixed(2));
+          const gross = Number((net + vat).toFixed(2));
+          return {
+            name: item.name,
+            unit: item.unit,
+            qty: item.qty,
+            unitPriceNet: item.unitPriceNet,
+            vatRate: item.vatRate,
+            net,
+            vat,
+            gross,
+          };
+        }),
+        xmlPreview: response.xml || invoicePreviewXml || undefined,
+        rawResponse: response.rawResponse || undefined,
+        pdfBase64: response.pdfBase64 || undefined,
+      });
+      setInvoiceModalOpen(false);
+      refreshQuoteInvoices();
+      // Auto-complete when fully invoiced
+      const updatedInvoices = getInvoicesByQuote(quote.quoteId);
+      const newInvoicedAmount = updatedInvoices
+        .filter((inv) => inv.status !== 'storno')
+        .reduce((sum, inv) => sum + (inv.totalGross || 0), 0);
+      if (newInvoicedAmount >= totals.total && (quote.quoteStatus === 'accepted_in_progress' || quote.quoteStatus === 'started')) {
+        completeTreatment(quote.quoteId);
+      }
+    } catch (error) {
+      setInvoiceError(error instanceof Error ? error.message : t.invoices.errorGeneric);
+    } finally {
+      setInvoiceSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -285,7 +496,7 @@ export function QuoteEditorPage() {
             </Link>
             <span>/</span>
             <Link to={`/patients/${patient.patientId}`} className="hover:text-dental-600">
-              {formatPatientName(patient.lastName, patient.firstName)}
+              {formatPatientName(patient.lastName, patient.firstName, patient.title)}
             </Link>
             <span>/</span>
             <span>{formatQuoteId(quote.quoteId)}</span>
@@ -446,6 +657,20 @@ export function QuoteEditorPage() {
             </Button>
           )}
 
+          {/* Invoicing button */}
+          {canInvoice ? (
+            <Button onClick={handleOpenInvoiceModal}>
+              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {t.invoices.invoicing}
+            </Button>
+          ) : invoiceDisabledReason ? (
+            <span className="text-xs text-gray-400 max-w-[120px] text-center" title={invoiceDisabledReason}>
+              {invoiceDisabledReason}
+            </span>
+          ) : null}
+
           {/* PDF Download button */}
           <Button onClick={handleDownloadPdf}>
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -456,7 +681,7 @@ export function QuoteEditorPage() {
                 d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
             </svg>
-            {t.quotes.downloadPdf}
+            PDF
           </Button>
         </div>
       </div>
@@ -633,7 +858,7 @@ export function QuoteEditorPage() {
               <h3 className="font-semibold">Páciens</h3>
             </CardHeader>
             <CardContent>
-              <p className="font-medium">{formatPatientName(patient.lastName, patient.firstName)}</p>
+              <p className="font-medium">{formatPatientName(patient.lastName, patient.firstName, patient.title)}</p>
               <p className="text-sm text-gray-500">{formatDate(patient.birthDate, 'long')}</p>
               {patient.phone && <p className="text-sm text-gray-500">{patient.phone}</p>}
             </CardContent>
@@ -711,8 +936,229 @@ export function QuoteEditorPage() {
               </div>
             </CardFooter>
           </Card>
+
+          {/* Issued Invoices */}
+          {quoteInvoices.length > 0 && (
+            <Card>
+              <CardHeader>
+                <h3 className="font-semibold">{t.invoices.issuedInvoices}</h3>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {quoteInvoices.map((inv) => (
+                  <div key={inv.id} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">{formatDate(inv.createdAt)}</span>
+                      <Link to={`/invoices/${inv.id}`} className="text-dental-600 hover:text-dental-700 hover:underline font-medium">
+                        {inv.szamlazzInvoiceNumber || inv.id.slice(0, 8)}
+                      </Link>
+                      {inv.status === 'storno' && (
+                        <Badge variant="danger">{t.invoices.statusStorno}</Badge>
+                      )}
+                    </div>
+                    <span className={`font-medium ${inv.status === 'storno' ? 'line-through text-gray-400' : ''}`}>
+                      {formatCurrency(inv.totalGross, inv.currency)}
+                    </span>
+                  </div>
+                ))}
+                <div className="pt-2 space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">{t.invoices.invoicedAmount}</span>
+                    <span className="font-medium">{formatCurrency(invoicedAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">{t.invoices.remainingAmount}</span>
+                    <span className={`font-semibold ${remainingAmount <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                      {formatCurrency(remainingAmount)}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
+
+      <Modal
+        isOpen={invoiceModalOpen}
+        onClose={() => setInvoiceModalOpen(false)}
+        title={t.invoices.invoicing}
+        size="xl"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Input
+              label={t.invoices.buyerName}
+              value={invoiceForm.buyerName}
+              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerName: e.target.value }))}
+            />
+            <Input
+              label={t.invoices.buyerEmail}
+              value={invoiceForm.buyerEmail}
+              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerEmail: e.target.value }))}
+            />
+            <Input
+              label={t.invoices.buyerZip}
+              value={invoiceForm.buyerZip}
+              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerZip: e.target.value }))}
+            />
+            <Input
+              label={t.invoices.buyerCity}
+              value={invoiceForm.buyerCity}
+              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerCity: e.target.value }))}
+            />
+            <Input
+              label={t.invoices.buyerAddress}
+              value={invoiceForm.buyerAddress}
+              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerAddress: e.target.value }))}
+            />
+            <Select
+              label={t.invoices.paymentMethod}
+              value={invoiceForm.paymentMethod}
+              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+              options={[
+                { value: 'atutalas', label: t.invoices.paymentTransfer },
+                { value: 'keszpenz', label: t.invoices.paymentCash },
+                { value: 'bankkartya', label: t.invoices.paymentCard },
+              ]}
+            />
+            <Input
+              label={t.invoices.issueDate}
+              type="date"
+              value={invoiceForm.issueDate}
+              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, issueDate: e.target.value }))}
+            />
+            <Input
+              label={t.invoices.fulfillmentDate}
+              type="date"
+              value={invoiceForm.fulfillmentDate}
+              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, fulfillmentDate: e.target.value }))}
+            />
+            <Input
+              label={t.invoices.dueDate}
+              type="date"
+              value={invoiceForm.dueDate}
+              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+            />
+            <Input
+              label={t.invoices.comment}
+              value={invoiceComment}
+              onChange={(e) => setInvoiceComment(e.target.value)}
+            />
+          </div>
+
+          {/* Editable invoice items */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-gray-700">{t.invoices.items}</h3>
+            </div>
+            {invoiceItems.length === 0 ? (
+              <p className="text-sm text-gray-400">{t.quotes.noItems}</p>
+            ) : (
+              <div className="space-y-2">
+                {invoiceItems.map((item, idx) => {
+                  const net = Number((item.qty * item.unitPriceNet).toFixed(2));
+                  const vat = Number(((net * item.vatRate) / 100).toFixed(2));
+                  const gross = Number((net + vat).toFixed(2));
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex items-center gap-2 rounded border border-gray-200 p-2 text-sm ${
+                        invoiceDraggedIndex === idx ? 'opacity-50' : ''
+                      } ${invoiceDragOverIndex === idx ? 'border-dental-500 border-2' : ''}`}
+                      draggable
+                      onDragStart={() => setInvoiceDraggedIndex(idx)}
+                      onDragOver={(e) => { e.preventDefault(); setInvoiceDragOverIndex(idx); }}
+                      onDragEnd={() => {
+                        if (invoiceDraggedIndex !== null && invoiceDragOverIndex !== null && invoiceDraggedIndex !== invoiceDragOverIndex) {
+                          setInvoiceItems((prev) => {
+                            const next = [...prev];
+                            const [moved] = next.splice(invoiceDraggedIndex, 1);
+                            next.splice(invoiceDragOverIndex, 0, moved);
+                            return next;
+                          });
+                        }
+                        setInvoiceDraggedIndex(null);
+                        setInvoiceDragOverIndex(null);
+                      }}
+                    >
+                      <div className="text-gray-400 cursor-grab">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                        </svg>
+                      </div>
+                      <span className="flex-1 font-medium">{item.name}</span>
+                      <Input
+                        type="number"
+                        value={item.qty}
+                        onChange={(e) =>
+                          setInvoiceItems((prev) =>
+                            prev.map((it, i) => (i === idx ? { ...it, qty: Number(e.target.value) || 1 } : it))
+                          )
+                        }
+                        min={1}
+                        className="w-16"
+                      />
+                      <span className="text-gray-500">{item.unit}</span>
+                      <Input
+                        type="number"
+                        value={item.unitPriceNet}
+                        onChange={(e) =>
+                          setInvoiceItems((prev) =>
+                            prev.map((it, i) => (i === idx ? { ...it, unitPriceNet: Number(e.target.value) || 0 } : it))
+                          )
+                        }
+                        className="w-24"
+                      />
+                      <span className="text-gray-500">{item.vatRate}%</span>
+                      <span className="w-24 text-right font-semibold">{formatCurrency(gross)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setInvoiceItems((prev) => prev.filter((_, i) => i !== idx))}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {invoicePreviewTotals && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+              <p>{t.invoices.netTotal}: {formatCurrency(invoicePreviewTotals.net, quote.currency)}</p>
+              <p>{t.invoices.vatTotal}: {formatCurrency(invoicePreviewTotals.vat, quote.currency)}</p>
+              <p className="font-semibold">{t.invoices.grossTotal}: {formatCurrency(invoicePreviewTotals.gross, quote.currency)}</p>
+            </div>
+          )}
+
+          {invoiceError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {invoiceError}
+            </div>
+          )}
+
+          <details>
+            <summary className="cursor-pointer text-sm font-medium text-gray-700">{t.invoices.xmlPreview}</summary>
+            <pre className="mt-2 max-h-56 overflow-auto rounded bg-gray-900 p-3 text-xs text-gray-100">
+              {invoicePreviewXml || t.invoices.xmlNotAvailable}
+            </pre>
+          </details>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setInvoiceModalOpen(false)}>
+              {t.common.cancel}
+            </Button>
+            <Button variant="secondary" onClick={handlePreviewInvoice} disabled={invoiceSubmitting}>
+              {t.invoices.preview}
+            </Button>
+            <Button onClick={handleCreateInvoice} disabled={invoiceSubmitting}>
+              {t.invoices.createInvoice}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Item Selector Modal */}
       <Modal

@@ -57,6 +57,15 @@ Kérjük, figyelmesen olvassa, és kérdés esetén forduljon hozzánk, majd al�
     counter: 0,
     deletedCount: 0,
   },
+  invoice: {
+    invoiceType: 'paper',
+    defaultComment: '',
+    defaultVatRate: 0,
+  },
+  patient: {
+    defaultCountry: 'Magyarország',
+    patientTypes: ['Privát páciens', 'NEAK páciens'],
+  },
   language: 'hu',
   defaultValidityDays: 60,
   dateFormat: 'YYYY-MM-DD HH:MM:SS',

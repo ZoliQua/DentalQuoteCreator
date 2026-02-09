@@ -136,8 +136,9 @@ export function formatInsuranceNum(value: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 9)}`;
 }
 
-export function formatPatientName(lastName: string, firstName: string): string {
-  return `${lastName} ${firstName}`;
+export function formatPatientName(lastName: string, firstName: string, title?: string): string {
+  const parts = [title, lastName, firstName].filter(Boolean);
+  return parts.join(' ');
 }
 
 export function formatQuoteId(quoteId: string): string {
@@ -157,4 +158,45 @@ export function addDays(dateString: string, days: number): string {
 
 export function getDateOnly(dateString: string): string {
   return dateString.split('T')[0];
+}
+
+export function getDatePlaceholder(): string {
+  return getDatePatternFromDateTime(getSelectedDateFormat());
+}
+
+export function formatBirthDateForDisplay(isoDate: string): string {
+  if (!isoDate) return '';
+  const date = new Date(isoDate + 'T00:00:00');
+  if (Number.isNaN(date.getTime())) return isoDate;
+  return formatDateWithPattern(date, getDatePatternFromDateTime(getSelectedDateFormat()));
+}
+
+export function parseBirthDateFromDisplay(displayValue: string): string {
+  if (!displayValue) return '';
+  const pattern = getDatePatternFromDateTime(getSelectedDateFormat());
+
+  const sep = pattern.includes('/') ? '/' : pattern.includes('.') ? '.' : '-';
+  const parts = displayValue.split(sep).map((s) => s.trim());
+  if (parts.length !== 3) return '';
+
+  let year: number, month: number, day: number;
+
+  if (pattern.startsWith('YYYY')) {
+    year = parseInt(parts[0]);
+    month = parseInt(parts[1]);
+    day = parseInt(parts[2]);
+  } else if (pattern.startsWith('DD')) {
+    day = parseInt(parts[0]);
+    month = parseInt(parts[1]);
+    year = parseInt(parts[2]);
+  } else {
+    month = parseInt(parts[0]);
+    day = parseInt(parts[1]);
+    year = parseInt(parts[2]);
+  }
+
+  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return '';
+  if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) return '';
+
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }

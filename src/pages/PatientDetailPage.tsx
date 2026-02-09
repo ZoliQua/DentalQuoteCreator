@@ -23,12 +23,17 @@ import {
   formatQuoteId,
   formatInsuranceNum,
   getTajValidationState,
+  formatBirthDateForDisplay,
+  parseBirthDateFromDisplay,
+  getDatePlaceholder,
 } from '../utils';
+import { postalCodes } from '../data/postalCodes';
 import { calculateQuoteTotals } from '../utils/calculations';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import iconFemale from '../assets/icon-svgs/symbol-female.svg';
 import iconMale from '../assets/icon-svgs/symbol-male.svg';
 import { OdontogramHost, OdontogramHostHandle } from '../modules/odontogram/OdontogramHost';
+import { getInvoicesByPatient } from '../modules/invoicing/storage';
 import {
   loadCurrent,
 } from '../modules/odontogram/odontogramStorage';
@@ -237,6 +242,7 @@ export function PatientDetailPage() {
   };
 
   const activeQuotes = quotes.filter((q) => !q.isDeleted);
+  const patientInvoices = useMemo(() => getInvoicesByPatient(patient.patientId), [patient.patientId]);
   const sortedQuotes = [...activeQuotes].sort(
     (a, b) => new Date(b.lastStatusChangeAt).getTime() - new Date(a.lastStatusChangeAt).getTime()
   );
@@ -363,10 +369,10 @@ export function PatientDetailPage() {
               {t.patients.title}
             </Link>
             <span>/</span>
-            <span>{formatPatientName(patient.lastName, patient.firstName)}</span>
+            <span>{formatPatientName(patient.lastName, patient.firstName, patient.title)}</span>
           </div>
           <h1 id="patientNameDisplay" className="text-2xl font-bold text-gray-900">
-            {formatPatientName(patient.lastName, patient.firstName)}
+            {formatPatientName(patient.lastName, patient.firstName, patient.title)}
             {patientAge !== null && (
               <span className="ml-2 align-middle text-base font-medium text-gray-500">
                 ({patientAge}
@@ -469,6 +475,12 @@ export function PatientDetailPage() {
               <label className="text-sm text-gray-500">{t.patients.birthDate}</label>
               <p className="font-medium">{formatDate(patient.birthDate, 'long')}</p>
             </div>
+            {patient.birthPlace && (
+              <div>
+                <label className="text-sm text-gray-500">{t.patients.birthPlace}</label>
+                <p className="font-medium">{patient.birthPlace}</p>
+              </div>
+            )}
             <div>
               <label className="text-sm text-gray-500">{t.patients.sex}</label>
               <p className="font-medium">{t.patients[patient.sex]}</p>
@@ -477,6 +489,22 @@ export function PatientDetailPage() {
               <div>
                 <label className="text-sm text-gray-500">{t.patients.insuranceNum}</label>
                 <p className="font-medium">{patient.insuranceNum}</p>
+              </div>
+            )}
+            {(patient.zipCode || patient.city || patient.street) && (
+              <div>
+                <label className="text-sm text-gray-500">{t.patients.addressSection}</label>
+                <p className="font-medium">
+                  {patient.country && patient.isForeignAddress ? `${patient.country}, ` : ''}
+                  {[patient.zipCode, patient.city].filter(Boolean).join(' ')}
+                  {(patient.zipCode || patient.city) && patient.street ? ', ' : ''}
+                  {patient.street}
+                </p>
+                {patient.isForeignAddress && (
+                  <span className="inline-block mt-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                    {t.patients.foreignAddress}
+                  </span>
+                )}
               </div>
             )}
             {patient.phone && (
@@ -491,14 +519,10 @@ export function PatientDetailPage() {
                 <p className="font-medium">{patient.email}</p>
               </div>
             )}
-            {(patient.zipCode || patient.city || patient.street) && (
+            {patient.patientType && (
               <div>
-                <label className="text-sm text-gray-500">{t.patients.address}</label>
-                <p className="font-medium">
-                  {[patient.zipCode, patient.city].filter(Boolean).join(' ')}
-                  {(patient.zipCode || patient.city) && patient.street ? ', ' : ''}
-                  {patient.street}
-                </p>
+                <label className="text-sm text-gray-500">{t.patients.patientType}</label>
+                <p className="font-medium">{patient.patientType}</p>
               </div>
             )}
             {patient.notes && (
@@ -629,6 +653,37 @@ export function PatientDetailPage() {
               })}
             </div>
           )}
+
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold">Szamlak</h2>
+            </CardHeader>
+            <CardContent>
+              {patientInvoices.length === 0 ? (
+                <p className="text-sm text-gray-500">Nincs meg ehhez a pacienshez szamla.</p>
+              ) : (
+                <div className="space-y-2">
+                  {patientInvoices.map((invoice) => (
+                    <div
+                      key={invoice.id}
+                      className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2"
+                    >
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {invoice.szamlazzInvoiceNumber || 'Preview szamla'}
+                        </p>
+                        <p className="text-xs text-gray-500">{formatDateTime(invoice.createdAt)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold">{formatCurrency(invoice.totalGross, invoice.currency)}</p>
+                        <p className="text-xs text-gray-500">{invoice.status}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -700,39 +755,58 @@ type PatientEditModalProps = {
 };
 
 function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditModalProps) {
-  const { t } = useSettings();
+  const { t, settings } = useSettings();
   const [formData, setFormData] = useState<PatientFormData>({
+    title: '',
     lastName: '',
     firstName: '',
     sex: 'male',
     birthDate: '',
+    birthPlace: '',
     insuranceNum: '',
     phone: '',
     email: '',
+    country: settings.patient.defaultCountry,
+    isForeignAddress: false,
     zipCode: '',
     city: '',
     street: '',
+    patientType: '',
     notes: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
+  const [birthDateText, setBirthDateText] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
     setFormData({
+      title: patient.title || '',
       lastName: patient.lastName,
       firstName: patient.firstName,
       sex: patient.sex,
       birthDate: patient.birthDate,
+      birthPlace: patient.birthPlace || '',
       insuranceNum: patient.insuranceNum || '',
       phone: patient.phone || '',
       email: patient.email || '',
+      country: patient.country || settings.patient.defaultCountry,
+      isForeignAddress: patient.isForeignAddress || false,
       zipCode: patient.zipCode || '',
       city: patient.city || '',
       street: patient.street || '',
+      patientType: patient.patientType || settings.patient.patientTypes[0] || '',
       notes: patient.notes || '',
     });
+    setBirthDateText(formatBirthDateForDisplay(patient.birthDate));
     setErrors({});
-  }, [isOpen, patient]);
+    setCitySuggestions([]);
+  }, [isOpen, patient, settings.patient.defaultCountry, settings.patient.patientTypes]);
+
+  const validateEmail = (email: string): boolean => {
+    if (!email) return true;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -740,6 +814,19 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
     if (!formData.lastName.trim()) nextErrors.lastName = t.validation.required;
     if (!formData.firstName.trim()) nextErrors.firstName = t.validation.required;
     if (!formData.birthDate) nextErrors.birthDate = t.validation.required;
+    if (!formData.zipCode?.trim()) nextErrors.zipCode = t.validation.required;
+    if (!formData.city?.trim()) nextErrors.city = t.validation.required;
+    if (!formData.street?.trim()) nextErrors.street = t.validation.required;
+
+    const tajState = getTajValidationState(formData.insuranceNum || '');
+    if (tajState !== 'empty' && tajState !== 'valid') {
+      nextErrors.insuranceNum = t.validation.invalidInsuranceNum;
+    }
+
+    if (formData.email && !validateEmail(formData.email)) {
+      nextErrors.email = t.validation.invalidEmail;
+    }
+
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       return;
@@ -747,104 +834,294 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
     onSubmit(formData);
   };
 
-  const tajValidationState = getTajValidationState(formData.insuranceNum || '');
+  const handleBirthDateTextChange = (value: string) => {
+    setBirthDateText(value);
+    const parsed = parseBirthDateFromDisplay(value);
+    if (parsed) {
+      setFormData((prev) => ({ ...prev, birthDate: parsed }));
+    } else if (!value) {
+      setFormData((prev) => ({ ...prev, birthDate: '' }));
+    }
+  };
+
+  const handleZipCodeChange = (value: string) => {
+    const zip = value.replace(/\D/g, '').slice(0, 4);
+    const next = { ...formData, zipCode: zip };
+
+    if (!formData.isForeignAddress && zip.length === 4) {
+      const settlements = postalCodes[zip];
+      if (settlements?.length === 1) {
+        next.city = settlements[0];
+        setCitySuggestions([]);
+      } else if (settlements && settlements.length > 1) {
+        setCitySuggestions(settlements);
+      } else {
+        setCitySuggestions([]);
+      }
+    } else {
+      setCitySuggestions([]);
+    }
+
+    setFormData(next);
+  };
+
+  const handleForeignToggle = (checked: boolean) => {
+    setFormData({
+      ...formData,
+      isForeignAddress: checked,
+      country: checked ? '' : settings.patient.defaultCountry,
+    });
+    setCitySuggestions([]);
+  };
+
+  const titleOptions = ['', 'Dr.', 'Prof.', 'id.', 'ifj.', 'özv.'];
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t.patients.editPatient} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title={t.patients.editPatient} size="xl">
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Row 1: Title, Last Name, First Name */}
+        <div className="flex gap-4">
+          <div className="w-20 shrink-0 min-w-0">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t.patients.titleLabel}
+            </label>
+            <select
+              value={formData.title || ''}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              className="w-full min-w-0 px-1 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300 text-sm"
+            >
+              {titleOptions.map((v) => (
+                <option key={v} value={v}>{v || '—'}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1 min-w-0">
+            <Input
+              label={t.patients.lastName}
+              value={formData.lastName}
+              onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+              error={errors.lastName}
+              required
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <Input
+              label={t.patients.firstName}
+              value={formData.firstName}
+              onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+              error={errors.firstName}
+              required
+            />
+          </div>
+        </div>
+
+        {/* Row 2: Birth Date, Birth Place */}
         <div className="grid grid-cols-2 gap-4">
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t.patients.birthDate}
+              <span className="text-red-500 ml-1">*</span>
+            </label>
+            <div className="relative">
+              <input
+                value={birthDateText}
+                onChange={(e) => handleBirthDateTextChange(e.target.value)}
+                placeholder={getDatePlaceholder()}
+                className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors ${
+                  errors.birthDate ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
+                }`}
+              />
+              <input
+                type="date"
+                value={formData.birthDate}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val) {
+                    setFormData((prev) => ({ ...prev, birthDate: val }));
+                    setBirthDateText(formatBirthDateForDisplay(val));
+                  }
+                }}
+                className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer"
+                tabIndex={-1}
+              />
+              <svg
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            {errors.birthDate && <p className="mt-1 text-sm text-red-600">{errors.birthDate}</p>}
+          </div>
           <Input
-            label={t.patients.lastName}
-            value={formData.lastName}
-            onChange={(event) => setFormData({ ...formData, lastName: event.target.value })}
-            error={errors.lastName}
-            required
-          />
-          <Input
-            label={t.patients.firstName}
-            value={formData.firstName}
-            onChange={(event) => setFormData({ ...formData, firstName: event.target.value })}
-            error={errors.firstName}
-            required
+            label={t.patients.birthPlace}
+            value={formData.birthPlace || ''}
+            onChange={(e) => setFormData({ ...formData, birthPlace: e.target.value })}
           />
         </div>
 
+        {/* Row 3: Sex, TAJ */}
         <div className="grid grid-cols-2 gap-4">
           <Select
             label={t.patients.sex}
             value={formData.sex}
-            onChange={(event) =>
-              setFormData({ ...formData, sex: event.target.value as PatientFormData['sex'] })
+            onChange={(e) =>
+              setFormData({ ...formData, sex: e.target.value as PatientFormData['sex'] })
             }
             options={[
               { value: 'male', label: t.patients.male },
               { value: 'female', label: t.patients.female },
               { value: 'other', label: t.patients.other },
             ]}
-          />
-          <Input
-            type="date"
-            label={t.patients.birthDate}
-            value={formData.birthDate}
-            onChange={(event) => setFormData({ ...formData, birthDate: event.target.value })}
-            error={errors.birthDate}
             required
           />
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t.patients.insuranceNum}
+            </label>
+            <input
+              value={formData.insuranceNum || ''}
+              onChange={(e) =>
+                setFormData({ ...formData, insuranceNum: formatInsuranceNum(e.target.value) })
+              }
+              placeholder={t.patients.insuranceNumPlaceholder}
+              maxLength={11}
+              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                (() => {
+                  const state = getTajValidationState(formData.insuranceNum || '');
+                  if (state === 'empty') return 'border-gray-300 focus:ring-dental-500';
+                  if (state === 'incomplete') return 'border-yellow-300 bg-yellow-50 focus:ring-yellow-500';
+                  if (state === 'valid') return 'border-green-500 bg-green-50 focus:ring-green-500';
+                  return 'border-red-500 bg-red-50 focus:ring-red-500';
+                })()
+              }`}
+            />
+            {getTajValidationState(formData.insuranceNum || '') === 'invalid' && (
+              <p className="mt-1 text-sm text-red-600">{t.validation.invalidInsuranceNum}</p>
+            )}
+            {getTajValidationState(formData.insuranceNum || '') === 'valid' && (
+              <p className="mt-1 text-sm text-green-600">{t.patients.tajValid}</p>
+            )}
+            {errors.insuranceNum && (
+              <p className="mt-1 text-sm text-red-600">{errors.insuranceNum}</p>
+            )}
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <Input
-            label={t.patients.insuranceNum}
-            value={formData.insuranceNum}
-            onChange={(event) =>
-              setFormData({ ...formData, insuranceNum: formatInsuranceNum(event.target.value) })
-            }
-            placeholder={t.patients.insuranceNumPlaceholder}
-            maxLength={11}
-            error={
-              formData.insuranceNum && tajValidationState !== 'valid'
-                ? t.validation.invalidInsuranceNum
-                : undefined
-            }
-          />
-          <Input
-            label={t.patients.phone}
-            value={formData.phone}
-            onChange={(event) => setFormData({ ...formData, phone: event.target.value })}
-          />
+        {/* Address Section */}
+        <div className="border-t pt-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.addressSection}</h3>
+
+          <div className="grid grid-cols-[1fr_8rem_1fr_auto] gap-4 items-end">
+            <Input
+              label={t.patients.country}
+              value={formData.country || ''}
+              onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+              readOnly={!formData.isForeignAddress}
+              className={!formData.isForeignAddress ? 'bg-gray-50' : ''}
+            />
+            <Input
+              label={t.patients.zipCode}
+              value={formData.zipCode || ''}
+              onChange={(e) => handleZipCodeChange(e.target.value)}
+              placeholder="9700"
+              maxLength={4}
+              error={errors.zipCode}
+              required
+            />
+            <div>
+              {citySuggestions.length > 1 ? (
+                <Select
+                  label={t.patients.city}
+                  value={formData.city || ''}
+                  onChange={(e) => {
+                    setFormData({ ...formData, city: e.target.value });
+                    setCitySuggestions([]);
+                  }}
+                  options={citySuggestions.map((s) => ({ value: s, label: s }))}
+                  error={errors.city}
+                  required
+                />
+              ) : (
+                <Input
+                  label={t.patients.city}
+                  value={formData.city || ''}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  error={errors.city}
+                  required
+                />
+              )}
+            </div>
+            <label className="flex items-center gap-2 mb-1 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={formData.isForeignAddress || false}
+                onChange={(e) => handleForeignToggle(e.target.checked)}
+                className="rounded border-gray-300 text-dental-600 focus:ring-dental-500"
+              />
+              <span className="text-sm text-gray-700">{t.patients.foreignAddress}</span>
+            </label>
+          </div>
+
+          <div className="mt-3">
+            <Input
+              label={t.patients.street}
+              value={formData.street || ''}
+              onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+              placeholder="Fő tér 1."
+              error={errors.street}
+              required
+            />
+          </div>
         </div>
 
-        <Input
-          type="email"
-          label={t.patients.email}
-          value={formData.email}
-          onChange={(event) => setFormData({ ...formData, email: event.target.value })}
-        />
+        {/* Contact Section */}
+        <div className="border-t pt-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.contactInfo}</h3>
 
-        <div className="grid grid-cols-3 gap-4">
-          <Input
-            label={t.patients.zipCode}
-            value={formData.zipCode}
-            onChange={(event) => setFormData({ ...formData, zipCode: event.target.value })}
-          />
-          <Input
-            label={t.patients.city}
-            value={formData.city}
-            onChange={(event) => setFormData({ ...formData, city: event.target.value })}
-          />
-          <Input
-            label={t.patients.street}
-            value={formData.street}
-            onChange={(event) => setFormData({ ...formData, street: event.target.value })}
-          />
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label={t.patients.phone}
+              value={formData.phone || ''}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            />
+            <Input
+              type="email"
+              label={t.patients.email}
+              value={formData.email || ''}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              error={errors.email}
+            />
+          </div>
         </div>
 
+        {/* Patient Type */}
+        {settings.patient.patientTypes.length > 0 && (
+          <Select
+            label={t.patients.patientType}
+            value={formData.patientType || ''}
+            onChange={(e) => setFormData({ ...formData, patientType: e.target.value })}
+            options={settings.patient.patientTypes.map((pt) => ({ value: pt, label: pt }))}
+          />
+        )}
+
+        {/* Notes */}
         <TextArea
           label={t.patients.notes}
-          value={formData.notes}
-          onChange={(event) => setFormData({ ...formData, notes: event.target.value })}
+          value={formData.notes || ''}
+          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
           rows={3}
         />
+
+        {/* Validation warning */}
+        {Object.keys(errors).length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm font-medium text-red-700">{t.patients.missingFieldsTitle}</p>
+            <p className="text-sm text-red-600">{t.patients.missingFieldsMessage}</p>
+          </div>
+        )}
 
         <div className="flex justify-end gap-2 pt-4">
           <Button type="button" variant="secondary" onClick={onClose}>

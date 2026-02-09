@@ -119,7 +119,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   doc.setFont('helvetica', 'bold');
   doc.text(toPdfText('Páciens:'), margin, yPos);
   doc.setFont('helvetica', 'normal');
-  doc.text(toPdfText(formatPatientName(patient.lastName, patient.firstName)), margin + 27, yPos);
+  doc.text(toPdfText(formatPatientName(patient.lastName, patient.firstName, patient.title)), margin + 27, yPos);
   yPos += 5;
 
   if (patient.birthDate) {
@@ -446,7 +446,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   // Patient signature
   doc.line(margin, sigY, margin + sigLineWidth, sigY);
   doc.setFontSize(9);
-  doc.text(toPdfText(formatPatientName(patient.lastName, patient.firstName)), margin + sigLineWidth / 2, sigY + 5, { align: 'center' });
+  doc.text(toPdfText(formatPatientName(patient.lastName, patient.firstName, patient.title)), margin + sigLineWidth / 2, sigY + 5, { align: 'center' });
   doc.text(toPdfText('Páciens'), margin + sigLineWidth / 2, sigY + 9, { align: 'center' });
 
   // Doctor signature

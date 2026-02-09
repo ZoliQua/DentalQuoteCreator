@@ -32,11 +32,24 @@ export type DateFormat =
   | 'MM.DD.YYYY HH:MM:SS'
   | 'MM/DD/YYYY HH:MM:SS';
 
+export interface InvoiceSettings {
+  invoiceType: 'paper' | 'electronic';
+  defaultComment: string;
+  defaultVatRate: 0 | 27;
+}
+
+export interface PatientSettings {
+  defaultCountry: string;
+  patientTypes: string[];
+}
+
 export interface Settings {
   clinic: ClinicSettings;
   doctors: Doctor[];
   pdf: PdfSettings;
   quote: QuoteSettings; // New: quote numbering settings
+  invoice: InvoiceSettings;
+  patient: PatientSettings;
   language: 'hu' | 'en' | 'de';
   defaultValidityDays: number;
   dateFormat: DateFormat;

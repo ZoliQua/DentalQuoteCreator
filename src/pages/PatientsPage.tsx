@@ -19,7 +19,8 @@ import {
   EmptySearchIcon,
   ConfirmModal,
 } from '../components/common';
-import { formatDate, formatInsuranceNum, formatPatientName, getTajValidationState } from '../utils';
+import { formatDate, formatInsuranceNum, formatPatientName, getTajValidationState, formatBirthDateForDisplay, parseBirthDateFromDisplay, getDatePlaceholder } from '../utils';
+import { postalCodes } from '../data/postalCodes';
 
 export function PatientsPage() {
   const { t } = useSettings();
@@ -157,7 +158,7 @@ export function PatientsPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900">
-                      {formatPatientName(patient.lastName, patient.firstName)}
+                      {formatPatientName(patient.lastName, patient.firstName, patient.title)}
                       {getPatientAge(patient.birthDate) !== null && (
                         <span className="ml-2 text-sm font-medium text-gray-500">
                           ({getPatientAge(patient.birthDate)}
@@ -269,56 +270,81 @@ interface PatientFormModalProps {
 }
 
 function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: PatientFormModalProps) {
-  const { t } = useSettings();
+  const { t, settings } = useSettings();
   const [formData, setFormData] = useState<PatientFormData>({
-    lastName: patient?.lastName || '',
-    firstName: patient?.firstName || '',
-    sex: patient?.sex || 'male',
-    birthDate: patient?.birthDate || '',
-    insuranceNum: patient?.insuranceNum || '',
-    phone: patient?.phone || '',
-    email: patient?.email || '',
-    zipCode: patient?.zipCode || '',
-    city: patient?.city || '',
-    street: patient?.street || '',
-    notes: patient?.notes || '',
+    title: '',
+    lastName: '',
+    firstName: '',
+    sex: 'male',
+    birthDate: '',
+    birthPlace: '',
+    insuranceNum: '',
+    phone: '',
+    email: '',
+    country: settings.patient.defaultCountry,
+    isForeignAddress: false,
+    zipCode: '',
+    city: '',
+    street: '',
+    patientType: settings.patient.patientTypes[0] || '',
+    notes: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
+  const [birthDateText, setBirthDateText] = useState('');
 
   useEffect(() => {
     if (patient) {
       setFormData({
+        title: patient.title || '',
         lastName: patient.lastName,
         firstName: patient.firstName,
         sex: patient.sex,
         birthDate: patient.birthDate,
+        birthPlace: patient.birthPlace || '',
         insuranceNum: patient.insuranceNum || '',
         phone: patient.phone || '',
         email: patient.email || '',
+        country: patient.country || settings.patient.defaultCountry,
+        isForeignAddress: patient.isForeignAddress || false,
         zipCode: patient.zipCode || '',
         city: patient.city || '',
         street: patient.street || '',
+        patientType: patient.patientType || settings.patient.patientTypes[0] || '',
         notes: patient.notes || '',
       });
+      setBirthDateText(formatBirthDateForDisplay(patient.birthDate));
     } else if (isOpen) {
       setFormData({
+        title: '',
         lastName: '',
         firstName: '',
         sex: 'male',
         birthDate: '',
+        birthPlace: '',
         insuranceNum: '',
         phone: '',
         email: '',
+        country: settings.patient.defaultCountry,
+        isForeignAddress: false,
         zipCode: '',
         city: '',
         street: '',
+        patientType: settings.patient.patientTypes[0] || '',
         notes: '',
       });
+      setBirthDateText('');
     }
     if (isOpen) {
       setErrors({});
+      setCitySuggestions([]);
     }
-  }, [patient, isOpen]);
+  }, [patient, isOpen, settings.patient.defaultCountry, settings.patient.patientTypes]);
+
+  const validateEmail = (email: string): boolean => {
+    if (!email) return true;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -327,6 +353,18 @@ function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: Patient
     if (!formData.lastName.trim()) newErrors.lastName = t.validation.required;
     if (!formData.firstName.trim()) newErrors.firstName = t.validation.required;
     if (!formData.birthDate) newErrors.birthDate = t.validation.required;
+    if (!formData.zipCode?.trim()) newErrors.zipCode = t.validation.required;
+    if (!formData.city?.trim()) newErrors.city = t.validation.required;
+    if (!formData.street?.trim()) newErrors.street = t.validation.required;
+
+    const tajState = getTajValidationState(formData.insuranceNum || '');
+    if (tajState !== 'empty' && tajState !== 'valid') {
+      newErrors.insuranceNum = t.validation.invalidInsuranceNum;
+    }
+
+    if (formData.email && !validateEmail(formData.email)) {
+      newErrors.email = t.validation.invalidEmail;
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -337,31 +375,140 @@ function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: Patient
     onClose();
   };
 
+  const handleBirthDateTextChange = (value: string) => {
+    setBirthDateText(value);
+    const parsed = parseBirthDateFromDisplay(value);
+    if (parsed) {
+      setFormData((prev) => ({ ...prev, birthDate: parsed }));
+    } else if (!value) {
+      setFormData((prev) => ({ ...prev, birthDate: '' }));
+    }
+  };
+
   const handleInsuranceNumChange = (value: string) => {
     const formatted = formatInsuranceNum(value);
     setFormData({ ...formData, insuranceNum: formatted });
   };
 
+  const handleZipCodeChange = (value: string) => {
+    const zip = value.replace(/\D/g, '').slice(0, 4);
+    const next = { ...formData, zipCode: zip };
+
+    if (!formData.isForeignAddress && zip.length === 4) {
+      const settlements = postalCodes[zip];
+      if (settlements?.length === 1) {
+        next.city = settlements[0];
+        setCitySuggestions([]);
+      } else if (settlements && settlements.length > 1) {
+        setCitySuggestions(settlements);
+      } else {
+        setCitySuggestions([]);
+      }
+    } else {
+      setCitySuggestions([]);
+    }
+
+    setFormData(next);
+  };
+
+  const handleForeignToggle = (checked: boolean) => {
+    setFormData({
+      ...formData,
+      isForeignAddress: checked,
+      country: checked ? '' : settings.patient.defaultCountry,
+    });
+    setCitySuggestions([]);
+  };
+
+  const titleOptions = ['', 'Dr.', 'Prof.', 'id.', 'ifj.', 'özv.'];
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="xl">
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Row 1: Title, Last Name, First Name */}
+        <div className="flex gap-4">
+          <div className="w-20 shrink-0 min-w-0">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t.patients.titleLabel}
+            </label>
+            <select
+              value={formData.title || ''}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              className="w-full min-w-0 px-1 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300 text-sm"
+            >
+              {titleOptions.map((v) => (
+                <option key={v} value={v}>{v || '—'}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1 min-w-0">
+            <Input
+              label={t.patients.lastName}
+              value={formData.lastName}
+              onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+              error={errors.lastName}
+              required
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <Input
+              label={t.patients.firstName}
+              value={formData.firstName}
+              onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+              error={errors.firstName}
+              required
+            />
+          </div>
+        </div>
+
+        {/* Row 2: Birth Date, Birth Place */}
         <div className="grid grid-cols-2 gap-4">
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t.patients.birthDate}
+              <span className="text-red-500 ml-1">*</span>
+            </label>
+            <div className="relative">
+              <input
+                value={birthDateText}
+                onChange={(e) => handleBirthDateTextChange(e.target.value)}
+                placeholder={getDatePlaceholder()}
+                className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors ${
+                  errors.birthDate ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
+                }`}
+              />
+              <input
+                type="date"
+                value={formData.birthDate}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val) {
+                    setFormData((prev) => ({ ...prev, birthDate: val }));
+                    setBirthDateText(formatBirthDateForDisplay(val));
+                  }
+                }}
+                className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer"
+                tabIndex={-1}
+              />
+              <svg
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            {errors.birthDate && <p className="mt-1 text-sm text-red-600">{errors.birthDate}</p>}
+          </div>
           <Input
-            label={t.patients.lastName}
-            value={formData.lastName}
-            onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-            error={errors.lastName}
-            required
-          />
-          <Input
-            label={t.patients.firstName}
-            value={formData.firstName}
-            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-            error={errors.firstName}
-            required
+            label={t.patients.birthPlace}
+            value={formData.birthPlace || ''}
+            onChange={(e) => setFormData({ ...formData, birthPlace: e.target.value })}
           />
         </div>
 
+        {/* Row 3: Sex, TAJ */}
         <div className="grid grid-cols-2 gap-4">
           <Select
             label={t.patients.sex}
@@ -376,89 +523,153 @@ function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: Patient
             ]}
             required
           />
-          <Input
-            label={t.patients.birthDate}
-            type="date"
-            value={formData.birthDate}
-            onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-            error={errors.birthDate}
-            required
-          />
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t.patients.insuranceNum}
+            </label>
+            <input
+              value={formData.insuranceNum || ''}
+              onChange={(e) => handleInsuranceNumChange(e.target.value)}
+              placeholder={t.patients.insuranceNumPlaceholder}
+              maxLength={11}
+              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                (() => {
+                  const state = getTajValidationState(formData.insuranceNum || '');
+                  if (state === 'empty') return 'border-gray-300 focus:ring-dental-500';
+                  if (state === 'incomplete') return 'border-yellow-300 bg-yellow-50 focus:ring-yellow-500';
+                  if (state === 'valid') return 'border-green-500 bg-green-50 focus:ring-green-500';
+                  return 'border-red-500 bg-red-50 focus:ring-red-500';
+                })()
+              }`}
+            />
+            {getTajValidationState(formData.insuranceNum || '') === 'invalid' && (
+              <p className="mt-1 text-sm text-red-600">{t.validation.invalidInsuranceNum}</p>
+            )}
+            {getTajValidationState(formData.insuranceNum || '') === 'valid' && (
+              <p className="mt-1 text-sm text-green-600">{t.patients.tajValid}</p>
+            )}
+            {errors.insuranceNum && (
+              <p className="mt-1 text-sm text-red-600">{errors.insuranceNum}</p>
+            )}
+          </div>
         </div>
 
-        {/* TAJ with validation feedback */}
-        <div className="w-full">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t.patients.insuranceNum}
-          </label>
-          <input
-            value={formData.insuranceNum || ''}
-            onChange={(e) => handleInsuranceNumChange(e.target.value)}
-            placeholder={t.patients.insuranceNumPlaceholder}
-            maxLength={11}
-            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
-              (() => {
-                const state = getTajValidationState(formData.insuranceNum || '');
-                if (state === 'empty') return 'border-gray-300 focus:ring-dental-500';
-                if (state === 'incomplete') return 'border-yellow-300 bg-yellow-50 focus:ring-yellow-500';
-                if (state === 'valid') return 'border-green-500 bg-green-50 focus:ring-green-500';
-                return 'border-red-500 bg-red-50 focus:ring-red-500';
-              })()
-            }`}
-          />
-          {getTajValidationState(formData.insuranceNum || '') === 'invalid' && (
-            <p className="mt-1 text-sm text-red-600">{t.validation.invalidInsuranceNum}</p>
-          )}
-          {getTajValidationState(formData.insuranceNum || '') === 'valid' && (
-            <p className="mt-1 text-sm text-green-600">TAJ szám érvényes</p>
-          )}
-        </div>
+        {/* Address Section */}
+        <div className="border-t pt-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.addressSection}</h3>
 
-        <div className="grid grid-cols-2 gap-4">
-          <Input
-            label={t.patients.phone}
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-          />
-          <Input
-            label={t.patients.email}
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          />
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
-          <Input
-            label={t.patients.zipCode}
-            value={formData.zipCode}
-            onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
-            placeholder="9700"
-          />
-          <div className="col-span-2">
+          {/* Row 4: Country, Zip, City, Foreign toggle */}
+          <div className="grid grid-cols-[1fr_8rem_1fr_auto] gap-4 items-end">
             <Input
-              label={t.patients.city}
-              value={formData.city}
-              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-              placeholder="Szombathely"
+              label={t.patients.country}
+              value={formData.country || ''}
+              onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+              readOnly={!formData.isForeignAddress}
+              className={!formData.isForeignAddress ? 'bg-gray-50' : ''}
+            />
+            <Input
+              label={t.patients.zipCode}
+              value={formData.zipCode || ''}
+              onChange={(e) => handleZipCodeChange(e.target.value)}
+              placeholder="9700"
+              maxLength={4}
+              error={errors.zipCode}
+              required
+            />
+            <div>
+              {citySuggestions.length > 1 ? (
+                <Select
+                  label={t.patients.city}
+                  value={formData.city || ''}
+                  onChange={(e) => {
+                    setFormData({ ...formData, city: e.target.value });
+                    setCitySuggestions([]);
+                  }}
+                  options={citySuggestions.map((s) => ({ value: s, label: s }))}
+                  error={errors.city}
+                  required
+                />
+              ) : (
+                <Input
+                  label={t.patients.city}
+                  value={formData.city || ''}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  error={errors.city}
+                  required
+                />
+              )}
+            </div>
+            <label className="flex items-center gap-2 mb-1 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={formData.isForeignAddress || false}
+                onChange={(e) => handleForeignToggle(e.target.checked)}
+                className="rounded border-gray-300 text-dental-600 focus:ring-dental-500"
+              />
+              <span className="text-sm text-gray-700">{t.patients.foreignAddress}</span>
+            </label>
+          </div>
+
+          {/* Row 5: Street */}
+          <div className="mt-3">
+            <Input
+              label={t.patients.street}
+              value={formData.street || ''}
+              onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+              placeholder="Fő tér 1."
+              error={errors.street}
+              required
             />
           </div>
         </div>
 
-        <Input
-          label={t.patients.street}
-          value={formData.street}
-          onChange={(e) => setFormData({ ...formData, street: e.target.value })}
-          placeholder="Fő tér 1."
-        />
+        {/* Contact Section */}
+        <div className="border-t pt-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.contactInfo}</h3>
 
+          {/* Row 6: Phone, Email */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label={t.patients.phone}
+              type="tel"
+              value={formData.phone || ''}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            />
+            <Input
+              label={t.patients.email}
+              type="email"
+              value={formData.email || ''}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              error={errors.email}
+            />
+          </div>
+        </div>
+
+        {/* Row 7: Patient Type */}
+        {settings.patient.patientTypes.length > 0 && (
+          <Select
+            label={t.patients.patientType}
+            value={formData.patientType || ''}
+            onChange={(e) => setFormData({ ...formData, patientType: e.target.value })}
+            options={settings.patient.patientTypes.map((pt) => ({ value: pt, label: pt }))}
+          />
+        )}
+
+        {/* Row 8: Notes */}
         <TextArea
           label={t.patients.notes}
-          value={formData.notes}
+          value={formData.notes || ''}
           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
           rows={3}
         />
+
+        {/* Validation warning */}
+        {Object.keys(errors).length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm font-medium text-red-700">{t.patients.missingFieldsTitle}</p>
+            <p className="text-sm text-red-600">{t.patients.missingFieldsMessage}</p>
+          </div>
+        )}
 
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="secondary" onClick={onClose}>

@@ -288,6 +288,18 @@ export class LocalStorageRepository implements StorageRepository {
         needsSave = true;
       }
 
+      // Migration: add invoice settings if missing
+      if (!parsed.invoice) {
+        parsed.invoice = defaultSettings.invoice;
+        needsSave = true;
+      }
+
+      // Migration: add patient settings if missing
+      if (!parsed.patient) {
+        parsed.patient = defaultSettings.patient;
+        needsSave = true;
+      }
+
       if (!parsed.dateFormat) {
         parsed.dateFormat = defaultSettings.dateFormat;
         needsSave = true;

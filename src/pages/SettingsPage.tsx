@@ -63,6 +63,26 @@ export function SettingsPage() {
     });
   };
 
+  const handlePatientChange = (field: keyof Settings['patient'], value: string | string[]) => {
+    setFormData({
+      ...formData,
+      patient: {
+        ...formData.patient,
+        [field]: value,
+      },
+    });
+  };
+
+  const handleInvoiceChange = (field: keyof Settings['invoice'], value: string | number) => {
+    setFormData({
+      ...formData,
+      invoice: {
+        ...formData.invoice,
+        [field]: value,
+      },
+    });
+  };
+
   const handleDoctorChange = (doctorId: string, field: 'name' | 'stampNumber', value: string) => {
     setFormData({
       ...formData,
@@ -363,6 +383,136 @@ export function SettingsPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Invoice Settings */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">{t.settings.invoiceSettings}</h2>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Select
+            label={t.settings.invoiceType}
+            value={formData.invoice.invoiceType}
+            onChange={(e) => handleInvoiceChange('invoiceType', e.target.value)}
+            options={[
+              { value: 'paper', label: t.settings.invoiceTypePaper },
+              { value: 'electronic', label: t.settings.invoiceTypeElectronic },
+            ]}
+          />
+          <TextArea
+            label={t.settings.invoiceComment}
+            value={formData.invoice.defaultComment}
+            onChange={(e) => handleInvoiceChange('defaultComment', e.target.value)}
+            rows={3}
+            helperText={t.settings.invoiceCommentHelp}
+          />
+          <Select
+            label={t.settings.defaultVatRate}
+            value={String(formData.invoice.defaultVatRate)}
+            onChange={(e) => handleInvoiceChange('defaultVatRate', Number(e.target.value))}
+            options={[
+              { value: '0', label: '0%' },
+              { value: '27', label: '27%' },
+            ]}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Patient Settings */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">{t.settings.patientSettings}</h2>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Input
+            label={t.settings.defaultCountry}
+            value={formData.patient.defaultCountry}
+            onChange={(e) => handlePatientChange('defaultCountry', e.target.value)}
+          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {t.settings.patientTypes}
+            </label>
+            <div className="space-y-2">
+              {formData.patient.patientTypes.map((pt, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <Input
+                    value={pt}
+                    onChange={(e) => {
+                      const newTypes = [...formData.patient.patientTypes];
+                      newTypes[index] = e.target.value;
+                      setFormData({
+                        ...formData,
+                        patient: { ...formData.patient, patientTypes: newTypes },
+                      });
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={index === 0}
+                    onClick={() => {
+                      if (index === 0) return;
+                      const newTypes = [...formData.patient.patientTypes];
+                      const [item] = newTypes.splice(index, 1);
+                      newTypes.unshift(item);
+                      setFormData({
+                        ...formData,
+                        patient: { ...formData.patient, patientTypes: newTypes },
+                      });
+                    }}
+                    className={`p-2 rounded-lg transition-colors ${
+                      index === 0
+                        ? 'text-amber-500 cursor-default'
+                        : 'text-gray-300 hover:text-amber-400 hover:bg-amber-50'
+                    }`}
+                    title={index === 0 ? t.settings.defaultPatientType : t.settings.setDefaultPatientType}
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill={index === 0 ? 'currentColor' : 'none'}>
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                    </svg>
+                  </button>
+                  {formData.patient.patientTypes.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newTypes = formData.patient.patientTypes.filter((_, i) => i !== index);
+                        setFormData({
+                          ...formData,
+                          patient: { ...formData.patient, patientTypes: newTypes },
+                        });
+                      }}
+                      className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                      title={t.settings.removePatientType}
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <Button
+              variant="secondary"
+              className="mt-2"
+              onClick={() => {
+                setFormData({
+                  ...formData,
+                  patient: {
+                    ...formData.patient,
+                    patientTypes: [...formData.patient.patientTypes, ''],
+                  },
+                });
+              }}
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              {t.settings.addPatientType}
+            </Button>
           </div>
         </CardContent>
       </Card>

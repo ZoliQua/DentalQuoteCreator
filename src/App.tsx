@@ -9,6 +9,8 @@ import { CatalogPage } from './pages/CatalogPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DataManagementPage } from './pages/DataManagementPage';
 import { OdontogramLabPage } from './pages/OdontogramLabPage';
+import { InvoicesPage } from './pages/InvoicesPage';
+import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
 
 function App() {
   return (
@@ -22,6 +24,8 @@ function App() {
         <Route path="/quotes" element={<QuotesPage />} />
         <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/invoices" element={<InvoicesPage />} />
+        <Route path="/invoices/:invoiceId" element={<InvoiceDetailPage />} />
         <Route path="/data" element={<DataManagementPage />} />
         <Route path="/odontogram-lab" element={<OdontogramLabPage />} />
       </Routes>
