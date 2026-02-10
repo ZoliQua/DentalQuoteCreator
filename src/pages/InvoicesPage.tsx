@@ -290,6 +290,14 @@ export function InvoicesPage() {
         pdfBase64: response.pdfBase64 || undefined,
       });
       setNewInvoiceOpen(false);
+      // Auto-open PDF in new tab
+      if (response.pdfBase64) {
+        const bytes = atob(response.pdfBase64);
+        const arr = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+        const blob = new Blob([arr], { type: 'application/pdf' });
+        window.open(URL.createObjectURL(blob), '_blank');
+      }
       refreshInvoices();
     } catch (error) {
       setNewInvoiceError(error instanceof Error ? error.message : t.invoices.errorGeneric);

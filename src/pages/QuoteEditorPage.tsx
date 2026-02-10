@@ -22,12 +22,14 @@ import {
 import {
   formatCurrency,
   formatPatientName,
-  formatQuoteId,
   formatDate,
   formatDateTime,
   calculateQuoteTotals,
   calculateLineTotal,
   calculateLineDiscountAmount,
+  formatBirthDateForDisplay,
+  parseBirthDateFromDisplay,
+  getDatePlaceholder,
 } from '../utils';
 import { generateQuotePdf } from '../components/pdf/QuotePdfGenerator';
 import { OdontogramHost } from '../modules/odontogram/OdontogramHost';
@@ -53,6 +55,7 @@ export function QuoteEditorPage() {
     removeItemFromQuote,
     reorderQuoteItems,
     editQuote,
+    addEventToQuote,
     deleteQuote,
     canDeleteQuote,
     closeQuote,
@@ -77,6 +80,7 @@ export function QuoteEditorPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [initialOdontogramState, setInitialOdontogramState] = useState<OdontogramState | null>(null);
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [invoiceDisabledModalOpen, setInvoiceDisabledModalOpen] = useState(false);
   const [invoicePreviewXml, setInvoicePreviewXml] = useState('');
   const [invoicePreviewTotals, setInvoicePreviewTotals] = useState<{ net: number; vat: number; gross: number } | null>(null);
   const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
@@ -96,6 +100,11 @@ export function QuoteEditorPage() {
     { name: string; unit: string; qty: number; unitPriceNet: number; vatRate: number }[]
   >([]);
   const [invoiceComment, setInvoiceComment] = useState('');
+  const [issueDateText, setIssueDateText] = useState('');
+  const [fulfillmentDateText, setFulfillmentDateText] = useState('');
+  const [dueDateText, setDueDateText] = useState('');
+  const [validUntilModalOpen, setValidUntilModalOpen] = useState(false);
+  const [validUntilText, setValidUntilText] = useState('');
   const [quoteInvoices, setQuoteInvoices] = useState<InvoiceRecord[]>([]);
   const [invoiceDraggedIndex, setInvoiceDraggedIndex] = useState<number | null>(null);
   const [invoiceDragOverIndex, setInvoiceDragOverIndex] = useState<number | null>(null);
@@ -390,6 +399,9 @@ export function QuoteEditorPage() {
         ? `${defaultComment} - ${quote.quoteNumber} - ${quote.quoteName}`
         : `${quote.quoteNumber} - ${quote.quoteName}`
     );
+    setIssueDateText(formatBirthDateForDisplay(today));
+    setFulfillmentDateText(formatBirthDateForDisplay(today));
+    setDueDateText(formatBirthDateForDisplay(dueDate));
     setInvoicePreviewXml('');
     setInvoicePreviewTotals(null);
     setInvoiceError(null);
@@ -427,14 +439,16 @@ export function QuoteEditorPage() {
       }, { net: 0, vat: 0, gross: 0 });
       const totalGross = Math.round((calculatedTotals.gross + Number.EPSILON) * 100) / 100;
       const isActuallySent = response.mode === 'live' && response.success;
+      const invoiceId = nanoid();
+      const invoiceNumber = response.invoiceNumber || undefined;
       saveInvoice({
-        id: nanoid(),
+        id: invoiceId,
         patientId: patient.patientId,
         quoteId: quote.quoteId,
         quoteNumber: quote.quoteNumber,
         quoteName: quote.quoteName,
         patientName: formatPatientName(patient.lastName, patient.firstName, patient.title),
-        szamlazzInvoiceNumber: response.invoiceNumber || undefined,
+        szamlazzInvoiceNumber: invoiceNumber,
         status: isActuallySent ? 'sent' : 'draft',
         totalGross,
         currency: quote.currency,
@@ -468,7 +482,24 @@ export function QuoteEditorPage() {
         rawResponse: response.rawResponse || undefined,
         pdfBase64: response.pdfBase64 || undefined,
       });
+      // Add invoice event to quote event log
+      addEventToQuote(quote.quoteId, {
+        type: 'invoice_created',
+        doctorName: doctorName,
+        invoiceId,
+        invoiceNumber: invoiceNumber || invoiceId.slice(0, 8),
+        invoiceAmount: totalGross,
+        invoiceCurrency: quote.currency,
+      });
       setInvoiceModalOpen(false);
+      // Auto-open PDF in new tab
+      if (response.pdfBase64) {
+        const bytes = atob(response.pdfBase64);
+        const arr = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+        const blob = new Blob([arr], { type: 'application/pdf' });
+        window.open(URL.createObjectURL(blob), '_blank');
+      }
       refreshQuoteInvoices();
       // Auto-complete when fully invoiced
       const updatedInvoices = getInvoicesByQuote(quote.quoteId);
@@ -499,12 +530,20 @@ export function QuoteEditorPage() {
               {formatPatientName(patient.lastName, patient.firstName, patient.title)}
             </Link>
             <span>/</span>
-            <span>{formatQuoteId(quote.quoteId)}</span>
+            <span>{quote.quoteNumber}</span>
           </div>
           <div className="flex items-center gap-4">
             <div>
-              <span className="text-xs text-gray-400">{quote.quoteNumber}</span>
-              <h1 className="text-2xl font-bold text-gray-900">{quote.quoteName}</h1>
+              {quote.quoteStatus === 'draft' ? (
+                <input
+                  value={quote.quoteName}
+                  onChange={(e) => editQuote(quote.quoteId, { quoteName: e.target.value })}
+                  className="text-2xl font-bold text-gray-900 bg-transparent border-b border-dashed border-gray-300 focus:border-dental-500 focus:outline-none w-64"
+                  placeholder={t.quotes.quoteName}
+                />
+              ) : (
+                <h1 className="text-2xl font-bold text-gray-900">{quote.quoteName}</h1>
+              )}
             </div>
             <Badge
               variant={
@@ -524,26 +563,6 @@ export function QuoteEditorPage() {
                quote.quoteStatus === 'started' ? t.quotes.statusStarted :
                t.quotes.statusCompleted}
             </Badge>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-4 mt-2">
-            <div className="flex items-center gap-2">
-              <span className="text-gray-500 text-sm">{t.quotes.quoteName}:</span>
-              {quote.quoteStatus === 'draft' ? (
-                <Input
-                  value={quote.quoteName}
-                  onChange={(e) => editQuote(quote.quoteId, { quoteName: e.target.value })}
-                  className="w-64"
-                  placeholder="Árajánlat neve"
-                />
-              ) : (
-                <span className="font-medium">{quote.quoteName}</span>
-              )}
-            </div>
-            <div className="text-gray-500 text-sm ml-auto text-right">
-              {t.quotes.createdAt}: {formatDate(quote.createdAt)} | {t.quotes.modifiedAt}:{' '}
-              {formatDateTime(quote.lastStatusChangeAt)} | {t.quotes.validUntil}:{' '}
-              {formatDate(quote.validUntil)}
-            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -666,9 +685,16 @@ export function QuoteEditorPage() {
               {t.invoices.invoicing}
             </Button>
           ) : invoiceDisabledReason ? (
-            <span className="text-xs text-gray-400 max-w-[120px] text-center" title={invoiceDisabledReason}>
-              {invoiceDisabledReason}
-            </span>
+            <Button
+              variant="secondary"
+              onClick={() => setInvoiceDisabledModalOpen(true)}
+              className="opacity-50"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {t.invoices.invoicing}
+            </Button>
           ) : null}
 
           {/* PDF Download button */}
@@ -689,20 +715,13 @@ export function QuoteEditorPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Items List */}
         <div className="lg:col-span-2 space-y-4">
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-semibold">{t.patients.dentalStatusTitle}</h2>
-            </CardHeader>
-            <CardContent noPadding>
-              <OdontogramHost
-                patientId={patient.patientId}
-                mode="view"
-                initialState={initialOdontogramState}
-                onChange={() => {}}
-                hidePanel
-              />
-            </CardContent>
-          </Card>
+          <OdontogramHost
+            patientId={patient.patientId}
+            mode="view"
+            initialState={initialOdontogramState}
+            onChange={() => {}}
+            hidePanel
+          />
 
           {/* Doctor and Expected Treatments Section */}
           <Card>
@@ -852,6 +871,40 @@ export function QuoteEditorPage() {
 
         {/* Summary */}
         <div className="space-y-4">
+          {/* Valid Until */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-semibold">{t.quotes.quoteValidity}</h3>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold text-gray-900">
+                  {formatDate(quote.validUntil)}
+                </span>
+                {(() => {
+                  const valid = new Date(quote.validUntil.slice(0, 10) + 'T00:00:00');
+                  const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00');
+                  const diff = Math.round((valid.getTime() - today.getTime()) / 86400000);
+                  return diff > 0
+                    ? <span className="text-sm text-gray-500 ml-1">({diff} {t.quotes.quoteValidityDays})</span>
+                    : <span className="text-sm text-red-500 font-medium ml-1">({t.quotes.quoteValidityExpired})</span>;
+                })()}
+                <button
+                  onClick={() => {
+                    setValidUntilText(formatBirthDateForDisplay(quote.validUntil.slice(0, 10)));
+                    setValidUntilModalOpen(true);
+                  }}
+                  className="p-1 text-gray-400 hover:text-dental-600 transition-colors"
+                  title={t.common.edit}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                  </svg>
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Patient Info */}
           <Card>
             <CardHeader>
@@ -1021,24 +1074,99 @@ export function QuoteEditorPage() {
                 { value: 'bankkartya', label: t.invoices.paymentCard },
               ]}
             />
-            <Input
-              label={t.invoices.issueDate}
-              type="date"
-              value={invoiceForm.issueDate}
-              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, issueDate: e.target.value }))}
-            />
-            <Input
-              label={t.invoices.fulfillmentDate}
-              type="date"
-              value={invoiceForm.fulfillmentDate}
-              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, fulfillmentDate: e.target.value }))}
-            />
-            <Input
-              label={t.invoices.dueDate}
-              type="date"
-              value={invoiceForm.dueDate}
-              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, dueDate: e.target.value }))}
-            />
+            <div className="w-full">
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.issueDate}</label>
+              <div className="relative">
+                <input
+                  value={issueDateText}
+                  onChange={(e) => {
+                    setIssueDateText(e.target.value);
+                    const parsed = parseBirthDateFromDisplay(e.target.value);
+                    if (parsed) setInvoiceForm((prev) => ({ ...prev, issueDate: parsed }));
+                    else if (!e.target.value) setInvoiceForm((prev) => ({ ...prev, issueDate: '' }));
+                  }}
+                  placeholder={getDatePlaceholder()}
+                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                />
+                <input
+                  type="date"
+                  value={invoiceForm.issueDate}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setInvoiceForm((prev) => ({ ...prev, issueDate: e.target.value }));
+                      setIssueDateText(formatBirthDateForDisplay(e.target.value));
+                    }
+                  }}
+                  className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer"
+                  tabIndex={-1}
+                />
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+            <div className="w-full">
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.fulfillmentDate}</label>
+              <div className="relative">
+                <input
+                  value={fulfillmentDateText}
+                  onChange={(e) => {
+                    setFulfillmentDateText(e.target.value);
+                    const parsed = parseBirthDateFromDisplay(e.target.value);
+                    if (parsed) setInvoiceForm((prev) => ({ ...prev, fulfillmentDate: parsed }));
+                    else if (!e.target.value) setInvoiceForm((prev) => ({ ...prev, fulfillmentDate: '' }));
+                  }}
+                  placeholder={getDatePlaceholder()}
+                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                />
+                <input
+                  type="date"
+                  value={invoiceForm.fulfillmentDate}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setInvoiceForm((prev) => ({ ...prev, fulfillmentDate: e.target.value }));
+                      setFulfillmentDateText(formatBirthDateForDisplay(e.target.value));
+                    }
+                  }}
+                  className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer"
+                  tabIndex={-1}
+                />
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+            <div className="w-full">
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.dueDate}</label>
+              <div className="relative">
+                <input
+                  value={dueDateText}
+                  onChange={(e) => {
+                    setDueDateText(e.target.value);
+                    const parsed = parseBirthDateFromDisplay(e.target.value);
+                    if (parsed) setInvoiceForm((prev) => ({ ...prev, dueDate: parsed }));
+                    else if (!e.target.value) setInvoiceForm((prev) => ({ ...prev, dueDate: '' }));
+                  }}
+                  placeholder={getDatePlaceholder()}
+                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                />
+                <input
+                  type="date"
+                  value={invoiceForm.dueDate}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setInvoiceForm((prev) => ({ ...prev, dueDate: e.target.value }));
+                      setDueDateText(formatBirthDateForDisplay(e.target.value));
+                    }
+                  }}
+                  className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer"
+                  tabIndex={-1}
+                />
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
             <Input
               label={t.invoices.comment}
               value={invoiceComment}
@@ -1269,21 +1397,38 @@ export function QuoteEditorPage() {
                 <div key={event.id} className="flex items-center justify-between text-sm py-2 border-b last:border-0">
                   <div className="flex items-center gap-3">
                     <span className="text-gray-500">{formatDateTime(event.timestamp)}</span>
-                    <span className="font-medium">
-                      {event.type === 'created' ? t.quotes.eventCreated :
-                       event.type === 'closed' ? t.quotes.eventClosed :
-                       event.type === 'reopened' ? t.quotes.eventReopened :
-                       event.type === 'accepted' ? t.quotes.eventAccepted :
-                       event.type === 'acceptance_revoked' ? t.quotes.eventAcceptanceRevoked :
-                       event.type === 'rejected' ? t.quotes.eventRejected :
-                       event.type === 'rejection_revoked' ? t.quotes.eventRejectionRevoked :
-                       event.type === 'started' ? t.quotes.eventStarted :
-                       event.type === 'start_revoked' ? t.quotes.eventStartRevoked :
-                       event.type === 'completed' ? t.quotes.eventCompleted :
-                       event.type === 'completion_revoked' ? t.quotes.eventCompletionRevoked :
-                       event.type === 'deleted' ? t.quotes.eventDeleted :
-                       event.type}
-                    </span>
+                    {event.type === 'invoice_created' ? (
+                      <span className="font-medium">
+                        {t.quotes.eventInvoiceCreated}:{' '}
+                        <Link
+                          to={`/invoices/${event.invoiceId}`}
+                          className="text-dental-600 hover:text-dental-700 hover:underline"
+                        >
+                          {event.invoiceNumber}
+                        </Link>
+                        {event.invoiceAmount != null && (
+                          <span className="ml-2 text-gray-600">
+                            — {formatCurrency(event.invoiceAmount, event.invoiceCurrency as 'HUF' | 'EUR' | undefined)}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="font-medium">
+                        {event.type === 'created' ? t.quotes.eventCreated :
+                         event.type === 'closed' ? t.quotes.eventClosed :
+                         event.type === 'reopened' ? t.quotes.eventReopened :
+                         event.type === 'accepted' ? t.quotes.eventAccepted :
+                         event.type === 'acceptance_revoked' ? t.quotes.eventAcceptanceRevoked :
+                         event.type === 'rejected' ? t.quotes.eventRejected :
+                         event.type === 'rejection_revoked' ? t.quotes.eventRejectionRevoked :
+                         event.type === 'started' ? t.quotes.eventStarted :
+                         event.type === 'start_revoked' ? t.quotes.eventStartRevoked :
+                         event.type === 'completed' ? t.quotes.eventCompleted :
+                         event.type === 'completion_revoked' ? t.quotes.eventCompletionRevoked :
+                         event.type === 'deleted' ? t.quotes.eventDeleted :
+                         event.type}
+                      </span>
+                    )}
                   </div>
                   <span className="text-gray-500">{event.doctorName}</span>
                 </div>
@@ -1292,6 +1437,23 @@ export function QuoteEditorPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Invoice disabled reason modal */}
+      <Modal
+        isOpen={invoiceDisabledModalOpen}
+        onClose={() => setInvoiceDisabledModalOpen(false)}
+        title={t.invoices.invoicing}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-700">{invoiceDisabledReason}</p>
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={() => setInvoiceDisabledModalOpen(false)}>
+              {t.common.close}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <ConfirmModal
@@ -1304,6 +1466,83 @@ export function QuoteEditorPage() {
         cancelText={t.common.cancel}
         variant="danger"
       />
+
+      {/* Valid Until Edit Modal */}
+      <Modal
+        isOpen={validUntilModalOpen}
+        onClose={() => setValidUntilModalOpen(false)}
+        title={t.quotes.quoteValidity}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">{t.quotes.quoteValidityDescription}</p>
+          <div className="relative">
+            <input
+              value={validUntilText}
+              onChange={(e) => {
+                setValidUntilText(e.target.value);
+                const parsed = parseBirthDateFromDisplay(e.target.value);
+                if (parsed) {
+                  editQuote(quote.quoteId, { validUntil: parsed });
+                }
+              }}
+              placeholder={getDatePlaceholder()}
+              className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+            />
+            <input
+              type="date"
+              value={quote.validUntil.slice(0, 10)}
+              onChange={(e) => {
+                if (e.target.value) {
+                  editQuote(quote.quoteId, { validUntil: e.target.value });
+                  setValidUntilText(formatBirthDateForDisplay(e.target.value));
+                }
+              }}
+              className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer"
+              tabIndex={-1}
+            />
+            <svg
+              className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"
+              />
+            </svg>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">{t.quotes.quoteValidityAdjust}</span>
+            {[30, 60, 90, 120].map((days) => {
+              const newDate = new Date();
+              newDate.setDate(newDate.getDate() + days);
+              const isoDate = newDate.toISOString().slice(0, 10);
+              return (
+                <button
+                  key={days}
+                  onClick={() => {
+                    editQuote(quote.quoteId, { validUntil: isoDate });
+                    setValidUntilText(formatBirthDateForDisplay(isoDate));
+                  }}
+                  className="px-3 py-1 text-sm font-medium rounded-lg border border-gray-300 hover:bg-dental-50 hover:border-dental-400 transition-colors"
+                >
+                  {days}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="primary" onClick={() => setValidUntilModalOpen(false)}>
+              {t.common.save}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

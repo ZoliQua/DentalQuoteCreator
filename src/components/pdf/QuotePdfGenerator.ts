@@ -462,6 +462,6 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   doc.text(disclaimerLines, pageWidth / 2, yPos, { align: 'center' });
 
   // Save PDF
-  const fileName = `arajanlat_${formatQuoteId(quote.quoteId)}_${patient.lastName}_${patient.firstName}.pdf`;
+  const fileName = `arajanlat_${quote.quoteNumber}_${patient.lastName}_${patient.firstName}.pdf`;
   doc.save(fileName);
 }

@@ -215,6 +215,26 @@ export function useQuotes() {
     [getQuote, updateQuote]
   );
 
+  const addEventToQuote = useCallback(
+    (quoteId: string, event: Omit<QuoteEvent, 'id' | 'timestamp'>): Quote | undefined => {
+      const existing = getQuote(quoteId);
+      if (!existing) return undefined;
+
+      const fullEvent: QuoteEvent = {
+        ...event,
+        id: nanoid(),
+        timestamp: getEventTimestamp(),
+      };
+      const updated: Quote = {
+        ...existing,
+        events: [...existing.events, fullEvent],
+      };
+      updateQuote(updated);
+      return updated;
+    },
+    [getQuote, updateQuote]
+  );
+
   // Status transition helper
   const changeStatus = useCallback(
     (quoteId: string, newStatus: QuoteStatus, eventType: QuoteEvent['type']): Quote | undefined => {
@@ -470,6 +490,7 @@ export function useQuotes() {
     removeItemFromQuote,
     reorderQuoteItems,
     editQuote,
+    addEventToQuote,
     deleteQuote,
     canDeleteQuote,
     canReopenQuote,

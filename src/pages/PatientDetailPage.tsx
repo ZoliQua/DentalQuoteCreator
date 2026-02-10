@@ -1,4 +1,5 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { usePatients, useQuotes } from '../hooks';
 import {
@@ -33,7 +34,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import iconFemale from '../assets/icon-svgs/symbol-female.svg';
 import iconMale from '../assets/icon-svgs/symbol-male.svg';
 import { OdontogramHost, OdontogramHostHandle } from '../modules/odontogram/OdontogramHost';
-import { getInvoicesByPatient } from '../modules/invoicing/storage';
+import { getInvoicesByPatient, saveInvoice } from '../modules/invoicing/storage';
+import { stornoInvoice } from '../modules/invoicing/api';
+import type { InvoiceRecord } from '../types/invoice';
+import { getChecksByPatient } from '../modules/neak/storage';
+import type { JogviszonyCode } from '../modules/neak/types';
 import {
   loadCurrent,
 } from '../modules/odontogram/odontogramStorage';
@@ -49,6 +54,8 @@ import {
 } from '../modules/odontogram/odontogramTimelineStorage';
 import type { OdontogramState, OdontogramTimelineEntry } from '../modules/odontogram/types';
 import type { Patient, PatientFormData } from '../types';
+import { NeakCheckModal } from '../modules/neak/NeakCheckModal';
+import { checkJogviszony, saveCheck } from '../modules/neak';
 
 type TimelineEditorModalProps = {
   isOpen: boolean;
@@ -187,6 +194,10 @@ export function PatientDetailPage() {
   const [editingSnapshotState, setEditingSnapshotState] = useState<OdontogramState | null>(null);
   const [activeSnapshotId, setActiveSnapshotId] = useState<string | null>(null);
   const [pendingDeleteSnapshotId, setPendingDeleteSnapshotId] = useState<string | null>(null);
+  const [neakModalOpen, setNeakModalOpen] = useState(false);
+  const [stornoConfirmInvoiceId, setStornoConfirmInvoiceId] = useState<string | null>(null);
+  const [stornoLoading, setStornoLoading] = useState(false);
+  const [stornoError, setStornoError] = useState<string | null>(null);
 
   const patient = patientId ? getPatient(patientId) : undefined;
   const quotes = patientId ? getQuotesByPatient(patientId) : [];
@@ -242,7 +253,52 @@ export function PatientDetailPage() {
   };
 
   const activeQuotes = quotes.filter((q) => !q.isDeleted);
-  const patientInvoices = useMemo(() => getInvoicesByPatient(patient.patientId), [patient.patientId]);
+  const [patientInvoices, setPatientInvoices] = useState(() => getInvoicesByPatient(patient.patientId));
+  const refreshPatientInvoices = () => setPatientInvoices(getInvoicesByPatient(patient.patientId));
+  useEffect(() => { refreshPatientInvoices(); }, [patient.patientId]);
+
+  const openInvoicePdf = (base64?: string) => {
+    if (!base64) return;
+    const bytes = atob(base64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'application/pdf' });
+    window.open(URL.createObjectURL(blob), '_blank');
+  };
+
+  const handleStorno = async (invoice: InvoiceRecord) => {
+    if (!invoice.szamlazzInvoiceNumber) return;
+    setStornoLoading(true);
+    setStornoError(null);
+    try {
+      const response = await stornoInvoice(invoice.szamlazzInvoiceNumber);
+      if (response.mode === 'live' && !response.success) {
+        throw new Error(response.message || t.invoices.errorGeneric);
+      }
+      const updated: InvoiceRecord = {
+        ...invoice,
+        status: 'storno',
+        stornoInvoiceNumber: response.invoiceNumber || undefined,
+        stornoPdfBase64: response.pdfBase64 || undefined,
+      };
+      saveInvoice(updated);
+      refreshPatientInvoices();
+      setStornoConfirmInvoiceId(null);
+      // Auto-open storno PDF
+      if (response.pdfBase64) {
+        openInvoicePdf(response.pdfBase64);
+      }
+    } catch (error) {
+      setStornoError(error instanceof Error ? error.message : t.invoices.errorGeneric);
+    } finally {
+      setStornoLoading(false);
+    }
+  };
+
+  const neakChecks = useMemo(() => {
+    if (!patient.patientType?.toLowerCase().includes('neak')) return [];
+    return getChecksByPatient(patient.patientId);
+  }, [patient.patientId, patient.patientType]);
   const sortedQuotes = [...activeQuotes].sort(
     (a, b) => new Date(b.lastStatusChangeAt).getTime() - new Date(a.lastStatusChangeAt).getTime()
   );
@@ -488,7 +544,22 @@ export function PatientDetailPage() {
             {patient.insuranceNum && (
               <div>
                 <label className="text-sm text-gray-500">{t.patients.insuranceNum}</label>
-                <p className="font-medium">{patient.insuranceNum}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium">{patient.insuranceNum}</p>
+                  {patient.patientType?.toLowerCase().includes('neak') && (
+                    <button
+                      type="button"
+                      onClick={() => setNeakModalOpen(true)}
+                      className="rounded-md border border-gray-200 p-1.5 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
+                      title={t.neak.checkButton}
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        <path d="M9 12l2 2 4-4" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             {(patient.zipCode || patient.city || patient.street) && (
@@ -654,36 +725,137 @@ export function PatientDetailPage() {
             </div>
           )}
 
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-semibold">Szamlak</h2>
-            </CardHeader>
-            <CardContent>
-              {patientInvoices.length === 0 ? (
-                <p className="text-sm text-gray-500">Nincs meg ehhez a pacienshez szamla.</p>
-              ) : (
-                <div className="space-y-2">
-                  {patientInvoices.map((invoice) => (
-                    <div
-                      key={invoice.id}
-                      className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2"
-                    >
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {invoice.szamlazzInvoiceNumber || 'Preview szamla'}
-                        </p>
-                        <p className="text-xs text-gray-500">{formatDateTime(invoice.createdAt)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold">{formatCurrency(invoice.totalGross, invoice.currency)}</p>
-                        <p className="text-xs text-gray-500">{invoice.status}</p>
-                      </div>
-                    </div>
-                  ))}
+          <h2 className="text-lg font-semibold mt-6">{t.invoices.issuedInvoices}</h2>
+
+          {patientInvoices.length === 0 ? (
+            <Card>
+              <CardContent>
+                <p className="text-sm text-gray-500">{t.patients.noInvoicesForPatient}</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {stornoError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {stornoError}
                 </div>
               )}
-            </CardContent>
-          </Card>
+              {patientInvoices.map((invoice) => (
+                <Card key={invoice.id} hoverable>
+                  <CardContent className="flex items-center justify-between">
+                    <Link to={`/invoices/${invoice.id}`} className="flex-1">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">
+                          {invoice.szamlazzInvoiceNumber || t.invoices.preview}
+                        </h3>
+                        <div className="flex items-center gap-3 text-sm text-gray-500">
+                          <span>{formatDateTime(invoice.createdAt)}</span>
+                          <Badge
+                            variant={
+                              invoice.status === 'sent' ? 'success' :
+                              invoice.status === 'storno' ? 'danger' : 'warning'
+                            }
+                            size="sm"
+                          >
+                            {invoice.status === 'sent' ? t.invoices.statusSent :
+                             invoice.status === 'draft' ? t.invoices.statusDraft :
+                             invoice.status === 'storno' ? t.invoices.statusStorno :
+                             invoice.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    </Link>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="font-semibold text-gray-900">{formatCurrency(invoice.totalGross, invoice.currency)}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {invoice.pdfBase64 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => { e.preventDefault(); openInvoicePdf(invoice.pdfBase64); }}
+                          >
+                            {t.invoices.pdf}
+                          </Button>
+                        )}
+                        {invoice.status === 'sent' && invoice.szamlazzInvoiceNumber && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => { e.preventDefault(); setStornoConfirmInvoiceId(invoice.id); }}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            {t.invoices.storno}
+                          </Button>
+                        )}
+                        {invoice.stornoPdfBase64 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => { e.preventDefault(); openInvoicePdf(invoice.stornoPdfBase64); }}
+                          >
+                            {t.invoices.stornoNumber}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {patient.patientType?.toLowerCase().includes('neak') && (
+            <>
+              <h2 className="text-lg font-semibold mt-6">{t.neak.neakData}</h2>
+              {neakChecks.length === 0 ? (
+                <Card>
+                  <CardContent>
+                    <p className="text-sm text-gray-500">{t.neak.noHistory}</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {neakChecks.map((entry) => {
+                    const code = entry.result.jogviszony as JogviszonyCode | undefined;
+                    const badgeMap: Record<string, { label: string; color: string }> = {
+                      Z: { label: t.neak.resultZ, color: 'bg-green-100 text-green-800' },
+                      P: { label: t.neak.resultP, color: 'bg-yellow-100 text-yellow-800' },
+                      K: { label: t.neak.resultK, color: 'bg-blue-100 text-blue-800' },
+                      N: { label: t.neak.resultN, color: 'bg-red-100 text-red-800' },
+                      B: { label: t.neak.resultB, color: 'bg-red-100 text-red-800' },
+                      S: { label: t.neak.resultS, color: 'bg-yellow-100 text-yellow-800' },
+                    };
+                    const badge = code ? badgeMap[code] : null;
+                    return (
+                      <Card key={entry.id}>
+                        <CardContent className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-500">
+                              {formatDateTime(entry.checkedAt)}
+                            </p>
+                            <p className="text-xs text-gray-400">TAJ: {formatInsuranceNum(entry.taj)}</p>
+                          </div>
+                          <div>
+                            {badge ? (
+                              <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${badge.color}`}>
+                                {badge.label}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-red-500">
+                                {entry.result.message || entry.result.hibaSzoveg || t.neak.errorGeneric}
+                              </span>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -737,12 +909,36 @@ export function PatientDetailPage() {
         variant="danger"
       />
 
+      <ConfirmModal
+        isOpen={stornoConfirmInvoiceId !== null}
+        onClose={() => { setStornoConfirmInvoiceId(null); setStornoError(null); }}
+        onConfirm={() => {
+          const inv = patientInvoices.find((i) => i.id === stornoConfirmInvoiceId);
+          if (inv) handleStorno(inv);
+        }}
+        title={t.invoices.storno}
+        message={`${t.invoices.stornoConfirm}\n\n${t.invoices.stornoConfirmDetail}`}
+        confirmText={stornoLoading ? t.invoices.stornoInProgress : t.invoices.storno}
+        cancelText={t.common.cancel}
+        variant="danger"
+      />
+
       <PatientEditModal
         isOpen={editPatientModalOpen}
         patient={patient}
         onClose={() => setEditPatientModalOpen(false)}
         onSubmit={handleEditPatient}
       />
+
+      {neakModalOpen && patient.insuranceNum && (
+        <NeakCheckModal
+          isOpen={neakModalOpen}
+          onClose={() => setNeakModalOpen(false)}
+          patientId={patient.patientId}
+          taj={patient.insuranceNum}
+          patientName={formatPatientName(patient.lastName, patient.firstName, patient.title)}
+        />
+      )}
     </div>
   );
 }
@@ -756,6 +952,7 @@ type PatientEditModalProps = {
 
 function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditModalProps) {
   const { t, settings } = useSettings();
+  const [neakModalOpen, setNeakModalOpen] = useState(false);
   const [formData, setFormData] = useState<PatientFormData>({
     title: '',
     lastName: '',
@@ -832,6 +1029,14 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
       return;
     }
     onSubmit(formData);
+    // Fire-and-forget NEAK auto-check
+    const tajDigits = formData.insuranceNum?.replace(/-/g, '') || '';
+    if (formData.patientType?.toLowerCase().includes('neak') && tajDigits.length === 9) {
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      checkJogviszony(tajDigits, date).then(result => {
+        saveCheck({ id: nanoid(), patientId: patient.patientId, taj: tajDigits, checkedAt: new Date().toISOString(), date, result });
+      }).catch(() => {});
+    }
   };
 
   const handleBirthDateTextChange = (value: string) => {
@@ -981,23 +1186,39 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {t.patients.insuranceNum}
             </label>
-            <input
-              value={formData.insuranceNum || ''}
-              onChange={(e) =>
-                setFormData({ ...formData, insuranceNum: formatInsuranceNum(e.target.value) })
-              }
-              placeholder={t.patients.insuranceNumPlaceholder}
-              maxLength={11}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
-                (() => {
-                  const state = getTajValidationState(formData.insuranceNum || '');
-                  if (state === 'empty') return 'border-gray-300 focus:ring-dental-500';
-                  if (state === 'incomplete') return 'border-yellow-300 bg-yellow-50 focus:ring-yellow-500';
-                  if (state === 'valid') return 'border-green-500 bg-green-50 focus:ring-green-500';
-                  return 'border-red-500 bg-red-50 focus:ring-red-500';
-                })()
-              }`}
-            />
+            <div className="flex gap-1">
+              <input
+                value={formData.insuranceNum || ''}
+                onChange={(e) =>
+                  setFormData({ ...formData, insuranceNum: formatInsuranceNum(e.target.value) })
+                }
+                placeholder={t.patients.insuranceNumPlaceholder}
+                maxLength={11}
+                className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                  (() => {
+                    const state = getTajValidationState(formData.insuranceNum || '');
+                    if (state === 'empty') return 'border-gray-300 focus:ring-dental-500';
+                    if (state === 'incomplete') return 'border-yellow-300 bg-yellow-50 focus:ring-yellow-500';
+                    if (state === 'valid') return 'border-green-500 bg-green-50 focus:ring-green-500';
+                    return 'border-red-500 bg-red-50 focus:ring-red-500';
+                  })()
+                }`}
+              />
+              {formData.patientType?.toLowerCase().includes('neak') &&
+                getTajValidationState(formData.insuranceNum || '') === 'valid' && (
+                <button
+                  type="button"
+                  onClick={() => setNeakModalOpen(true)}
+                  className="shrink-0 rounded-lg border border-gray-300 p-2 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
+                  title={t.neak.checkButton}
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    <path d="M9 12l2 2 4-4" />
+                  </svg>
+                </button>
+              )}
+            </div>
             {getTajValidationState(formData.insuranceNum || '') === 'invalid' && (
               <p className="mt-1 text-sm text-red-600">{t.validation.invalidInsuranceNum}</p>
             )}
@@ -1130,6 +1351,15 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
           <Button type="submit">{t.common.save}</Button>
         </div>
       </form>
+      {neakModalOpen && (
+        <NeakCheckModal
+          isOpen={neakModalOpen}
+          onClose={() => setNeakModalOpen(false)}
+          patientId={patient.patientId}
+          taj={formData.insuranceNum || ''}
+          patientName={`${formData.lastName} ${formData.firstName}`.trim()}
+        />
+      )}
     </Modal>
   );
 }

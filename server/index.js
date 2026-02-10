@@ -424,6 +424,97 @@ app.get('/api/szamlazz/health', (_req, res) => {
   res.json({ ok: true, mode: INVOICE_MODE });
 });
 
+// ── NEAK OJOTE jogviszony endpoints ──────────────────────────────────
+
+const NEAK_OJOTE_KEY = process.env.NEAK_OJOTE_KEY || '';
+const NEAK_OJOTE_ENV = process.env.NEAK_OJOTE_ENV || 'production';
+const NEAK_WSS_USER = process.env.NEAK_WSS_USER || '';
+const NEAK_WSS_PASS = process.env.NEAK_WSS_PASS || '';
+const NEAK_ENDPOINT = NEAK_OJOTE_ENV === 'test'
+  ? 'https://tesztjogviszony.neak.gov.hu/ojote/jogviszonyV12'
+  : 'https://jogviszony.neak.gov.hu/ojote/jogviszonyV12';
+const NEAK_PING_URL = NEAK_OJOTE_ENV === 'test'
+  ? 'https://tesztjogviszony.neak.gov.hu/ojote/ping'
+  : 'https://jogviszony.neak.gov.hu/ojote/ping';
+
+app.get('/api/neak/ping', async (_req, res) => {
+  try {
+    const response = await fetch(NEAK_PING_URL);
+    const text = await response.text();
+    res.json({ ok: response.ok, response: text });
+  } catch (error) {
+    console.error('[neak] ping error', error);
+    res.status(502).json({ ok: false, response: String(error) });
+  }
+});
+
+app.post('/api/neak/jogviszony', async (req, res) => {
+  try {
+    const { taj: rawTaj, date } = req.body || {};
+    const taj = String(rawTaj || '').replace(/-/g, '');
+    const datum = date || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
+    if (!/^\d{9}$/.test(taj)) {
+      return res.status(400).json({ success: false, hibaKod: '4', message: 'TAJ must be exactly 9 digits' });
+    }
+    if (!NEAK_OJOTE_KEY) {
+      return res.status(500).json({ success: false, hibaKod: '8', message: 'Missing NEAK_OJOTE_KEY in server config' });
+    }
+    if (!NEAK_WSS_USER || !NEAK_WSS_PASS) {
+      return res.status(500).json({ success: false, hibaKod: '8', message: 'Missing NEAK_WSS_USER / NEAK_WSS_PASS in server config' });
+    }
+
+    const soapXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ojot="http://ojote/">
+  <soapenv:Header>
+    <wsse:Security soapenv:mustUnderstand="1" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">
+      <wsse:UsernameToken>
+        <wsse:Username>${escapeXml(NEAK_WSS_USER)}</wsse:Username>
+        <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">${escapeXml(NEAK_WSS_PASS)}</wsse:Password>
+      </wsse:UsernameToken>
+    </wsse:Security>
+  </soapenv:Header>
+  <soapenv:Body>
+    <ojot:jogviszonyTAJV12Element>
+      <ojot:program_azon>${escapeXml(NEAK_OJOTE_KEY)}</ojot:program_azon>
+      <ojot:ruser></ojot:ruser>
+      <ojot:taj>${escapeXml(taj)}</ojot:taj>
+    </ojot:jogviszonyTAJV12Element>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+    const response = await fetch(NEAK_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml; charset=utf-8',
+        'SOAPAction': 'http://ojote//jogviszonyTAJV12',
+      },
+      body: soapXml,
+    });
+
+    const rawText = await response.text();
+
+    // Namespace-tolerant extraction (NEAK uses ns0: prefix)
+    const extractTag = (tag) => {
+      const re = new RegExp(`<(?:[\\w]+:)?${tag}(?:\\s[^>]*)?>([^<]+)<\\/(?:[\\w]+:)?${tag}>`);
+      return rawText.match(re)?.[1] || undefined;
+    };
+
+    const jogviszony = extractTag('jogviszony');
+    const hibaKod = extractTag('hibaKod') || '0';
+    const hibaSzoveg = extractTag('hibaSzoveg');
+    const torlesNapja = extractTag('torlesNapja');
+    const kozlemeny = extractTag('kozlemeny');
+
+    const success = hibaKod === '0' && response.ok;
+
+    res.json({ success, jogviszony, hibaKod, hibaSzoveg, torlesNapja, kozlemeny });
+  } catch (error) {
+    console.error('[neak] jogviszony error', error);
+    res.status(502).json({ success: false, hibaKod: '2', message: 'NEAK jogviszony request failed' });
+  }
+});
+
 app.use((err, _req, res, _next) => {
   console.error('[szamlazz] unhandled express error', err);
   if (res.headersSent) {

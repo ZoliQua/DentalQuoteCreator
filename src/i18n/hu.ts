@@ -88,6 +88,7 @@ export const hu = {
     tajValid: 'TAJ szám érvényes',
     missingFieldsTitle: 'Hiányzó adatok',
     missingFieldsMessage: 'Kérjük, töltse ki a kötelező mezőket',
+    noInvoicesForPatient: 'Nincs még ehhez a pácienshez számla.',
   },
 
   // Quotes
@@ -101,6 +102,11 @@ export const hu = {
     createdAt: 'Létrehozva',
     modifiedAt: 'Módosítva',
     validUntil: 'Érvényes',
+    quoteValidity: 'Árajánlat Érvényessége',
+    quoteValidityDescription: 'Az Árajánlat az alábbi időpontig érvényes:',
+    quoteValidityAdjust: 'Módosítás:',
+    quoteValidityDays: 'nap',
+    quoteValidityExpired: 'lejárt',
     status: 'Státusz',
     // New status labels
     statusDraft: 'Piszkozat',
@@ -175,6 +181,7 @@ export const hu = {
     eventCompleted: 'Árajánlat befejezve',
     eventCompletionRevoked: 'Árajánlat befejezése visszavonva',
     eventDeleted: 'Árajánlat törölve',
+    eventInvoiceCreated: 'Számla kiállítva',
     itemsCount: '{count} tétel',
   },
 
@@ -362,7 +369,7 @@ export const hu = {
     amount: 'Összeg',
     status: 'Állapot',
     statusDraft: 'Piszkozat',
-    statusSent: 'Végleges',
+    statusSent: 'Kiállított',
     statusStorno: 'Sztornózott',
     open: 'Megnyitás',
     pdf: 'PDF',
@@ -441,6 +448,28 @@ export const hu = {
     patientSignature: 'Páciens aláírása',
     doctorSignature: 'Kezelőorvos',
     currency: 'Ft',
+  },
+
+  // NEAK
+  neak: {
+    title: 'NEAK Jogviszony Ellenőrzés',
+    checkButton: 'NEAK ellenőrzés',
+    checking: 'Ellenőrzés...',
+    recheck: 'Újra ellenőrzés',
+    history: 'Ellenőrzési előzmények',
+    noHistory: 'Nincs korábbi ellenőrzés',
+    date: 'Dátum',
+    result: 'Eredmény',
+    resultZ: 'Érvényes, rendezett jogviszony',
+    resultP: 'Érvényes, rendezetlen jogviszony',
+    resultK: 'Külföldi biztosított',
+    resultN: 'Érvénytelen — NAV tartozás',
+    resultB: 'Érvénytelen TAJ',
+    resultS: 'Korlátozott jogosultság',
+    errorGeneric: 'NEAK ellenőrzés sikertelen',
+    deletedOn: 'Törlés napja',
+    autoCheckDone: 'NEAK ellenőrzés automatikusan végrehajtva',
+    neakData: 'NEAK adatok',
   },
 
   // Validation

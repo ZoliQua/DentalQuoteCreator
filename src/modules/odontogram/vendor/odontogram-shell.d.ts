@@ -14,4 +14,10 @@ declare module '@odontogram-shell' {
 
   const OdontogramShell: ComponentType<OdontogramShellProps>;
   export default OdontogramShell;
+
+  export function clearSelection(): void;
+  export function setOcclusalVisible(on: boolean): void;
+  export function setWisdomVisible(on: boolean): void;
+  export function setShowBase(on: boolean): void;
+  export function setHealthyPulpVisible(on: boolean): void;
 }

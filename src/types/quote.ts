@@ -14,8 +14,12 @@ export type Jaw = 'upper' | 'lower' | 'both';
 export interface QuoteEvent {
   id: string;
   timestamp: string;
-  type: 'created' | 'closed' | 'reopened' | 'accepted' | 'acceptance_revoked' | 'rejected' | 'rejection_revoked' | 'started' | 'start_revoked' | 'completed' | 'completion_revoked' | 'deleted';
+  type: 'created' | 'closed' | 'reopened' | 'accepted' | 'acceptance_revoked' | 'rejected' | 'rejection_revoked' | 'started' | 'start_revoked' | 'completed' | 'completion_revoked' | 'deleted' | 'invoice_created';
   doctorName: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  invoiceAmount?: number;
+  invoiceCurrency?: string;
 }
 
 export interface QuoteItem {

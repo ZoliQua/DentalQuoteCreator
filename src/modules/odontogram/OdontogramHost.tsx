@@ -1,5 +1,6 @@
 import { type ReactNode, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import OdontogramApp from '@odontogram-shell';
+import OdontogramApp, { clearSelection } from '@odontogram-shell';
+export { clearSelection, setOcclusalVisible, setWisdomVisible, setShowBase, setHealthyPulpVisible } from '@odontogram-shell';
 import { createPortal } from 'react-dom';
 import type { OdontogramState } from './types';
 import './odontogramHost.css';
@@ -174,10 +175,7 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
         importState: (state) => importStateIntoOdontogram(rootRef.current, state),
         exportState: () => captureExportState(rootRef.current),
         syncViewMode: async () => {
-          const root = rootRef.current;
-          if (!root) return;
-          const clearButton = root.querySelector('#btnSelectNoneChart') as HTMLButtonElement | null;
-          clearButton?.click();
+          clearSelection();
         },
       }),
       []
@@ -202,6 +200,10 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
           }
         }
         if (!cancelled) {
+          // In view mode, clear tooth selection after import finishes
+          if (mode === 'view') {
+            clearSelection();
+          }
           window.setTimeout(() => {
             suppressMutationsRef.current = false;
           }, 50);
@@ -213,7 +215,7 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
         cancelled = true;
         suppressMutationsRef.current = false;
       };
-    }, [initialState, patientId]);
+    }, [initialState, patientId, mode]);
 
     useEffect(() => {
       const target = rootRef.current;
@@ -248,12 +250,6 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
 
     useEffect(() => {
       if (mode !== 'view') return;
-      const clearSelection = () => {
-        const root = rootRef.current;
-        if (!root) return;
-        const clearButton = root.querySelector('#btnSelectNoneChart') as HTMLButtonElement | null;
-        clearButton?.click();
-      };
       clearSelection();
     }, [mode]);
 

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { usePatients } from '../hooks';
 import { Patient, PatientFormData } from '../types';
@@ -21,6 +22,8 @@ import {
 } from '../components/common';
 import { formatDate, formatInsuranceNum, formatPatientName, getTajValidationState, formatBirthDateForDisplay, parseBirthDateFromDisplay, getDatePlaceholder } from '../utils';
 import { postalCodes } from '../data/postalCodes';
+import { NeakCheckModal } from '../modules/neak/NeakCheckModal';
+import { checkJogviszony, saveCheck } from '../modules/neak';
 
 export function PatientsPage() {
   const { t } = useSettings();
@@ -48,13 +51,29 @@ export function PatientsPage() {
   const displayedPatients = showArchived ? archivedPatients : filteredPatients;
 
   const handleCreatePatient = (data: PatientFormData) => {
-    createPatient(data);
+    const newPatient = createPatient(data);
     setIsModalOpen(false);
+    // Fire-and-forget NEAK auto-check for new NEAK patients
+    const tajDigits = data.insuranceNum?.replace(/-/g, '') || '';
+    if (data.patientType?.toLowerCase().includes('neak') && tajDigits.length === 9 && newPatient) {
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      checkJogviszony(tajDigits, date).then(result => {
+        saveCheck({ id: nanoid(), patientId: newPatient.patientId, taj: tajDigits, checkedAt: new Date().toISOString(), date, result });
+      }).catch(() => {});
+    }
   };
 
   const handleEditPatient = (data: PatientFormData) => {
     if (editingPatient) {
       editPatient(editingPatient.patientId, data);
+      // Fire-and-forget NEAK auto-check
+      const tajDigits = data.insuranceNum?.replace(/-/g, '') || '';
+      if (data.patientType?.toLowerCase().includes('neak') && tajDigits.length === 9) {
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        checkJogviszony(tajDigits, date).then(result => {
+          saveCheck({ id: nanoid(), patientId: editingPatient.patientId, taj: tajDigits, checkedAt: new Date().toISOString(), date, result });
+        }).catch(() => {});
+      }
       setEditingPatient(null);
     }
   };
@@ -271,6 +290,7 @@ interface PatientFormModalProps {
 
 function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: PatientFormModalProps) {
   const { t, settings } = useSettings();
+  const [neakModalOpen, setNeakModalOpen] = useState(false);
   const [formData, setFormData] = useState<PatientFormData>({
     title: '',
     lastName: '',
@@ -527,21 +547,37 @@ function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: Patient
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {t.patients.insuranceNum}
             </label>
-            <input
-              value={formData.insuranceNum || ''}
-              onChange={(e) => handleInsuranceNumChange(e.target.value)}
-              placeholder={t.patients.insuranceNumPlaceholder}
-              maxLength={11}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
-                (() => {
-                  const state = getTajValidationState(formData.insuranceNum || '');
-                  if (state === 'empty') return 'border-gray-300 focus:ring-dental-500';
-                  if (state === 'incomplete') return 'border-yellow-300 bg-yellow-50 focus:ring-yellow-500';
-                  if (state === 'valid') return 'border-green-500 bg-green-50 focus:ring-green-500';
-                  return 'border-red-500 bg-red-50 focus:ring-red-500';
-                })()
-              }`}
-            />
+            <div className="flex gap-1">
+              <input
+                value={formData.insuranceNum || ''}
+                onChange={(e) => handleInsuranceNumChange(e.target.value)}
+                placeholder={t.patients.insuranceNumPlaceholder}
+                maxLength={11}
+                className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                  (() => {
+                    const state = getTajValidationState(formData.insuranceNum || '');
+                    if (state === 'empty') return 'border-gray-300 focus:ring-dental-500';
+                    if (state === 'incomplete') return 'border-yellow-300 bg-yellow-50 focus:ring-yellow-500';
+                    if (state === 'valid') return 'border-green-500 bg-green-50 focus:ring-green-500';
+                    return 'border-red-500 bg-red-50 focus:ring-red-500';
+                  })()
+                }`}
+              />
+              {formData.patientType?.toLowerCase().includes('neak') &&
+                getTajValidationState(formData.insuranceNum || '') === 'valid' && (
+                <button
+                  type="button"
+                  onClick={() => setNeakModalOpen(true)}
+                  className="shrink-0 rounded-lg border border-gray-300 p-2 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
+                  title={t.neak.checkButton}
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    <path d="M9 12l2 2 4-4" />
+                  </svg>
+                </button>
+              )}
+            </div>
             {getTajValidationState(formData.insuranceNum || '') === 'invalid' && (
               <p className="mt-1 text-sm text-red-600">{t.validation.invalidInsuranceNum}</p>
             )}
@@ -678,6 +714,15 @@ function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: Patient
           <Button type="submit">{t.common.save}</Button>
         </div>
       </form>
+      {neakModalOpen && (
+        <NeakCheckModal
+          isOpen={neakModalOpen}
+          onClose={() => setNeakModalOpen(false)}
+          patientId={patient?.patientId || 'new'}
+          taj={formData.insuranceNum || ''}
+          patientName={`${formData.lastName} ${formData.firstName}`.trim()}
+        />
+      )}
     </Modal>
   );
 }

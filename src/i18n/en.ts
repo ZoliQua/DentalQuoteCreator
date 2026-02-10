@@ -90,6 +90,7 @@ export const en: TranslationKeys = {
     tajValid: 'TAJ number valid',
     missingFieldsTitle: 'Missing Data',
     missingFieldsMessage: 'Please fill in the required fields',
+    noInvoicesForPatient: 'No invoices for this patient yet.',
   },
 
   // Quotes
@@ -103,6 +104,11 @@ export const en: TranslationKeys = {
     createdAt: 'Created',
     modifiedAt: 'Modified',
     validUntil: 'Valid Until',
+    quoteValidity: 'Quote Validity',
+    quoteValidityDescription: 'The quote is valid until the following date:',
+    quoteValidityAdjust: 'Adjust:',
+    quoteValidityDays: 'days',
+    quoteValidityExpired: 'expired',
     status: 'Status',
     // New status labels
     statusDraft: 'Draft',
@@ -177,6 +183,7 @@ export const en: TranslationKeys = {
     eventCompleted: 'Treatment completed',
     eventCompletionRevoked: 'Completion revoked',
     eventDeleted: 'Quote deleted',
+    eventInvoiceCreated: 'Invoice issued',
     itemsCount: '{count} items',
   },
 
@@ -365,7 +372,7 @@ export const en: TranslationKeys = {
     amount: 'Amount',
     status: 'Status',
     statusDraft: 'Draft',
-    statusSent: 'Finalized',
+    statusSent: 'Issued',
     statusStorno: 'Reversed',
     open: 'Open',
     pdf: 'PDF',
@@ -444,6 +451,28 @@ export const en: TranslationKeys = {
     patientSignature: 'Patient Signature',
     doctorSignature: 'Doctor',
     currency: 'HUF',
+  },
+
+  // NEAK
+  neak: {
+    title: 'NEAK Insurance Check',
+    checkButton: 'NEAK Check',
+    checking: 'Checking...',
+    recheck: 'Re-check',
+    history: 'Check History',
+    noHistory: 'No previous checks',
+    date: 'Date',
+    result: 'Result',
+    resultZ: 'Valid insurance, settled',
+    resultP: 'Valid insurance, unsettled',
+    resultK: 'Foreign insured',
+    resultN: 'Invalid — NAV debt',
+    resultB: 'Invalid TAJ',
+    resultS: 'Limited eligibility',
+    errorGeneric: 'NEAK check failed',
+    deletedOn: 'Deleted on',
+    autoCheckDone: 'NEAK check performed automatically',
+    neakData: 'NEAK Data',
   },
 
   // Validation
