@@ -1,27 +1,21 @@
 import type { NeakCheckLogEntry } from './types';
+import { requestJsonSync } from '../../utils/syncHttp';
 
-const STORAGE_KEY = 'neak_ojote_checks';
+const API_PREFIX = '/backend';
 
-const safeParse = (raw: string | null): NeakCheckLogEntry[] => {
-  if (!raw) return [];
+export const listChecks = (): NeakCheckLogEntry[] => {
   try {
-    const parsed = JSON.parse(raw) as NeakCheckLogEntry[];
-    return Array.isArray(parsed) ? parsed : [];
+    const checks = requestJsonSync<NeakCheckLogEntry[]>('GET', `${API_PREFIX}/neak-checks`);
+    return (Array.isArray(checks) ? checks : []).sort(
+      (a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime()
+    );
   } catch {
     return [];
   }
 };
 
-export const listChecks = (): NeakCheckLogEntry[] => {
-  return safeParse(localStorage.getItem(STORAGE_KEY)).sort(
-    (a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime(),
-  );
-};
-
 export const saveCheck = (entry: NeakCheckLogEntry): void => {
-  const current = listChecks();
-  const next = [entry, ...current.filter((item) => item.id !== entry.id)];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  requestJsonSync('PUT', `${API_PREFIX}/neak-checks/${entry.id}`, entry);
 };
 
 export const getChecksByPatient = (patientId: string): NeakCheckLogEntry[] => {

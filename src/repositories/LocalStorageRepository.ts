@@ -1,110 +1,59 @@
-import { nanoid } from 'nanoid';
 import {
-  Patient,
-  CatalogItem,
-  Quote,
-  Settings,
   CatalogCategory,
   CATALOG_CATEGORIES,
   CATALOG_UNITS,
+  CatalogItem,
   DentalStatusSnapshot,
+  Patient,
+  Quote,
+  Settings,
 } from '../types';
-import { StorageRepository, ExportData } from './StorageRepository';
 import { defaultCatalog } from '../data/defaultCatalog';
 import { defaultSettings } from '../data/defaultSettings';
+import { StorageRepository, ExportData } from './StorageRepository';
+import { requestJsonSync } from '../utils/syncHttp';
 
-const STORAGE_KEYS = {
-  PATIENTS: 'dental_quote_patients',
-  CATALOG: 'dental_quote_catalog',
-  QUOTES: 'dental_quote_quotes',
-  SETTINGS: 'dental_quote_settings',
-  DENTAL_STATUS: 'dental_quote_dental_status_snapshots',
-} as const;
-
-const DATA_VERSION = '1.0.0';
+const API_PREFIX = '/backend';
 
 export class LocalStorageRepository implements StorageRepository {
   // Patients
   getPatients(): Patient[] {
-    const data = localStorage.getItem(STORAGE_KEYS.PATIENTS);
-    if (!data) return [];
     try {
-      const patients = JSON.parse(data);
-
-      // Migration: convert old address string to zipCode, city, street
-      let needsSave = false;
-      const migratedPatients = patients.map((p: Patient & { address?: string }) => {
-        if (p.address && !p.zipCode && !p.city && !p.street) {
-          needsSave = true;
-          // Try to parse address: "9700 Szombathely, Fő tér 1."
-          const match = p.address.match(/^(\d{4})\s+([^,]+),?\s*(.*)$/);
-          if (match) {
-            return {
-              ...p,
-              zipCode: match[1],
-              city: match[2].trim(),
-              street: match[3]?.trim() || '',
-              address: undefined,
-            };
-          }
-          // Fallback: put everything in street
-          return {
-            ...p,
-            street: p.address,
-            address: undefined,
-          };
-        }
-        return p;
-      });
-
-      if (needsSave) {
-        localStorage.setItem(STORAGE_KEYS.PATIENTS, JSON.stringify(migratedPatients));
-      }
-
-      return migratedPatients;
+      return requestJsonSync<Patient[]>('GET', `${API_PREFIX}/patients?includeArchived=true`);
     } catch {
       return [];
     }
   }
 
   getPatient(patientId: string): Patient | undefined {
-    return this.getPatients().find((p) => p.patientId === patientId);
+    try {
+      return requestJsonSync<Patient>('GET', `${API_PREFIX}/patients/${patientId}`);
+    } catch {
+      return undefined;
+    }
   }
 
   savePatient(patient: Patient): void {
-    const patients = this.getPatients();
-    const index = patients.findIndex((p) => p.patientId === patient.patientId);
-    if (index >= 0) {
-      patients[index] = patient;
-    } else {
-      patients.push(patient);
+    const exists = this.getPatient(patient.patientId);
+    if (exists) {
+      requestJsonSync('PATCH', `${API_PREFIX}/patients/${patient.patientId}`, patient);
+      return;
     }
-    localStorage.setItem(STORAGE_KEYS.PATIENTS, JSON.stringify(patients));
+    requestJsonSync('POST', `${API_PREFIX}/patients`, patient);
   }
 
   deletePatient(patientId: string): void {
-    const patients = this.getPatients().filter((p) => p.patientId !== patientId);
-    localStorage.setItem(STORAGE_KEYS.PATIENTS, JSON.stringify(patients));
+    requestJsonSync('DELETE', `${API_PREFIX}/patients/${patientId}`);
   }
 
   // Catalog
   getCatalog(): CatalogItem[] {
-    const data = localStorage.getItem(STORAGE_KEYS.CATALOG);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.CATALOG, JSON.stringify(defaultCatalog));
-      return defaultCatalog;
-    }
     try {
-      const parsed = JSON.parse(data);
-      if (!Array.isArray(parsed)) {
+      const items = requestJsonSync<CatalogItem[]>('GET', `${API_PREFIX}/catalog`);
+      if (!Array.isArray(items) || items.length === 0) {
         return defaultCatalog;
       }
-      const normalized = parsed.map((item: Partial<CatalogItem>) => normalizeCatalogItem(item));
-      const normalizedString = JSON.stringify(normalized);
-      if (normalizedString !== data) {
-        localStorage.setItem(STORAGE_KEYS.CATALOG, normalizedString);
-      }
-      return normalized;
+      return items.map((item) => normalizeCatalogItem(item));
     } catch {
       return defaultCatalog;
     }
@@ -115,100 +64,27 @@ export class LocalStorageRepository implements StorageRepository {
   }
 
   saveCatalogItem(item: CatalogItem): void {
-    const catalog = this.getCatalog();
-    const index = catalog.findIndex((c) => c.catalogItemId === item.catalogItemId);
-    if (index >= 0) {
-      catalog[index] = item;
-    } else {
-      catalog.push(item);
+    const exists = this.getCatalogItem(item.catalogItemId);
+    if (exists) {
+      requestJsonSync('PATCH', `${API_PREFIX}/catalog/${item.catalogItemId}`, item);
+      return;
     }
-    localStorage.setItem(STORAGE_KEYS.CATALOG, JSON.stringify(catalog));
+    requestJsonSync('POST', `${API_PREFIX}/catalog`, item);
   }
 
   deleteCatalogItem(catalogItemId: string): void {
-    const catalog = this.getCatalog().filter((c) => c.catalogItemId !== catalogItemId);
-    localStorage.setItem(STORAGE_KEYS.CATALOG, JSON.stringify(catalog));
+    requestJsonSync('DELETE', `${API_PREFIX}/catalog/${catalogItemId}`);
   }
 
   resetCatalog(items: CatalogItem[]): void {
-    localStorage.setItem(STORAGE_KEYS.CATALOG, JSON.stringify(items));
+    requestJsonSync('PUT', `${API_PREFIX}/catalog/reset`, { items });
   }
 
   // Quotes
   getQuotes(): Quote[] {
-    const data = localStorage.getItem(STORAGE_KEYS.QUOTES);
-    if (!data) return [];
     try {
-      const quotes = JSON.parse(data);
-      let needsSave = false;
-
-      // Migration: convert old quote format to new format
-      const migratedQuotes = quotes.map((q: Quote & {
-        status?: string;
-        acceptanceStatus?: string;
-        updatedAt?: string;
-        acceptedAt?: string;
-      }, index: number) => {
-        const migrated = { ...q };
-
-        // Migration: old status/acceptanceStatus to new quoteStatus
-        if (q.status && !q.quoteStatus) {
-          needsSave = true;
-          if (q.status === 'draft') {
-            migrated.quoteStatus = 'draft';
-          } else if (q.status === 'final') {
-            if (q.acceptanceStatus === 'accepted') {
-              migrated.quoteStatus = 'accepted_in_progress';
-            } else if (q.acceptanceStatus === 'rejected') {
-              migrated.quoteStatus = 'rejected';
-            } else {
-              migrated.quoteStatus = 'closed_pending';
-            }
-          } else if (q.status === 'archived') {
-            migrated.quoteStatus = 'completed';
-          }
-          delete (migrated as { status?: string }).status;
-          delete (migrated as { acceptanceStatus?: string }).acceptanceStatus;
-          delete (migrated as { acceptedAt?: string }).acceptedAt;
-        }
-
-        // Migration: generate quoteNumber if missing
-        if (!q.quoteNumber) {
-          needsSave = true;
-          // Use index + 1 as a fallback counter
-          const settings = this.getSettings();
-          migrated.quoteNumber = `${settings.quote.prefix}-${String(index + 1).padStart(4, '0')}`;
-        }
-
-        // Migration: lastStatusChangeAt from updatedAt
-        if (!q.lastStatusChangeAt && q.updatedAt) {
-          needsSave = true;
-          migrated.lastStatusChangeAt = q.updatedAt;
-          delete (migrated as { updatedAt?: string }).updatedAt;
-        } else if (!q.lastStatusChangeAt) {
-          needsSave = true;
-          migrated.lastStatusChangeAt = q.createdAt;
-        }
-
-        // Migration: initialize events array if missing
-        if (!q.events) {
-          needsSave = true;
-          migrated.events = [{
-            id: nanoid(),
-            timestamp: q.createdAt,
-            type: 'created' as const,
-            doctorName: 'Ismeretlen',
-          }];
-        }
-
-        return migrated;
-      });
-
-      if (needsSave) {
-        localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(migratedQuotes));
-      }
-
-      return migratedQuotes;
+      const quotes = requestJsonSync<Quote[]>('GET', `${API_PREFIX}/quotes`);
+      return Array.isArray(quotes) ? quotes : [];
     } catch {
       return [];
     }
@@ -223,208 +99,92 @@ export class LocalStorageRepository implements StorageRepository {
   }
 
   saveQuote(quote: Quote): void {
-    const quotes = this.getQuotes();
-    const index = quotes.findIndex((q) => q.quoteId === quote.quoteId);
-    if (index >= 0) {
-      quotes[index] = quote;
-    } else {
-      quotes.push(quote);
+    const exists = this.getQuote(quote.quoteId);
+    if (exists) {
+      requestJsonSync('PATCH', `${API_PREFIX}/quotes/${quote.quoteId}`, quote);
+      return;
     }
-    localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(quotes));
+    requestJsonSync('POST', `${API_PREFIX}/quotes`, quote);
   }
 
   deleteQuote(quoteId: string): void {
-    const quotes = this.getQuotes().filter((q) => q.quoteId !== quoteId);
-    localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(quotes));
+    requestJsonSync('DELETE', `${API_PREFIX}/quotes/${quoteId}`);
   }
 
   // Settings
   getSettings(): Settings {
-    const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    if (!data) {
-      // Initialize with default settings
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(defaultSettings));
-      return defaultSettings;
-    }
     try {
-      const parsed = JSON.parse(data);
-      let needsSave = false;
-
-      // Migration: convert old clinic.doctor string to doctors array
-      if (parsed.clinic?.doctor && !parsed.doctors) {
-        parsed.doctors = [{ id: 'doc-1', name: parsed.clinic.doctor, stampNumber: '' }];
-        delete parsed.clinic.doctor;
-        needsSave = true;
-      }
-
-      // Ensure doctors array exists
-      if (!parsed.doctors) {
-        parsed.doctors = defaultSettings.doctors;
-        needsSave = true;
-      }
-
-      // Migration: add stampNumber to existing doctors
-      if (parsed.doctors && parsed.doctors.length > 0 && parsed.doctors[0].stampNumber === undefined) {
-        parsed.doctors = parsed.doctors.map((d: { id: string; name: string; stampNumber?: string }) => ({
-          ...d,
-          stampNumber: d.stampNumber || '',
-        }));
-        needsSave = true;
-      }
-
-      // Migration: add quote settings if missing
-      if (!parsed.quote) {
-        // Generate random 4-letter prefix
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        let prefix = '';
-        for (let i = 0; i < 4; i++) {
-          prefix += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        parsed.quote = {
-          prefix,
-          counter: 0,
-          deletedCount: 0,
-        };
-        needsSave = true;
-      }
-
-      // Migration: add invoice settings if missing
-      if (!parsed.invoice) {
-        parsed.invoice = defaultSettings.invoice;
-        needsSave = true;
-      }
-
-      // Migration: add patient settings if missing
-      if (!parsed.patient) {
-        parsed.patient = defaultSettings.patient;
-        needsSave = true;
-      }
-
-      if (!parsed.dateFormat) {
-        parsed.dateFormat = defaultSettings.dateFormat;
-        needsSave = true;
-      } else if (!String(parsed.dateFormat).includes('HH:MM:SS')) {
-        parsed.dateFormat = `${parsed.dateFormat} HH:MM:SS`;
-        needsSave = true;
-      }
-
-      if (needsSave) {
-        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(parsed));
-      }
-
-      return parsed;
+      const settings = requestJsonSync<Settings>('GET', `${API_PREFIX}/settings`);
+      return settings || defaultSettings;
     } catch {
       return defaultSettings;
     }
   }
 
   saveSettings(settings: Settings): void {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+    requestJsonSync('PUT', `${API_PREFIX}/settings`, settings);
   }
 
   // Dental status snapshots
   getDentalStatusSnapshots(patientId: string): DentalStatusSnapshot[] {
-    const data = localStorage.getItem(STORAGE_KEYS.DENTAL_STATUS);
-    if (!data) return [];
     try {
-      const snapshots = JSON.parse(data) as DentalStatusSnapshot[];
-      if (!Array.isArray(snapshots)) return [];
-      return patientId ? snapshots.filter((s) => s.patientId === patientId) : snapshots;
+      const query = patientId ? `?patientId=${encodeURIComponent(patientId)}` : '';
+      const snapshots = requestJsonSync<DentalStatusSnapshot[]>(
+        'GET',
+        `${API_PREFIX}/dental-status-snapshots${query}`
+      );
+      return Array.isArray(snapshots) ? snapshots : [];
     } catch {
       return [];
     }
   }
 
   getLatestDentalStatusSnapshot(patientId: string): DentalStatusSnapshot | undefined {
-    const snapshots = this.getDentalStatusSnapshots(patientId);
-    return snapshots
+    return this.getDentalStatusSnapshots(patientId)
       .slice()
       .sort((a, b) => new Date(b.takenAt).getTime() - new Date(a.takenAt).getTime())[0];
   }
 
   createDentalStatusSnapshot(snapshot: DentalStatusSnapshot): void {
-    const data = localStorage.getItem(STORAGE_KEYS.DENTAL_STATUS);
-    let snapshots: DentalStatusSnapshot[] = [];
-    if (data) {
-      try {
-        const parsed = JSON.parse(data) as DentalStatusSnapshot[];
-        snapshots = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        snapshots = [];
-      }
-    }
-    snapshots.push(snapshot);
-    localStorage.setItem(STORAGE_KEYS.DENTAL_STATUS, JSON.stringify(snapshots));
+    requestJsonSync('POST', `${API_PREFIX}/dental-status-snapshots`, snapshot);
   }
 
   updateDentalStatusSnapshot(snapshot: DentalStatusSnapshot): void {
-    const data = localStorage.getItem(STORAGE_KEYS.DENTAL_STATUS);
-    let snapshots: DentalStatusSnapshot[] = [];
-    if (data) {
-      try {
-        const parsed = JSON.parse(data) as DentalStatusSnapshot[];
-        snapshots = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        snapshots = [];
-      }
-    }
-    const index = snapshots.findIndex((s) => s.snapshotId === snapshot.snapshotId);
-    if (index >= 0) {
-      snapshots[index] = snapshot;
-    } else {
-      snapshots.push(snapshot);
-    }
-    localStorage.setItem(STORAGE_KEYS.DENTAL_STATUS, JSON.stringify(snapshots));
+    requestJsonSync('PUT', `${API_PREFIX}/dental-status-snapshots/${snapshot.snapshotId}`, snapshot);
   }
 
   // Export/Import
   exportAll(): string {
-    const exportData: ExportData = {
-      version: DATA_VERSION,
-      exportedAt: new Date().toISOString(),
-      patients: this.getPatients(),
-      catalog: this.getCatalog(),
-      quotes: this.getQuotes(),
-      settings: this.getSettings(),
-      dentalStatusSnapshots: (() => {
-        const data = localStorage.getItem(STORAGE_KEYS.DENTAL_STATUS);
-        if (!data) return [];
-        try {
-          const snapshots = JSON.parse(data);
-          return Array.isArray(snapshots) ? snapshots : [];
-        } catch {
-          return [];
-        }
-      })(),
-    };
-    return JSON.stringify(exportData, null, 2);
+    try {
+      const exportData = requestJsonSync<ExportData>('GET', `${API_PREFIX}/data/export`);
+      return JSON.stringify(exportData, null, 2);
+    } catch {
+      const fallback: ExportData = {
+        version: '2.0.0',
+        exportedAt: new Date().toISOString(),
+        patients: this.getPatients(),
+        catalog: this.getCatalog(),
+        quotes: this.getQuotes(),
+        settings: this.getSettings(),
+        dentalStatusSnapshots: this.getDentalStatusSnapshots(''),
+      };
+      return JSON.stringify(fallback, null, 2);
+    }
   }
 
   importAll(data: string): boolean {
     try {
-      const importData: ExportData = JSON.parse(data);
-
-      // Validate structure
+      const parsed = JSON.parse(data) as ExportData;
       if (
-        !importData.version ||
-        !Array.isArray(importData.patients) ||
-        !Array.isArray(importData.catalog) ||
-        !Array.isArray(importData.quotes) ||
-        !importData.settings
+        !parsed.version ||
+        !Array.isArray(parsed.patients) ||
+        !Array.isArray(parsed.catalog) ||
+        !Array.isArray(parsed.quotes) ||
+        !parsed.settings
       ) {
         return false;
       }
-
-      // Import all data
-      localStorage.setItem(STORAGE_KEYS.PATIENTS, JSON.stringify(importData.patients));
-      localStorage.setItem(STORAGE_KEYS.CATALOG, JSON.stringify(importData.catalog));
-      localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(importData.quotes));
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(importData.settings));
-      localStorage.setItem(
-        STORAGE_KEYS.DENTAL_STATUS,
-        JSON.stringify(importData.dentalStatusSnapshots || [])
-      );
-
+      requestJsonSync('POST', `${API_PREFIX}/data/import`, parsed);
       return true;
     } catch {
       return false;
@@ -457,7 +217,7 @@ function normalizeCatalogItem(item: Partial<CatalogItem>): CatalogItem {
       : CATALOG_CATEGORIES[0];
 
   return {
-    catalogItemId: item.catalogItemId || nanoid(),
+    catalogItemId: item.catalogItemId || '',
     catalogCode: item.catalogCode ? item.catalogCode.toString().toUpperCase() : '',
     catalogName: item.catalogName ? item.catalogName.toString() : '',
     catalogUnit: normalizedUnit,

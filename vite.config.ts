@@ -9,14 +9,19 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       '@odontogram-shell': path.resolve(
         __dirname,
-        './test_uis/odontogram_editor_v4/src/App.tsx'
+        './src/modules/odontogram/engine/src/App.tsx'
       ),
     },
   },
   server: {
     proxy: {
+      '/backend': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/backend/, ''),
+      },
       '/api': {
-        target: 'http://localhost:5178',
+        target: 'http://localhost:4000',
         changeOrigin: true,
       },
     },

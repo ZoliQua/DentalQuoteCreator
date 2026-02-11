@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { useApp } from '../context/AppContext';
@@ -10,6 +10,24 @@ import type { CatalogItem, Patient, Quote, QuoteItem, QuoteStatus } from '../typ
 import type { OdontogramState, OdontogramToothState } from '../modules/odontogram/types';
 import { getBudapestDateKey, saveCurrent, saveDailySnapshot } from '../modules/odontogram/odontogramStorage';
 import { Button, Card, CardContent, CardHeader, ConfirmModal } from '../components/common';
+
+type DbTableStat = {
+  tableName: string;
+  rowCount: number;
+  totalBytes: number;
+  dataBytes: number;
+  indexBytes: number;
+};
+
+type DbStatsResponse = {
+  generatedAt: string;
+  databaseName: string;
+  databaseSizeBytes: number;
+  tableCount: number;
+  totalRows: number;
+  totalTableBytes: number;
+  tables: DbTableStat[];
+};
 
 const FDI_TEETH = [
   '18', '17', '16', '15', '14', '13', '12', '11',
@@ -184,19 +202,7 @@ export function DataManagementPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const clearOdontogramStorageKeys = () => {
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
-      if (!key) continue;
-      if (
-        key.startsWith('odontogram:patient:') ||
-        key.startsWith('settings:odontogram:') ||
-        key === 'settings:language'
-      ) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach((key) => localStorage.removeItem(key));
+    // Legacy no-op after backend migration.
   };
 
   const createMockPatients = (): Patient[] => {
@@ -575,7 +581,9 @@ export function DataManagementPage() {
               d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
             />
           </svg>
-          <p className="text-sm text-yellow-800">{t.dataManagement.localStorageWarning}</p>
+          <p className="text-sm text-yellow-800">
+            Az adatok PostgreSQL adatbazisban tarolodnak. Mentes/import tovabbra is ajanlott.
+          </p>
         </div>
       </div>
 
@@ -762,6 +770,15 @@ export function DataManagementPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">{t.dataManagement.dbReportTitle}</h2>
+        </CardHeader>
+        <CardContent>
+          <DatabaseReport />
+        </CardContent>
+      </Card>
+
       {/* Import Confirmation */}
       <ConfirmModal
         isOpen={pendingCatalogImport !== null}
@@ -811,19 +828,7 @@ function StorageInfo() {
   const { t } = useSettings();
   const { patients, quotes, catalog } = useApp();
 
-  const storageUsed = (() => {
-    try {
-      let total = 0;
-      for (const key in localStorage) {
-        if (key.startsWith('dental_quote_')) {
-          total += localStorage.getItem(key)?.length || 0;
-        }
-      }
-      return (total / 1024).toFixed(2);
-    } catch {
-      return '?';
-    }
-  })();
+  const storageUsed = 'DB';
 
   return (
     <div className="space-y-3">
@@ -841,7 +846,121 @@ function StorageInfo() {
       </div>
       <div className="flex justify-between py-2">
         <span className="text-gray-600">{t.dataManagement.storageUsage}</span>
-        <span className="font-medium">{storageUsed} KB</span>
+        <span className="font-medium">{storageUsed}</span>
+      </div>
+    </div>
+  );
+}
+
+function DatabaseReport() {
+  const { t } = useSettings();
+  const [stats, setStats] = useState<DbStatsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch('/backend/db/stats');
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = (await response.json()) as DbStatsResponse;
+        if (active) setStats(data);
+      } catch {
+        if (active) setError(t.dataManagement.dbReportError);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      active = false;
+    };
+  }, [t.dataManagement.dbReportError]);
+
+  const formatNumber = (value: number) => new Intl.NumberFormat('hu-HU').format(value);
+
+  const formatBytes = (bytes: number): string => {
+    if (!Number.isFinite(bytes) || bytes < 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = bytes;
+    let unitIndex = 0;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex += 1;
+    }
+    const value = unitIndex === 0 ? size.toFixed(0) : size.toFixed(2);
+    return `${value} ${units[unitIndex]}`;
+  };
+
+  if (loading) {
+    return <p className="text-sm text-gray-500">{t.dataManagement.dbReportLoading}</p>;
+  }
+
+  if (error || !stats) {
+    return <p className="text-sm text-red-600">{error || t.dataManagement.dbReportError}</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-gray-200 p-3">
+        <p className="text-xs uppercase tracking-wide text-gray-500">{t.dataManagement.dbReportDatabase}</p>
+        <p className="mt-1 text-sm font-semibold text-gray-900 break-all leading-5">
+          {stats.databaseName}
+        </p>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-lg border border-gray-200 p-3">
+          <p className="text-xs uppercase tracking-wide text-gray-500">{t.dataManagement.dbReportTables}</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">{formatNumber(stats.tableCount)}</p>
+        </div>
+        <div className="rounded-lg border border-gray-200 p-3">
+          <p className="text-xs uppercase tracking-wide text-gray-500">{t.dataManagement.dbReportRows}</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">{formatNumber(stats.totalRows)}</p>
+        </div>
+        <div className="rounded-lg border border-gray-200 p-3">
+          <p className="text-xs uppercase tracking-wide text-gray-500">{t.dataManagement.dbReportSize}</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">{formatBytes(stats.databaseSizeBytes)}</p>
+        </div>
+      </div>
+
+      <p className="text-xs text-gray-500">
+        {t.dataManagement.dbReportLastUpdated}: {new Date(stats.generatedAt).toLocaleString('hu-HU')}
+      </p>
+
+      <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <table className="min-w-full text-sm">
+          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="px-3 py-2">{t.dataManagement.dbReportTableName}</th>
+              <th className="px-3 py-2 text-right">{t.dataManagement.dbReportTableRows}</th>
+              <th className="px-3 py-2 text-right">{t.dataManagement.dbReportDataSize}</th>
+              <th className="px-3 py-2 text-right">{t.dataManagement.dbReportIndexSize}</th>
+              <th className="px-3 py-2 text-right">{t.dataManagement.dbReportTotalSize}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.tables
+              .slice()
+              .sort((a, b) => a.tableName.localeCompare(b.tableName))
+              .map((table) => (
+              <tr key={table.tableName} className="border-t border-gray-100">
+                <td className="px-3 py-2 font-medium text-gray-800">{table.tableName}</td>
+                <td className="px-3 py-2 text-right text-gray-700">{formatNumber(table.rowCount)}</td>
+                <td className="px-3 py-2 text-right text-gray-700">{formatBytes(table.dataBytes)}</td>
+                <td className="px-3 py-2 text-right text-gray-700">{formatBytes(table.indexBytes)}</td>
+                <td className="px-3 py-2 text-right font-semibold text-gray-900">{formatBytes(table.totalBytes)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

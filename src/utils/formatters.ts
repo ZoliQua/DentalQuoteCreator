@@ -1,6 +1,6 @@
 import type { DateFormat } from '../types';
+import { requestJsonSync } from './syncHttp';
 
-const SETTINGS_STORAGE_KEY = 'dental_quote_settings';
 const DEFAULT_DATE_FORMAT: DateFormat = 'YYYY-MM-DD HH:MM:SS';
 
 const pad = (value: number) => String(value).padStart(2, '0');
@@ -64,9 +64,7 @@ export function formatDateWithPattern(date: Date, pattern: DateOnlyPattern): str
 
 export function getSelectedDateFormat(): DateFormat {
   try {
-    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (!raw) return DEFAULT_DATE_FORMAT;
-    const parsed = JSON.parse(raw) as { dateFormat?: string };
+    const parsed = requestJsonSync<{ dateFormat?: string }>('GET', '/backend/settings');
     return normalizeDateFormat(parsed?.dateFormat);
   } catch {
     return DEFAULT_DATE_FORMAT;

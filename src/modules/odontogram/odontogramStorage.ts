@@ -3,13 +3,10 @@ import type {
   OdontogramState,
   StoredOdontogramPayload,
 } from './types';
+import { requestJsonSync } from '../../utils/syncHttp';
 
 const STORAGE_VERSION = 1;
-
-const getCurrentKey = (patientId: string) => `odontogram:patient:${patientId}:current`;
-const getDailyKey = (patientId: string, dateKey: string) =>
-  `odontogram:patient:${patientId}:daily:${dateKey}`;
-const getHistoryIndexKey = (patientId: string) => `odontogram:patient:${patientId}:historyIndex`;
+const API_PREFIX = '/backend';
 
 const formatBudapestDateKey = (date: Date) => {
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -34,50 +31,22 @@ const wrapPayload = (state: OdontogramState): StoredOdontogramPayload => ({
   state,
 });
 
-const safeParse = (raw: string | null): StoredOdontogramPayload | null => {
-  if (!raw) return null;
+export const getBudapestDateKey = (date: Date = new Date()) => formatBudapestDateKey(date);
+
+export const loadCurrent = (patientId: string): StoredOdontogramPayload | null => {
   try {
-    const parsed = JSON.parse(raw) as StoredOdontogramPayload;
-    if (!parsed || typeof parsed !== 'object') return null;
-    if (!parsed.state || typeof parsed.state !== 'object') return null;
-    return parsed;
+    return requestJsonSync<StoredOdontogramPayload | null>(
+      'GET',
+      `${API_PREFIX}/odontogram/current/${patientId}`
+    );
   } catch {
     return null;
   }
 };
 
-const safeParseHistoryIndex = (raw: string | null): OdontogramHistoryIndexEntry[] => {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as OdontogramHistoryIndexEntry[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (entry) =>
-        typeof entry?.dateKey === 'string' &&
-        typeof entry?.updatedAt === 'string' &&
-        Boolean(entry.dateKey)
-    );
-  } catch {
-    return [];
-  }
-};
-
-const updateHistoryIndex = (patientId: string, dateKey: string, updatedAt: string) => {
-  const history = safeParseHistoryIndex(localStorage.getItem(getHistoryIndexKey(patientId)));
-  const next = history.filter((entry) => entry.dateKey !== dateKey);
-  next.push({ dateKey, updatedAt });
-  localStorage.setItem(getHistoryIndexKey(patientId), JSON.stringify(next));
-};
-
-export const getBudapestDateKey = (date: Date = new Date()) => formatBudapestDateKey(date);
-
-export const loadCurrent = (patientId: string): StoredOdontogramPayload | null => {
-  return safeParse(localStorage.getItem(getCurrentKey(patientId)));
-};
-
 export const saveCurrent = (patientId: string, state: OdontogramState): void => {
   const payload = wrapPayload(state);
-  localStorage.setItem(getCurrentKey(patientId), JSON.stringify(payload));
+  requestJsonSync('PUT', `${API_PREFIX}/odontogram/current/${patientId}`, payload);
 };
 
 export const saveDailySnapshot = (
@@ -86,21 +55,35 @@ export const saveDailySnapshot = (
   dateKey: string
 ): void => {
   const payload = wrapPayload(state);
-  localStorage.setItem(getDailyKey(patientId, dateKey), JSON.stringify(payload));
-  updateHistoryIndex(patientId, dateKey, payload.updatedAt);
+  requestJsonSync('PUT', `${API_PREFIX}/odontogram/daily/${patientId}/${dateKey}`, payload);
 };
 
 export const listHistoryIndex = (patientId: string): OdontogramHistoryIndexEntry[] => {
-  return safeParseHistoryIndex(localStorage.getItem(getHistoryIndexKey(patientId)))
-    .slice()
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  try {
+    const entries = requestJsonSync<OdontogramHistoryIndexEntry[]>(
+      'GET',
+      `${API_PREFIX}/odontogram/history/${patientId}`
+    );
+    return (Array.isArray(entries) ? entries : [])
+      .slice()
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  } catch {
+    return [];
+  }
 };
 
 export const loadDailySnapshot = (
   patientId: string,
   dateKey: string
 ): StoredOdontogramPayload | null => {
-  return safeParse(localStorage.getItem(getDailyKey(patientId, dateKey)));
+  try {
+    return requestJsonSync<StoredOdontogramPayload | null>(
+      'GET',
+      `${API_PREFIX}/odontogram/daily/${patientId}/${dateKey}`
+    );
+  } catch {
+    return null;
+  }
 };
 
 export const restoreDailySnapshotAsCurrent = (

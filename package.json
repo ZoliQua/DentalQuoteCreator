@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"node --watch server/index.js\"",
+    "dev": "concurrently \"vite\" \"npm --prefix backend run dev\"",
     "dev:frontend": "vite",
-    "dev:server": "node --watch server/index.js",
+    "dev:server": "npm --prefix backend run dev",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"

@@ -1,27 +1,21 @@
 import type { InvoiceRecord } from '../../types/invoice';
+import { requestJsonSync } from '../../utils/syncHttp';
 
-const STORAGE_KEY = 'invoices';
+const API_PREFIX = '/backend';
 
-const safeParse = (raw: string | null): InvoiceRecord[] => {
-  if (!raw) return [];
+export const listInvoices = (): InvoiceRecord[] => {
   try {
-    const parsed = JSON.parse(raw) as InvoiceRecord[];
-    return Array.isArray(parsed) ? parsed : [];
+    const records = requestJsonSync<InvoiceRecord[]>('GET', `${API_PREFIX}/invoices`);
+    return (Array.isArray(records) ? records : []).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   } catch {
     return [];
   }
 };
 
-export const listInvoices = (): InvoiceRecord[] => {
-  return safeParse(localStorage.getItem(STORAGE_KEY)).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-};
-
 export const saveInvoice = (record: InvoiceRecord): void => {
-  const current = listInvoices();
-  const next = [record, ...current.filter((item) => item.id !== record.id)];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  requestJsonSync('PUT', `${API_PREFIX}/invoices/${record.id}`, record);
 };
 
 export const getInvoice = (invoiceId: string): InvoiceRecord | undefined => {
@@ -37,5 +31,5 @@ export const getInvoicesByQuote = (quoteId: string): InvoiceRecord[] => {
 };
 
 export const clearAllInvoices = (): void => {
-  localStorage.removeItem(STORAGE_KEY);
+  requestJsonSync('DELETE', `${API_PREFIX}/invoices`);
 };
