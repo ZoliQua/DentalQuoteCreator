@@ -18,8 +18,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@odontogram-shell": ["src/modules/odontogram/vendor/odontogram-shell"]
+      "@odontogram-shell": ["src/modules/odontogram/odontogram-shell"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/modules/odontogram/engine"]
 }

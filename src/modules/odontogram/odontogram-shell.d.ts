@@ -3,7 +3,7 @@ declare module '@odontogram-shell' {
   import type {
     OdontogramLanguage,
     OdontogramNumberingSystem,
-  } from '../odontogramSettings';
+  } from './odontogramSettings';
 
   type OdontogramShellProps = {
     language?: OdontogramLanguage;

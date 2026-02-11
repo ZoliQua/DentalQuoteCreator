@@ -186,6 +186,7 @@ export function PatientDetailPage() {
   const { getQuotesByPatient, createQuote, deleteQuote, duplicateQuote } = useQuotes();
   const [deleteQuoteConfirm, setDeleteQuoteConfirm] = useState<string | null>(null);
   const [deletePatientConfirm, setDeletePatientConfirm] = useState(false);
+  const [duplicatePatientConfirm, setDuplicatePatientConfirm] = useState(false);
   const [editPatientModalOpen, setEditPatientModalOpen] = useState(false);
   const [initialOdontogramState, setInitialOdontogramState] = useState<OdontogramState | null>(null);
   const [timelineEntries, setTimelineEntries] = useState<OdontogramTimelineEntry[]>([]);
@@ -451,22 +452,6 @@ export function PatientDetailPage() {
             </div>
           )}
         </div>
-        <div id="patientActions" className="flex items-center gap-2">
-          <Button id="patientDuplicateBtn" variant="secondary" onClick={handleDuplicatePatient}>
-            {t.common.duplicate}
-          </Button>
-          <Button id="patientEditBtn" variant="secondary" onClick={() => setEditPatientModalOpen(true)}>
-            {t.common.edit}
-          </Button>
-          {!patient.isArchived && (
-            <Button id="patientArchiveBtn" variant="secondary" onClick={handleArchivePatient}>
-              {t.common.archive}
-            </Button>
-          )}
-          <Button id="patientDeleteBtn" variant="danger" onClick={() => setDeletePatientConfirm(true)}>
-            {t.common.delete}
-          </Button>
-        </div>
       </div>
 
       {!editorOpen && (
@@ -522,7 +507,13 @@ export function PatientDetailPage() {
           <Card>
             <div id="patientDataCardHeader">
               <CardHeader>
-                <h2 className="text-lg font-semibold">{t.patients.patientDetails}</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">{t.patients.patientDetails}</h2>
+                  <Button id="patientEditBtn" variant="secondary" size="sm"
+                          onClick={() => setEditPatientModalOpen(true)}>
+                    {t.common.edit}
+                  </Button>
+                </div>
               </CardHeader>
             </div>
             <div id="patientDataCardContent">
@@ -609,6 +600,27 @@ export function PatientDetailPage() {
             </div>
               </CardContent>
             </div>
+          </Card>
+          <Card className="mt-4">
+            <CardHeader>
+              <h2 className="text-lg font-semibold">{t.patients.dataSheetActions}</h2>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <Button id="patientDuplicateBtn" variant="secondary" className="w-full justify-center"
+                      onClick={() => setDuplicatePatientConfirm(true)}>
+                {t.patients.duplicateDataSheet}
+              </Button>
+              {!patient.isArchived && (
+                <Button id="patientArchiveBtn" variant="secondary" className="w-full justify-center"
+                        onClick={handleArchivePatient}>
+                  {t.common.archive}
+                </Button>
+              )}
+              <Button id="patientDeleteBtn" variant="danger" className="w-full justify-center"
+                      onClick={() => setDeletePatientConfirm(true)}>
+                {t.common.delete}
+              </Button>
+            </CardContent>
           </Card>
         </div>
 
@@ -891,6 +903,17 @@ export function PatientDetailPage() {
         confirmText={t.common.delete}
         cancelText={t.common.cancel}
         variant="danger"
+      />
+
+      <ConfirmModal
+        isOpen={duplicatePatientConfirm}
+        onClose={() => setDuplicatePatientConfirm(false)}
+        onConfirm={() => { setDuplicatePatientConfirm(false); handleDuplicatePatient(); }}
+        title={t.common.confirm}
+        message={t.patients.duplicateConfirm}
+        confirmText={t.patients.duplicateDataSheet}
+        cancelText={t.common.cancel}
+        variant="primary"
       />
 
       <ConfirmModal

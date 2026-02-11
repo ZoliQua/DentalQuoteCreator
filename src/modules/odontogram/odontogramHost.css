@@ -45,3 +45,31 @@
   pointer-events: all;
   background: transparent;
 }
+
+/* Override Tailwind component classes (.btn, .card, .btn-danger) that
+   collide with the odontogram engine's own class names.  After the
+   engine moved into src/, Vite orders engine CSS before Tailwind CSS
+   in the bundle so the Tailwind rules win at equal specificity.
+   The .odontogram-host parent selector raises specificity to fix this. */
+.odontogram-host .btn {
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: none;
+}
+.odontogram-host .btn:focus {
+  outline: revert;
+  box-shadow: none;
+}
+.odontogram-host .btn-danger {
+  background: rgba(217,69,69,.12);
+  border-color: rgba(217,69,69,.4);
+  color: #b83a3a;
+}
+.odontogram-host .card {
+  background: rgba(255,255,255,.9);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: none;
+}
