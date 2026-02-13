@@ -21,6 +21,7 @@ export interface QuoteSettings {
   prefix: string; // 4 characters, e.g., "ABCD"
   counter: number; // Current counter value
   deletedCount: number; // Count of deleted quotes
+  perPage?: number;
 }
 
 export type DateFormat =
@@ -41,6 +42,7 @@ export interface InvoiceSettings {
 export interface PatientSettings {
   defaultCountry: string;
   patientTypes: string[];
+  perPage?: number;
 }
 
 export interface Settings {

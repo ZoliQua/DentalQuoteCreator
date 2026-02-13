@@ -13,6 +13,94 @@ enum Sex {
   other
 }
 
+enum UserRole {
+  admin
+  doctor
+  assistant
+  receptionist
+  user
+  beta_tester
+}
+
+model User {
+  id           String                   @id
+  email        String                   @unique
+  fullName     String
+  passwordHash String
+  role         UserRole                 @default(user)
+  isActive     Boolean                  @default(true)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  sessions            AuthSession[]
+  permissionOverrides UserPermissionOverride[]
+  auditTargets        PermissionAuditLog[] @relation("AuditTarget")
+  auditChangers       PermissionAuditLog[] @relation("AuditChanger")
+  activityLogs        UserActivityLog[]
+}
+
+model AuthSession {
+  id           String   @id
+  userId       String
+  tokenHash    String   @unique
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  lastSeenAt   DateTime @default(now())
+  revokedAt    DateTime?
+  userAgent    String?
+  ipAddress    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model UserPermissionOverride {
+  id         String   @id
+  userId     String
+  key        String
+  isAllowed  Boolean
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([key])
+}
+
+model PermissionAuditLog {
+  id              String   @id
+  targetUserId    String
+  changedByUserId String
+  changedAt       DateTime @default(now())
+  key             String
+  oldValue        Boolean
+  newValue        Boolean
+  targetUser      User @relation("AuditTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  changedByUser   User @relation("AuditChanger", fields: [changedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([targetUserId])
+  @@index([changedAt])
+}
+
+model UserActivityLog {
+  id         String   @id
+  userId     String
+  action     String
+  page       String?
+  entityType String?
+  entityId   String?
+  details    Json?
+  createdAt  DateTime @default(now())
+  ipAddress  String?
+  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
 model Patient {
   patientId        String   @id
   title            String?
@@ -34,6 +122,7 @@ model Patient {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   isArchived       Boolean  @default(false)
+  createdByUserId  String?
 
   quotes    Quote[]
   snapshots DentalStatusSnapshot[]
@@ -47,6 +136,7 @@ model Quote {
   lastStatusChangeAt DateTime
   isDeleted          Boolean  @default(false)
   data               Json
+  createdByUserId    String?
 
   patient Patient @relation(fields: [patientId], references: [patientId])
 
@@ -91,12 +181,13 @@ model AppSettings {
 }
 
 model Invoice {
-  id        String   @id
-  patientId String
-  quoteId   String
-  status    String
-  createdAt DateTime
-  data      Json
+  id              String   @id
+  patientId       String
+  quoteId         String
+  status          String
+  createdAt       DateTime
+  data            Json
+  createdByUserId String?
 
   @@index([patientId])
   @@index([quoteId])

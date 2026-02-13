@@ -36,7 +36,7 @@ export type InvoiceRequestPayload = {
 const postJson = async <T>(url: string, payload: InvoiceRequestPayload): Promise<T> => {
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(payload),
   });
 
@@ -92,7 +92,7 @@ export type StornoResponse = {
 export const stornoInvoice = async (invoiceNumber: string): Promise<StornoResponse> => {
   const response = await fetch('/api/szamlazz/storno-invoice', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ invoiceNumber }),
   });
 
@@ -112,3 +112,4 @@ export const stornoInvoice = async (invoiceNumber: string): Promise<StornoRespon
   }
   return parsed;
 };
+import { getAuthHeaders } from '../../utils/auth';

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import { useCatalog } from '../hooks';
 import {
   CatalogItem,
@@ -37,6 +38,7 @@ const CATEGORY_CODE_PREFIX: Record<CatalogCategory, string> = {
 
 export function CatalogPage() {
   const { t } = useSettings();
+  const { hasPermission } = useAuth();
   const {
     catalog,
     activeItems,
@@ -200,15 +202,19 @@ export function CatalogPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {hasPermission('catalog.update') && hasPermission('catalog.delete') && (
           <Button variant="secondary" onClick={() => setResetConfirm(true)}>
             {t.catalog.resetToDefault}
           </Button>
+          )}
+          {hasPermission('catalog.create') && (
           <Button onClick={() => setIsModalOpen(true)}>
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             {t.catalog.newItem}
           </Button>
+          )}
         </div>
       </div>
 
@@ -277,6 +283,7 @@ export function CatalogPage() {
                 <CardContent>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">{category}</h3>
+                    {hasPermission('catalog.create') && (
                     <Button
                       size="sm"
                       variant="secondary"
@@ -285,6 +292,7 @@ export function CatalogPage() {
                     >
                       {t.common.add}
                     </Button>
+                    )}
                   </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -316,6 +324,7 @@ export function CatalogPage() {
                           </td>
                           <td className="py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
+                              {hasPermission('catalog.update') && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -323,6 +332,8 @@ export function CatalogPage() {
                               >
                                 {t.common.edit}
                               </Button>
+                              )}
+                              {hasPermission('catalog.update') && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -330,6 +341,8 @@ export function CatalogPage() {
                               >
                                 {item.isActive ? 'Deaktiválás' : 'Aktiválás'}
                               </Button>
+                              )}
+                              {hasPermission('catalog.delete') && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -338,6 +351,7 @@ export function CatalogPage() {
                               >
                                 {t.common.delete}
                               </Button>
+                              )}
                             </div>
                           </td>
                         </tr>

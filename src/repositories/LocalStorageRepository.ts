@@ -12,12 +12,14 @@ import { defaultCatalog } from '../data/defaultCatalog';
 import { defaultSettings } from '../data/defaultSettings';
 import { StorageRepository, ExportData } from './StorageRepository';
 import { requestJsonSync } from '../utils/syncHttp';
+import { getAuthToken } from '../utils/auth';
 
 const API_PREFIX = '/backend';
 
 export class LocalStorageRepository implements StorageRepository {
   // Patients
   getPatients(): Patient[] {
+    if (!getAuthToken()) return [];
     try {
       return requestJsonSync<Patient[]>('GET', `${API_PREFIX}/patients?includeArchived=true`);
     } catch {
@@ -43,11 +45,16 @@ export class LocalStorageRepository implements StorageRepository {
   }
 
   deletePatient(patientId: string): void {
-    requestJsonSync('DELETE', `${API_PREFIX}/patients/${patientId}`);
+    requestJsonSync('PATCH', `${API_PREFIX}/patients/${patientId}`, { isArchived: true });
+  }
+
+  restorePatient(patientId: string): void {
+    requestJsonSync('PATCH', `${API_PREFIX}/patients/${patientId}/restore`);
   }
 
   // Catalog
   getCatalog(): CatalogItem[] {
+    if (!getAuthToken()) return defaultCatalog;
     try {
       const items = requestJsonSync<CatalogItem[]>('GET', `${API_PREFIX}/catalog`);
       if (!Array.isArray(items) || items.length === 0) {
@@ -82,6 +89,7 @@ export class LocalStorageRepository implements StorageRepository {
 
   // Quotes
   getQuotes(): Quote[] {
+    if (!getAuthToken()) return [];
     try {
       const quotes = requestJsonSync<Quote[]>('GET', `${API_PREFIX}/quotes`);
       return Array.isArray(quotes) ? quotes : [];
@@ -111,8 +119,13 @@ export class LocalStorageRepository implements StorageRepository {
     requestJsonSync('DELETE', `${API_PREFIX}/quotes/${quoteId}`);
   }
 
+  restoreQuote(quoteId: string): void {
+    requestJsonSync('PATCH', `${API_PREFIX}/quotes/${quoteId}/restore`);
+  }
+
   // Settings
   getSettings(): Settings {
+    if (!getAuthToken()) return defaultSettings;
     try {
       const settings = requestJsonSync<Settings>('GET', `${API_PREFIX}/settings`);
       return settings || defaultSettings;
@@ -122,11 +135,13 @@ export class LocalStorageRepository implements StorageRepository {
   }
 
   saveSettings(settings: Settings): void {
+    if (!getAuthToken()) return;
     requestJsonSync('PUT', `${API_PREFIX}/settings`, settings);
   }
 
   // Dental status snapshots
   getDentalStatusSnapshots(patientId: string): DentalStatusSnapshot[] {
+    if (!getAuthToken()) return [];
     try {
       const query = patientId ? `?patientId=${encodeURIComponent(patientId)}` : '';
       const snapshots = requestJsonSync<DentalStatusSnapshot[]>(

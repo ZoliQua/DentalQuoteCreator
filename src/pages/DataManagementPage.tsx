@@ -7,6 +7,7 @@ import { defaultCatalog } from '../data/defaultCatalog';
 import { defaultSettings } from '../data/defaultSettings';
 import type { ExportData } from '../repositories/StorageRepository';
 import type { CatalogItem, Patient, Quote, QuoteItem, QuoteStatus } from '../types';
+import { getAuthHeaders } from '../utils/auth';
 import type { OdontogramState, OdontogramToothState } from '../modules/odontogram/types';
 import { getBudapestDateKey, saveCurrent, saveDailySnapshot } from '../modules/odontogram/odontogramStorage';
 import { Button, Card, CardContent, CardHeader, ConfirmModal } from '../components/common';
@@ -264,8 +265,18 @@ export function DataManagementPage() {
       },
     ];
 
+    const usedIds = new Set<string>();
+    const generate8DigitId = (): string => {
+      let id: string;
+      do {
+        id = String(10000000 + Math.floor(Math.random() * 90000000));
+      } while (usedIds.has(id));
+      usedIds.add(id);
+      return id;
+    };
+
     return entries.map((entry) => ({
-      patientId: nanoid(),
+      patientId: generate8DigitId(),
       title: entry.title,
       firstName: entry.firstName,
       lastName: entry.lastName,
@@ -291,8 +302,7 @@ export function DataManagementPage() {
   const createMockQuotes = (patients: Patient[]): Quote[] => {
     const statuses: QuoteStatus[] = [
       'draft',
-      'closed_pending',
-      'accepted_in_progress',
+      'closed',
       'rejected',
       'started',
       'completed',
@@ -865,7 +875,9 @@ function DatabaseReport() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch('/backend/db/stats');
+        const response = await fetch('/backend/db/stats', {
+          headers: getAuthHeaders(),
+        });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }

@@ -293,6 +293,23 @@ export function SettingsPage() {
             </div>
           </div>
 
+          {/* Per Page */}
+          <Select
+            label={t.settings.quotesPerPageLabel}
+            value={String(formData.quote.perPage || 50)}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                quote: { ...formData.quote, perPage: Number(e.target.value) },
+              })
+            }
+            options={[
+              { value: '20', label: '20' },
+              { value: '50', label: '50' },
+              { value: '100', label: '100' },
+            ]}
+          />
+
           {/* Statistics */}
           <div>
             <h3 className="text-sm font-medium text-gray-700 mb-3">{t.settings.quoteStatistics}</h3>
@@ -308,12 +325,8 @@ export function SettingsPage() {
                   <span className="font-semibold">{quoteStats.draft}</span>
                 </div>
                 <div className="flex justify-between items-center py-1 border-b">
-                  <span className="text-blue-600">{t.settings.statClosedPending}</span>
-                  <span className="font-semibold">{quoteStats.closedPending}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b">
-                  <span className="text-indigo-600">{t.settings.statAccepted}</span>
-                  <span className="font-semibold">{quoteStats.acceptedInProgress}</span>
+                  <span className="text-blue-600">{t.settings.statClosed}</span>
+                  <span className="font-semibold">{quoteStats.closed}</span>
                 </div>
                 <div className="flex justify-between items-center py-1 border-b">
                   <span className="text-green-600">{t.settings.statStarted}</span>
@@ -339,15 +352,14 @@ export function SettingsPage() {
                   {quoteStats.total > 0 ? (
                     <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
                       {(() => {
-                        const total = quoteStats.draft + quoteStats.closedPending + quoteStats.acceptedInProgress +
+                        const total = quoteStats.draft + quoteStats.closed +
                                      quoteStats.started + quoteStats.completed + quoteStats.rejected;
                         if (total === 0) return <circle cx="50" cy="50" r="40" fill="#e5e7eb" />;
 
                         let currentAngle = 0;
                         const segments = [
                           { value: quoteStats.draft, color: '#fbbf24' },
-                          { value: quoteStats.closedPending, color: '#3b82f6' },
-                          { value: quoteStats.acceptedInProgress, color: '#6366f1' },
+                          { value: quoteStats.closed, color: '#3b82f6' },
                           { value: quoteStats.started, color: '#22c55e' },
                           { value: quoteStats.completed, color: '#9ca3af' },
                           { value: quoteStats.rejected, color: '#ef4444' },
@@ -514,6 +526,23 @@ export function SettingsPage() {
               {t.settings.addPatientType}
             </Button>
           </div>
+
+          {/* Per Page */}
+          <Select
+            label={t.settings.patientsPerPageLabel}
+            value={String(formData.patient.perPage || 50)}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                patient: { ...formData.patient, perPage: Number(e.target.value) },
+              })
+            }
+            options={[
+              { value: '20', label: '20' },
+              { value: '50', label: '50' },
+              { value: '100', label: '100' },
+            ]}
+          />
         </CardContent>
       </Card>
 

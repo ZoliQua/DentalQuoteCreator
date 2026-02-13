@@ -1,7 +1,6 @@
 export type QuoteStatus =
   | 'draft'
-  | 'closed_pending'
-  | 'accepted_in_progress'
+  | 'closed'
   | 'rejected'
   | 'started'
   | 'completed';
@@ -14,7 +13,7 @@ export type Jaw = 'upper' | 'lower' | 'both';
 export interface QuoteEvent {
   id: string;
   timestamp: string;
-  type: 'created' | 'closed' | 'reopened' | 'accepted' | 'acceptance_revoked' | 'rejected' | 'rejection_revoked' | 'started' | 'start_revoked' | 'completed' | 'completion_revoked' | 'deleted' | 'invoice_created';
+  type: 'created' | 'closed' | 'reopened' | 'accepted' | 'acceptance_revoked' | 'rejected' | 'rejection_revoked' | 'completed' | 'completion_revoked' | 'deleted' | 'invoice_created';
   doctorName: string;
   invoiceId?: string;
   invoiceNumber?: string;

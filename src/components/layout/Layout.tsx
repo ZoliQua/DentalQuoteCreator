@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
+
+interface NavChild {
+  to: string;
+  label: string;
+  permission?: string;
+}
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,11 +15,25 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const { t, appLanguage, setAppLanguage } = useSettings();
+  const { user, logout, hasPermission } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [openMenus, setOpenMenus] = useState<Set<string>>(new Set());
   const location = useLocation();
 
-  const navItems = [
+  const toggleSubmenu = (key: string) => {
+    setOpenMenus((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const isAdmin = user?.role === 'admin';
+
+  const allNavItems: Array<{ key: string; to: string; label: string; permission?: string; icon: React.ReactNode; children?: NavChild[] }> = [
     {
+      key: 'dashboard',
       to: '/',
       label: t.nav.dashboard,
       icon: (
@@ -27,6 +48,7 @@ export function Layout({ children }: LayoutProps) {
       ),
     },
     {
+      key: 'patients',
       to: '/patients',
       label: t.nav.patients,
       icon: (
@@ -39,10 +61,16 @@ export function Layout({ children }: LayoutProps) {
           />
         </svg>
       ),
+      children: [
+        { to: '/patients', label: t.nav.patientsActive },
+        ...(isAdmin ? [{ to: '/patients/deleted', label: t.nav.patientsDeleted }] : []),
+      ],
     },
     {
+      key: 'quotes',
       to: '/quotes',
       label: t.nav.quotes,
+      permission: 'quotes.view',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
@@ -53,10 +81,16 @@ export function Layout({ children }: LayoutProps) {
           />
         </svg>
       ),
+      children: [
+        { to: '/quotes', label: t.nav.quotesActive },
+        ...(isAdmin ? [{ to: '/quotes/deleted', label: t.nav.quotesDeleted }] : []),
+      ],
     },
     {
+      key: 'invoices',
       to: '/invoices',
       label: t.nav.invoices,
+      permission: 'invoices.view',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
@@ -69,8 +103,10 @@ export function Layout({ children }: LayoutProps) {
       ),
     },
     {
+      key: 'catalog',
       to: '/catalog',
       label: t.nav.catalog,
+      permission: 'catalog.view',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
@@ -83,8 +119,10 @@ export function Layout({ children }: LayoutProps) {
       ),
     },
     {
+      key: 'settings',
       to: '/settings',
       label: t.nav.settings,
+      permission: 'settings.view',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
@@ -103,8 +141,10 @@ export function Layout({ children }: LayoutProps) {
       ),
     },
     {
+      key: 'data',
       to: '/data',
       label: t.nav.dataManagement,
+      permission: 'data.view',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
@@ -117,8 +157,10 @@ export function Layout({ children }: LayoutProps) {
       ),
     },
     {
+      key: 'lab',
       to: '/odontogram-lab',
       label: t.nav.lab,
+      permission: 'lab.view',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
@@ -131,6 +173,26 @@ export function Layout({ children }: LayoutProps) {
       ),
     },
   ];
+
+  if (hasPermission('admin.users.manage') || hasPermission('admin.permissions.manage')) {
+    allNavItems.push({
+      key: 'admin',
+      to: '/admin',
+      label: t.nav.admin,
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422A12.083 12.083 0 0112 20.055a12.083 12.083 0 01-6.16-9.477L12 14z"
+          />
+        </svg>
+      ),
+    });
+  }
+
+  const navItems = allNavItems.filter((item) => !item.permission || hasPermission(item.permission));
 
   const languageLabel = appLanguage === 'hu'
     ? t.settings.hungarian
@@ -146,19 +208,24 @@ export function Layout({ children }: LayoutProps) {
           isSidebarOpen ? 'w-64' : 'w-20'
         } bg-white border-r border-gray-200 flex flex-col transition-all duration-300`}
       >
-        {/* Logo */}
+        {/* Logo + logged-in user */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
           {isSidebarOpen && (
-            <div className="flex items-center gap-2">
-              <svg className="w-8 h-8 text-dental-600" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C9.5 2 7.5 3.5 7 6c-.5 2.5-1 5-2 7-1 2-1.5 4-1 6 .5 2 2 3 3.5 3s2.5-1 3-2.5c.3-.9.5-2 .5-3.5 0 1.5.2 2.6.5 3.5.5 1.5 1.5 2.5 3 2.5s3-1 3.5-3c.5-2 0-4-1-6-1-2-1.5-4.5-2-7-.5-2.5-2.5-4-5-4z" />
-              </svg>
-              <span className="font-semibold text-gray-800">DentalQuote</span>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2">
+                <svg className="w-8 h-8 text-dental-600 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C9.5 2 7.5 3.5 7 6c-.5 2.5-1 5-2 7-1 2-1.5 4-1 6 .5 2 2 3 3.5 3s2.5-1 3-2.5c.3-.9.5-2 .5-3.5 0 1.5.2 2.6.5 3.5.5 1.5 1.5 2.5 3 2.5s3-1 3.5-3c.5-2 0-4-1-6-1-2-1.5-4.5-2-7-.5-2.5-2.5-4-5-4z" />
+                </svg>
+                <span className="font-semibold text-gray-800">DentalQuote</span>
+              </div>
+              {user && (
+                <p className="text-xs text-gray-500 truncate pl-10">{user.email}</p>
+              )}
             </div>
           )}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100"
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 flex-shrink-0"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               {isSidebarOpen ? (
@@ -181,26 +248,80 @@ export function Layout({ children }: LayoutProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-3">
+        <nav className="flex-1 py-4 px-3 overflow-y-auto">
           <ul className="space-y-1">
-            {navItems.map((item) => (
-              <li key={item.to}>
-                <NavLink
-                  to={item.to}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      isActive || (item.to !== '/' && location.pathname.startsWith(item.to))
-                        ? 'bg-dental-100 text-dental-700 font-medium'
-                        : 'text-gray-700 hover:bg-dental-50 hover:text-dental-700'
-                    }`
-                  }
-                  title={!isSidebarOpen ? item.label : undefined}
-                >
-                  {item.icon}
-                  {isSidebarOpen && <span>{item.label}</span>}
-                </NavLink>
-              </li>
-            ))}
+            {navItems.map((item) => {
+              const hasChildren = item.children && item.children.length > 1;
+              const isExpanded = openMenus.has(item.key);
+              const isParentActive = item.to !== '/' && location.pathname.startsWith(item.to);
+
+              if (hasChildren && isSidebarOpen) {
+                return (
+                  <li key={item.key}>
+                    <button
+                      onClick={() => toggleSubmenu(item.key)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                        isParentActive
+                          ? 'bg-dental-100 text-dental-700 font-medium'
+                          : 'text-gray-700 hover:bg-dental-50 hover:text-dental-700'
+                      }`}
+                    >
+                      {item.icon}
+                      <span className="flex-1 text-left">{item.label}</span>
+                      <svg
+                        className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {isExpanded && (
+                      <ul className="mt-1 space-y-1">
+                        {item.children!.filter(c => !c.permission || hasPermission(c.permission)).map((child) => (
+                          <li key={child.to}>
+                            <NavLink
+                              to={child.to}
+                              end
+                              className={({ isActive }) =>
+                                `flex items-center pl-12 pr-4 py-2 rounded-lg text-sm transition-colors ${
+                                  isActive
+                                    ? 'bg-dental-100 text-dental-700 font-medium'
+                                    : 'text-gray-600 hover:bg-dental-50 hover:text-dental-700'
+                                }`
+                              }
+                            >
+                              {child.label}
+                            </NavLink>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                );
+              }
+
+              return (
+                <li key={item.key}>
+                  <NavLink
+                    to={item.to}
+                    end={item.to === '/'}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                        isActive || (item.to !== '/' && location.pathname.startsWith(item.to))
+                          ? 'bg-dental-100 text-dental-700 font-medium'
+                          : 'text-gray-700 hover:bg-dental-50 hover:text-dental-700'
+                      }`
+                    }
+                    title={!isSidebarOpen ? item.label : undefined}
+                  >
+                    {item.icon}
+                    {isSidebarOpen && <span>{item.label}</span>}
+                  </NavLink>
+                </li>
+              );
+            })}
           </ul>
         </nav>
 
@@ -232,6 +353,12 @@ export function Layout({ children }: LayoutProps) {
               />
             </svg>
           )}
+          <button
+            onClick={() => logout()}
+            className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+          >
+            {isSidebarOpen ? t.login.logout : t.login.logoutShort}
+          </button>
         </div>
       </aside>
 

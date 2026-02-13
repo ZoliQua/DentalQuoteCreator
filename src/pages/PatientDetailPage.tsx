@@ -1,6 +1,7 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import { usePatients, useQuotes } from '../hooks';
 import {
   Button,
@@ -181,6 +182,7 @@ export function PatientDetailPage() {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
   const { t } = useSettings();
+  const { hasPermission } = useAuth();
   const hostRef = useRef<OdontogramHostHandle | null>(null);
   const { getPatient, editPatient, duplicatePatient, archivePatient, deletePatient } = usePatients();
   const { getQuotesByPatient, createQuote, deleteQuote, duplicateQuote } = useQuotes();
@@ -509,10 +511,12 @@ export function PatientDetailPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold">{t.patients.patientDetails}</h2>
+                  {hasPermission('patients.update') && (
                   <Button id="patientEditBtn" variant="secondary" size="sm"
                           onClick={() => setEditPatientModalOpen(true)}>
                     {t.common.edit}
                   </Button>
+                  )}
                 </div>
               </CardHeader>
             </div>
@@ -606,20 +610,24 @@ export function PatientDetailPage() {
               <h2 className="text-lg font-semibold">{t.patients.dataSheetActions}</h2>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
+              {hasPermission('patients.update') && (
               <Button id="patientDuplicateBtn" variant="secondary" className="w-full justify-center"
                       onClick={() => setDuplicatePatientConfirm(true)}>
                 {t.patients.duplicateDataSheet}
               </Button>
-              {!patient.isArchived && (
+              )}
+              {hasPermission('patients.update') && !patient.isArchived && (
                 <Button id="patientArchiveBtn" variant="secondary" className="w-full justify-center"
                         onClick={handleArchivePatient}>
                   {t.common.archive}
                 </Button>
               )}
+              {hasPermission('patients.delete') && (
               <Button id="patientDeleteBtn" variant="danger" className="w-full justify-center"
                       onClick={() => setDeletePatientConfirm(true)}>
                 {t.common.delete}
               </Button>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -685,15 +693,13 @@ export function PatientDetailPage() {
                               >
                                 {quote.quoteStatus === 'draft'
                                   ? t.quotes.statusDraft
-                                  : quote.quoteStatus === 'closed_pending'
-                                    ? t.quotes.statusClosedPending
-                                    : quote.quoteStatus === 'accepted_in_progress'
-                                      ? t.quotes.statusAcceptedInProgress
-                                      : quote.quoteStatus === 'rejected'
-                                        ? t.quotes.statusRejected
-                                        : quote.quoteStatus === 'started'
-                                          ? t.quotes.statusStarted
-                                          : t.quotes.statusCompleted}
+                                  : quote.quoteStatus === 'closed'
+                                    ? t.quotes.statusClosed
+                                    : quote.quoteStatus === 'rejected'
+                                      ? t.quotes.statusRejected
+                                      : quote.quoteStatus === 'started'
+                                        ? t.quotes.statusStarted
+                                        : t.quotes.statusCompleted}
                               </Badge>
                             </div>
                           </div>

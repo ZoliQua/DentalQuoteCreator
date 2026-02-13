@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import { usePatients, useCatalog } from '../hooks';
 import { Card, Button, Input, Select, Modal, Badge } from '../components/common';
 import { formatCurrency, formatDate, formatPatientName, formatBirthDateForDisplay, parseBirthDateFromDisplay, getDatePlaceholder } from '../utils';
@@ -11,6 +12,7 @@ import type { InvoiceRecord } from '../types/invoice';
 
 export function InvoicesPage() {
   const { t, settings } = useSettings();
+  const { hasPermission } = useAuth();
   const { patients } = usePatients();
   const { activeItems } = useCatalog();
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => listInvoices());
@@ -322,7 +324,7 @@ export function InvoicesPage() {
           <h1 className="text-2xl font-bold text-gray-900">{t.invoices.title}</h1>
           <p className="text-gray-500 mt-1">{t.invoices.subtitle}</p>
         </div>
-        <Button onClick={handleOpenNewInvoice}>{t.invoices.newInvoice}</Button>
+        {hasPermission('invoices.issue') && (<Button onClick={handleOpenNewInvoice}>{t.invoices.newInvoice}</Button>)}
       </div>
 
       <Card>

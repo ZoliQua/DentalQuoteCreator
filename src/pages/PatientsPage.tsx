@@ -2,10 +2,9 @@ import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import { usePatients } from '../hooks';
 import { Patient, PatientFormData } from '../types';
-import iconFemale from '../assets/icon-svgs/symbol-female.svg';
-import iconMale from '../assets/icon-svgs/symbol-male.svg';
 import {
   Button,
   Card,
@@ -25,35 +24,121 @@ import { postalCodes } from '../data/postalCodes';
 import { NeakCheckModal } from '../modules/neak/NeakCheckModal';
 import { checkJogviszony, saveCheck } from '../modules/neak';
 
-export function PatientsPage() {
-  const { t } = useSettings();
+type PatientSortColumn = 'patientId' | 'name' | 'birthDate' | 'phone' | 'insuranceNum' | 'tag';
+type SortDirection = 'asc' | 'desc';
+
+export function PatientsPage({ showDeleted }: { showDeleted?: boolean }) {
+  const { t, settings } = useSettings();
+  const { hasPermission } = useAuth();
   const {
     activePatients,
     archivedPatients,
     createPatient,
     editPatient,
     deletePatient,
-    archivePatient,
     restorePatient,
-    searchPatients,
   } = usePatients();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [restoreConfirm, setRestoreConfirm] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<PatientSortColumn>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const perPage = settings.patient?.perPage || 50;
+
+  const basePatients = showDeleted ? archivedPatients : activePatients;
 
   const filteredPatients = useMemo(() => {
-    return searchPatients(searchQuery, showArchived);
-  }, [searchPatients, searchQuery, showArchived]);
+    let result = basePatients;
 
-  const displayedPatients = showArchived ? archivedPatients : filteredPatients;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((p) =>
+        p.lastName.toLowerCase().includes(query) ||
+        p.firstName.toLowerCase().includes(query) ||
+        `${p.lastName} ${p.firstName}`.toLowerCase().includes(query) ||
+        (p.insuranceNum && p.insuranceNum.includes(query)) ||
+        (p.phone && p.phone.includes(query)) ||
+        p.patientId.includes(query)
+      );
+    }
+
+    const sorted = [...result].sort((a, b) => {
+      let cmp = 0;
+      switch (sortColumn) {
+        case 'patientId':
+          cmp = a.patientId.localeCompare(b.patientId);
+          break;
+        case 'name':
+          cmp = `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`);
+          break;
+        case 'birthDate':
+          cmp = new Date(a.birthDate).getTime() - new Date(b.birthDate).getTime();
+          break;
+        case 'phone':
+          cmp = (a.phone || '').localeCompare(b.phone || '');
+          break;
+        case 'insuranceNum':
+          cmp = (a.insuranceNum || '').localeCompare(b.insuranceNum || '');
+          break;
+        case 'tag':
+          cmp = (a.patientType || '').localeCompare(b.patientType || '');
+          break;
+      }
+      return sortDirection === 'asc' ? cmp : -cmp;
+    });
+
+    return sorted;
+  }, [basePatients, searchQuery, sortColumn, sortDirection]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPatients.length / perPage));
+  const paginatedPatients = filteredPatients.slice((currentPage - 1) * perPage, currentPage * perPage);
+
+  const handleSort = (column: PatientSortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1);
+  };
+
+  const SortArrow = ({ column }: { column: PatientSortColumn }) => (
+    <span className="ml-1 inline-block w-3">
+      {sortColumn === column ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+    </span>
+  );
+
+  const ThSortable = ({ column, children }: { column: PatientSortColumn; children: React.ReactNode }) => (
+    <th
+      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+      onClick={() => handleSort(column)}
+    >
+      {children}
+      <SortArrow column={column} />
+    </th>
+  );
+
+  const getTagBadge = (patientType?: string) => {
+    if (!patientType) return null;
+    const isNeak = patientType.toLowerCase().includes('neak');
+    return (
+      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+        isNeak ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'
+      }`}>
+        {isNeak ? t.patients.tagNeak : t.patients.tagPrivate}
+      </span>
+    );
+  };
 
   const handleCreatePatient = (data: PatientFormData) => {
     const newPatient = createPatient(data);
     setIsModalOpen(false);
-    // Fire-and-forget NEAK auto-check for new NEAK patients
     const tajDigits = data.insuranceNum?.replace(/-/g, '') || '';
     if (data.patientType?.toLowerCase().includes('neak') && tajDigits.length === 9 && newPatient) {
       const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -66,7 +151,6 @@ export function PatientsPage() {
   const handleEditPatient = (data: PatientFormData) => {
     if (editingPatient) {
       editPatient(editingPatient.patientId, data);
-      // Fire-and-forget NEAK auto-check
       const tajDigits = data.insuranceNum?.replace(/-/g, '') || '';
       if (data.patientType?.toLowerCase().includes('neak') && tajDigits.length === 9) {
         const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -83,174 +167,191 @@ export function PatientsPage() {
     setDeleteConfirm(null);
   };
 
-  const getPatientAge = (birthDate: string): number | null => {
-    const birth = new Date(birthDate);
-    if (Number.isNaN(birth.getTime())) return null;
-    const now = new Date();
-    let age = now.getFullYear() - birth.getFullYear();
-    const monthDiff = now.getMonth() - birth.getMonth();
-    const dayDiff = now.getDate() - birth.getDate();
-    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-      age -= 1;
-    }
-    return age < 0 ? null : age;
+  const handleRestore = (patientId: string) => {
+    restorePatient(patientId);
+    setRestoreConfirm(null);
   };
+
+  const pageTitle = showDeleted ? t.nav.patientsDeleted : t.patients.title;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.patients.title}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{pageTitle}</h1>
           <p className="text-gray-500 mt-1">
-            {activePatients.length} {t.common.active}, {archivedPatients.length} {t.common.archived}
+            {filteredPatients.length} {showDeleted ? t.common.archived : t.common.active}
           </p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)}>
-          <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          {t.patients.newPatient}
-        </Button>
+        {!showDeleted && hasPermission('patients.create') && (
+          <Button onClick={() => setIsModalOpen(true)}>
+            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            {t.patients.newPatient}
+          </Button>
+        )}
       </div>
 
       <div className="flex items-center gap-4">
         <SearchInput
           value={searchQuery}
-          onChange={setSearchQuery}
+          onChange={(v) => { setSearchQuery(v); setCurrentPage(1); }}
           placeholder={t.patients.searchPlaceholder}
           className="flex-1"
         />
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowArchived(false)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              !showArchived ? 'bg-dental-100 text-dental-700' : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            {t.common.active}
-          </button>
-          <button
-            onClick={() => setShowArchived(true)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              showArchived ? 'bg-dental-100 text-dental-700' : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            {t.common.archived}
-          </button>
-        </div>
       </div>
 
-      {displayedPatients.length === 0 ? (
+      {filteredPatients.length === 0 ? (
         <Card>
           <CardContent>
             {searchQuery ? (
               <EmptyState
                 icon={<EmptySearchIcon />}
                 title={t.common.noResults}
-                description="Próbáljon más keresési kifejezést"
+                description={t.patients.tryDifferentSearch}
               />
             ) : (
               <EmptyState
                 icon={<EmptyPatientIcon />}
                 title={t.patients.noPatients}
-                description="Adja hozzá az első pácienst a rendszerhez"
-                actionLabel={t.patients.newPatient}
-                onAction={() => setIsModalOpen(true)}
+                description={t.patients.addFirstPatient}
+                actionLabel={!showDeleted ? t.patients.newPatient : undefined}
+                onAction={!showDeleted ? () => setIsModalOpen(true) : undefined}
               />
             )}
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4">
-          {displayedPatients.map((patient) => (
-            <Card key={patient.patientId} hoverable>
-              <CardContent className="flex items-center justify-between">
-                <Link
-                  to={`/patients/${patient.patientId}`}
-                  className="flex-1 flex items-center gap-4"
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <ThSortable column="patientId">{t.patients.patientDisplayId}</ThSortable>
+                  <ThSortable column="name">{t.patients.name}</ThSortable>
+                  <ThSortable column="birthDate">{t.patients.birthDate}</ThSortable>
+                  <ThSortable column="phone">{t.patients.phone}</ThSortable>
+                  <ThSortable column="insuranceNum">TAJ</ThSortable>
+                  <ThSortable column="tag">{t.patients.tag}</ThSortable>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {t.common.actions}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {paginatedPatients.map((patient) => (
+                  <tr key={patient.patientId} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm text-gray-500 font-mono">
+                      {patient.patientId}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        to={`/patients/${patient.patientId}`}
+                        className="text-dental-600 hover:text-dental-700 font-medium"
+                      >
+                        {formatPatientName(patient.lastName, patient.firstName, patient.title)}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {formatDate(patient.birthDate)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {patient.phone || '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {patient.insuranceNum || '-'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {getTagBadge(patient.patientType)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {showDeleted ? (
+                          <>
+                            <button
+                              onClick={() => setRestoreConfirm(patient.patientId)}
+                              title={t.common.restore}
+                              className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a5 5 0 015 5v2M3 10l4-4m-4 4l4 4" />
+                              </svg>
+                            </button>
+                            {hasPermission('patients.update') && (
+                              <button
+                                onClick={() => setEditingPatient(patient)}
+                                title={t.common.edit}
+                                className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {hasPermission('patients.update') && (
+                              <button
+                                onClick={() => setEditingPatient(patient)}
+                                title={t.common.edit}
+                                className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                            )}
+                            {hasPermission('patients.delete') && (
+                              <button
+                                onClick={() => setDeleteConfirm(patient.patientId)}
+                                title={t.common.delete}
+                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+              <div className="text-sm text-gray-500">
+                {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filteredPatients.length)} / {filteredPatients.length}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 rounded border text-sm disabled:opacity-40 hover:bg-gray-50"
                 >
-                  <div className="w-12 h-12 rounded-full bg-dental-100 flex items-center justify-center">
-                    <span className="text-dental-700 font-semibold text-lg">
-                      {patient.lastName[0]}
-                      {patient.firstName[0]}
-                    </span>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">
-                      {formatPatientName(patient.lastName, patient.firstName, patient.title)}
-                      {getPatientAge(patient.birthDate) !== null && (
-                        <span className="ml-2 text-sm font-medium text-gray-500">
-                          ({getPatientAge(patient.birthDate)}
-                          {(patient.sex === 'male' || patient.sex === 'female') && (
-                            <img
-                              src={patient.sex === 'male' ? iconMale : iconFemale}
-                              alt={t.patients[patient.sex]}
-                              className="ml-1 inline-block h-4 w-4 align-middle"
-                            />
-                          )}
-                          )
-                        </span>
-                      )}
-                    </h3>
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <span>{formatDate(patient.birthDate)}</span>
-                      {patient.insuranceNum && <span>TAJ: {patient.insuranceNum}</span>}
-                      {patient.phone && <span>{patient.phone}</span>}
-                    </div>
-                  </div>
-                </Link>
-                <div className="flex items-center gap-2">
-                  {showArchived ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        restorePatient(patient.patientId);
-                      }}
-                    >
-                      {t.common.restore}
-                    </Button>
-                  ) : (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingPatient(patient);
-                        }}
-                      >
-                        {t.common.edit}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          archivePatient(patient.patientId);
-                        }}
-                      >
-                        {t.common.archive}
-                      </Button>
-                    </>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteConfirm(patient.patientId);
-                    }}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    {t.common.delete}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  &laquo;
+                </button>
+                <span className="text-sm text-gray-600">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 rounded border text-sm disabled:opacity-40 hover:bg-gray-50"
+                >
+                  &raquo;
+                </button>
+              </div>
+            </div>
+          )}
+        </Card>
       )}
 
       {/* Create/Edit Modal */}
@@ -276,6 +377,18 @@ export function PatientsPage() {
         cancelText={t.common.cancel}
         variant="danger"
       />
+
+      {/* Restore Confirmation */}
+      <ConfirmModal
+        isOpen={restoreConfirm !== null}
+        onClose={() => setRestoreConfirm(null)}
+        onConfirm={() => restoreConfirm && handleRestore(restoreConfirm)}
+        title={t.common.confirm}
+        message={t.quotes.restoreConfirm}
+        confirmText={t.common.restore}
+        cancelText={t.common.cancel}
+        variant="primary"
+      />
     </div>
   );
 }
@@ -288,7 +401,7 @@ interface PatientFormModalProps {
   title: string;
 }
 
-function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: PatientFormModalProps) {
+export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: PatientFormModalProps) {
   const { t, settings } = useSettings();
   const [neakModalOpen, setNeakModalOpen] = useState(false);
   const [formData, setFormData] = useState<PatientFormData>({

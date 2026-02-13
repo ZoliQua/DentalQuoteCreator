@@ -112,7 +112,11 @@ export function ConfirmModal({
   variant = 'danger',
 }: ConfirmModalProps) {
   const handleConfirm = () => {
-    onConfirm();
+    try {
+      onConfirm();
+    } catch (error) {
+      console.error('Confirm action failed:', error);
+    }
     onClose();
   };
 

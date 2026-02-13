@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Patient, CatalogItem, Quote, DentalStatusSnapshot } from '../types';
 import { storage } from '../repositories';
 import { defaultCatalog } from '../data/defaultCatalog';
+import { useAuth } from './AuthContext';
 
 interface AppContextType {
   // Patients
@@ -27,6 +28,10 @@ interface AppContextType {
   getQuote: (quoteId: string) => Quote | undefined;
   getQuotesByPatient: (patientId: string) => Quote[];
 
+  // Restore (admin)
+  restorePatient: (patientId: string) => void;
+  restoreQuote: (quoteId: string) => void;
+
   // Data management
   exportData: () => string;
   importData: (data: string) => boolean;
@@ -43,6 +48,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -50,14 +56,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Load data on mount
   useEffect(() => {
+    if (!isAuthenticated) {
+      setPatients([]);
+      setCatalog([]);
+      setQuotes([]);
+      setDentalStatusSnapshots([]);
+      return;
+    }
     setPatients(storage.getPatients());
     setCatalog(storage.getCatalog());
     setQuotes(storage.getQuotes());
     setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
-  }, []);
+  }, [isAuthenticated]);
 
   // Listen for storage changes (for multi-tab support)
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const handleStorageChange = () => {
       setPatients(storage.getPatients());
       setCatalog(storage.getCatalog());
@@ -66,8 +81,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
 
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+    window.addEventListener('auth-changed', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('auth-changed', handleStorageChange);
+    };
+  }, [isAuthenticated]);
 
   // Patients
   const addPatient = useCallback((patient: Patient) => {
@@ -81,8 +100,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deletePatient = useCallback((patientId: string) => {
-    storage.deletePatient(patientId);
-    setPatients(storage.getPatients());
+    try {
+      storage.deletePatient(patientId);
+      setPatients(storage.getPatients());
+    } catch (error) {
+      console.error('Failed to delete patient:', error);
+    }
   }, []);
 
   const getPatient = useCallback(
@@ -102,8 +125,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteCatalogItem = useCallback((catalogItemId: string) => {
-    storage.deleteCatalogItem(catalogItemId);
-    setCatalog(storage.getCatalog());
+    try {
+      storage.deleteCatalogItem(catalogItemId);
+      setCatalog(storage.getCatalog());
+    } catch (error) {
+      console.error('Failed to delete catalog item:', error);
+    }
   }, []);
 
   const getCatalogItem = useCallback(
@@ -129,8 +156,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteQuote = useCallback((quoteId: string) => {
-    storage.deleteQuote(quoteId);
-    setQuotes(storage.getQuotes());
+    try {
+      storage.deleteQuote(quoteId);
+      setQuotes(storage.getQuotes());
+    } catch (error) {
+      console.error('Failed to delete quote:', error);
+    }
   }, []);
 
   const getQuote = useCallback(
@@ -172,6 +203,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateDentalStatusSnapshot = useCallback((snapshot: DentalStatusSnapshot) => {
     storage.updateDentalStatusSnapshot(snapshot);
     setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
+  }, []);
+
+  // Restore (admin)
+  const restorePatient = useCallback((patientId: string) => {
+    try {
+      storage.restorePatient(patientId);
+      setPatients(storage.getPatients());
+    } catch (error) {
+      console.error('Failed to restore patient:', error);
+    }
+  }, []);
+
+  const restoreQuote = useCallback((quoteId: string) => {
+    try {
+      storage.restoreQuote(quoteId);
+      setQuotes(storage.getQuotes());
+    } catch (error) {
+      console.error('Failed to restore quote:', error);
+    }
   }, []);
 
   // Data management
@@ -220,6 +270,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         getLatestDentalStatusSnapshot,
         createDentalStatusSnapshot,
         updateDentalStatusSnapshot,
+        restorePatient,
+        restoreQuote,
         exportData,
         importData,
         refreshData,

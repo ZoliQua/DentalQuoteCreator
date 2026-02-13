@@ -164,7 +164,8 @@ export function getDatePlaceholder(): string {
 
 export function formatBirthDateForDisplay(isoDate: string): string {
   if (!isoDate) return '';
-  const date = new Date(isoDate + 'T00:00:00');
+  const dateOnly = isoDate.split('T')[0];
+  const date = new Date(dateOnly + 'T00:00:00');
   if (Number.isNaN(date.getTime())) return isoDate;
   return formatDateWithPattern(date, getDatePatternFromDateTime(getSelectedDateFormat()));
 }

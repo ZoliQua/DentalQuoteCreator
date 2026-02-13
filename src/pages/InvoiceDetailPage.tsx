@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, Button, Badge, ConfirmModal } from '../components/common';
 import { getInvoice, saveInvoice } from '../modules/invoicing/storage';
 import { stornoInvoice } from '../modules/invoicing/api';
@@ -10,6 +11,7 @@ import type { InvoiceRecord } from '../types/invoice';
 export function InvoiceDetailPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
   const { t } = useSettings();
+  const { hasPermission } = useAuth();
   const [invoice, setInvoice] = useState<InvoiceRecord | undefined>(() =>
     invoiceId ? getInvoice(invoiceId) : undefined
   );
@@ -118,7 +120,7 @@ export function InvoiceDetailPage() {
               {t.invoices.pdfDownload}
             </Button>
           )}
-          {invoice.status === 'sent' && invoice.szamlazzInvoiceNumber && (
+          {hasPermission('invoices.storno') && invoice.status === 'sent' && invoice.szamlazzInvoiceNumber && (
             <Button variant="danger" onClick={() => setStornoConfirmOpen(true)}>
               {t.invoices.storno}
             </Button>

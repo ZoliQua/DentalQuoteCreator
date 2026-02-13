@@ -4,6 +4,15 @@ import { useApp } from '../context/AppContext';
 import { Patient, PatientFormData, DentalStatusSnapshot } from '../types';
 import { createHealthyTeethRecord, getCurrentDateString } from '../utils';
 
+function generatePatientId(existingPatients: Patient[]): string {
+  const existing = new Set(existingPatients.map((p) => p.patientId));
+  let id: string;
+  do {
+    id = String(10000000 + Math.floor(Math.random() * 90000000));
+  } while (existing.has(id));
+  return id;
+}
+
 export function usePatients() {
   const {
     patients,
@@ -11,6 +20,7 @@ export function usePatients() {
     updatePatient,
     deletePatient,
     getPatient,
+    restorePatient: restorePatientFromContext,
     createDentalStatusSnapshot,
   } = useApp();
 
@@ -29,7 +39,7 @@ export function usePatients() {
       const now = getCurrentDateString();
       const patient: Patient = {
         ...data,
-        patientId: nanoid(),
+        patientId: generatePatientId(patients),
         createdAt: now,
         updatedAt: now,
         isArchived: false,
@@ -45,7 +55,7 @@ export function usePatients() {
       createDentalStatusSnapshot(snapshot);
       return patient;
     },
-    [addPatient, createDentalStatusSnapshot]
+    [patients, addPatient, createDentalStatusSnapshot]
   );
 
   const editPatient = useCallback(
@@ -80,16 +90,9 @@ export function usePatients() {
 
   const restorePatient = useCallback(
     (patientId: string): void => {
-      const existing = getPatient(patientId);
-      if (existing) {
-        updatePatient({
-          ...existing,
-          isArchived: false,
-          updatedAt: getCurrentDateString(),
-        });
-      }
+      restorePatientFromContext(patientId);
     },
-    [getPatient, updatePatient]
+    [restorePatientFromContext]
   );
 
   const duplicatePatient = useCallback(
@@ -100,7 +103,7 @@ export function usePatients() {
       const now = getCurrentDateString();
       const duplicate: Patient = {
         ...existing,
-        patientId: nanoid(),
+        patientId: generatePatientId(patients),
         lastName: `${existing.lastName} (másolat)`,
         createdAt: now,
         updatedAt: now,

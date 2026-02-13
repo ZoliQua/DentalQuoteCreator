@@ -1,4 +1,5 @@
 import type { NeakCheckResult } from './types';
+import { getAuthHeaders } from '../../utils/auth';
 
 export const checkJogviszony = async (
   taj: string,
@@ -6,7 +7,7 @@ export const checkJogviszony = async (
 ): Promise<NeakCheckResult> => {
   const response = await fetch('/api/neak/jogviszony', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ taj, date }),
   });
 
@@ -28,6 +29,6 @@ export const checkJogviszony = async (
 };
 
 export const pingNeak = async (): Promise<{ ok: boolean; response: string }> => {
-  const response = await fetch('/api/neak/ping');
+  const response = await fetch('/api/neak/ping', { headers: getAuthHeaders() });
   return response.json();
 };

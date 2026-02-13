@@ -1,6 +1,6 @@
 import { type ReactNode, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import OdontogramApp, { clearSelection } from '@odontogram-shell';
-export { clearSelection, setOcclusalVisible, setWisdomVisible, setShowBase, setHealthyPulpVisible } from '@odontogram-shell';
+import OdontogramApp, { clearSelection, setOcclusalVisible, setWisdomVisible, setShowBase, setHealthyPulpVisible } from '@odontogram-shell';
+export { clearSelection, setOcclusalVisible, setWisdomVisible, setShowBase, setHealthyPulpVisible };
 import { createPortal } from 'react-dom';
 import type { OdontogramState } from './types';
 import './odontogramHost.css';
@@ -24,6 +24,19 @@ export type OdontogramHostHandle = {
 
 const EXPORT_BUTTON_ID = 'btnStatusExport';
 const IMPORT_INPUT_ID = 'statusImportInput';
+// Chart toolbar buttons that need re-dispatching in embedded mode.
+// The engine binds listeners via addEventListener during wireControls(),
+// but in the host the MutationObserver / React lifecycle can interfere
+// with normal event propagation.  We re-fire the native click so the
+// engine's own handler picks it up reliably.
+const CHART_BUTTONS = new Set([
+  'btnOcclView',
+  'btnWisdomVisible',
+  'btnBoneVisible',
+  'btnPulpVisible',
+  'btnSelectNoneChart',
+]);
+
 const TOGGLE_TARGETS: Record<string, { selector: string; collapsedClass: string }> = {
   btnToggleControlsCard: { selector: '#controlsActions', collapsedClass: 'hidden' },
   btnToggleStatusCard: { selector: '#statusCard', collapsedClass: 'collapsed' },
@@ -269,10 +282,39 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
         const target = event.target as Element | null;
         const button = target?.closest('button[id]') as HTMLButtonElement | null;
         if (!button) return;
-        if (!TOGGLE_TARGETS[button.id]) return;
-        event.preventDefault();
-        event.stopPropagation();
-        togglePanelSection(rootRef.current, button.id);
+        if (TOGGLE_TARGETS[button.id]) {
+          event.preventDefault();
+          event.stopPropagation();
+          togglePanelSection(rootRef.current, button.id);
+          return;
+        }
+        if (CHART_BUTTONS.has(button.id)) {
+          // Stop propagation so the engine's own handler doesn't also fire
+          // (which would cause a double-toggle). The delegated bubble-phase
+          // handler below calls the engine API directly.
+          event.preventDefault();
+          event.stopPropagation();
+          // Read current state from aria-pressed (engine keeps this in sync)
+          const isPressed = button.getAttribute('aria-pressed') === 'true';
+          switch (button.id) {
+            case 'btnOcclView':
+              setOcclusalVisible(!isPressed);
+              break;
+            case 'btnWisdomVisible':
+              setWisdomVisible(!isPressed);
+              break;
+            case 'btnBoneVisible':
+              setShowBase(!isPressed);
+              break;
+            case 'btnPulpVisible':
+              setHealthyPulpVisible(!isPressed);
+              break;
+            case 'btnSelectNoneChart':
+              clearSelection();
+              break;
+          }
+          return;
+        }
       };
       root.addEventListener('click', onClickCapture, true);
       return () => root.removeEventListener('click', onClickCapture, true);

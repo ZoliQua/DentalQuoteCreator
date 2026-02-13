@@ -1,10 +1,45 @@
 import 'dotenv/config';
-import Fastify from 'fastify';
-import { randomUUID } from 'crypto';
-import { Prisma } from '@prisma/client';
+import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
+import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual, createHash } from 'crypto';
+import { promisify } from 'util';
+import { Prisma, UserRole } from '@prisma/client';
 import { prisma } from './db.js';
 
 type JsonRecord = Record<string, unknown>;
+type PermissionMap = Record<PermissionKey, boolean>;
+
+const scrypt = promisify(scryptCallback);
+
+const ALL_PERMISSION_KEYS = [
+  'quotes.view',
+  'quotes.create',
+  'quotes.delete',
+  'invoices.view',
+  'invoices.issue',
+  'invoices.storno',
+  'catalog.view',
+  'catalog.create',
+  'catalog.update',
+  'catalog.delete',
+  'patients.update',
+  'patients.create',
+  'patients.delete',
+  'lab.view',
+  'settings.view',
+  'data.view',
+  'admin.users.manage',
+  'admin.permissions.manage',
+] as const;
+
+type PermissionKey = (typeof ALL_PERMISSION_KEYS)[number];
+type AuthenticatedUser = {
+  id: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  isActive: boolean;
+  permissions: PermissionMap;
+};
 
 type ExportData = {
   version: string;
@@ -23,16 +58,16 @@ const DATA_VERSION = '2.0.0';
 const defaultSettings: JsonRecord = {
   clinic: {
     name: 'Macko Dental Kft.',
-    address: '9700 Szombathely, Fo ter 1.',
+    address: '9700 Szombathely, Fő tér 1.',
     phone: '+36 94 123 456',
     email: 'info@mackodental.hu',
     website: 'www.mackodental.hu',
   },
-  doctors: [{ id: 'doc-1', name: 'Dr. Dul Zoltan', stampNumber: '' }],
+  doctors: [{ id: 'doc-1', name: 'Dr. Dul Zoltán', stampNumber: '' }],
   pdf: {
     footerText:
-      'Az arajanlat tajekoztato jellegu es a fent jelolt ideig ervenyes.',
-    warrantyText: 'Garancialis feltetelek a rendeloben.',
+      'Az árajánlat tájékoztató jellegű és a fent jelölt ideig érvényes.',
+    warrantyText: 'Garanciális feltételek a rendelőben.',
   },
   quote: {
     prefix: 'MDKD',
@@ -45,8 +80,8 @@ const defaultSettings: JsonRecord = {
     defaultVatRate: 0,
   },
   patient: {
-    defaultCountry: 'Magyarorszag',
-    patientTypes: ['Privat paciens', 'NEAK paciens'],
+    defaultCountry: 'Magyarország',
+    patientTypes: ['Privát páciens', 'NEAK páciens'],
   },
   language: 'hu',
   defaultValidityDays: 60,
@@ -72,7 +107,204 @@ const parseJsonObject = <T extends JsonRecord>(value: Prisma.JsonValue | null | 
   return value as T;
 };
 
+const hashToken = (value: string): string => createHash('sha256').update(value).digest('hex');
+
+const hashPassword = async (plainTextPassword: string): Promise<string> => {
+  const normalized = plainTextPassword.trim();
+  if (!normalized) {
+    throw new Error('Password is required');
+  }
+  const salt = randomBytes(16).toString('hex');
+  const derived = (await scrypt(normalized, salt, 64)) as Buffer;
+  return `${salt}:${derived.toString('hex')}`;
+};
+
+const verifyPassword = async (plainTextPassword: string, storedHash: string): Promise<boolean> => {
+  const [salt, keyHex] = String(storedHash || '').split(':');
+  if (!salt || !keyHex) return false;
+  const derived = (await scrypt(plainTextPassword, salt, 64)) as Buffer;
+  const expected = Buffer.from(keyHex, 'hex');
+  if (derived.length !== expected.length) return false;
+  return timingSafeEqual(derived, expected);
+};
+
+const createToken = (): string => randomBytes(32).toString('hex');
+
+const ROLE_PERMISSION_PRESETS: Record<UserRole, readonly PermissionKey[]> = {
+  admin: [...ALL_PERMISSION_KEYS],
+  beta_tester: [...ALL_PERMISSION_KEYS],
+  receptionist: ALL_PERMISSION_KEYS.filter(k => !['admin.users.manage', 'admin.permissions.manage', 'lab.view'].includes(k)),
+  doctor: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update'],
+  assistant: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'patients.delete'],
+  user: [],
+};
+
+const VALID_ROLES: readonly string[] = ['admin', 'doctor', 'assistant', 'receptionist', 'user', 'beta_tester'];
+
+const getDefaultPermissions = (role: UserRole): PermissionMap => {
+  const preset = ROLE_PERMISSION_PRESETS[role] || [];
+  return ALL_PERMISSION_KEYS.reduce((acc, key) => {
+    acc[key] = preset.includes(key);
+    return acc;
+  }, {} as PermissionMap);
+};
+
+const buildPermissionMap = (
+  role: UserRole,
+  overrides: Array<{ key: string; isAllowed: boolean }>
+): PermissionMap => {
+  const permissions = getDefaultPermissions(role);
+  for (const override of overrides) {
+    if (ALL_PERMISSION_KEYS.includes(override.key as PermissionKey)) {
+      permissions[override.key as PermissionKey] = override.isAllowed;
+    }
+  }
+  return permissions;
+};
+
+const toSafeUser = (user: {
+  id: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}) => {
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    role: user.role,
+    isActive: user.isActive,
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
+  };
+};
+
 const server = Fastify({ logger: true });
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    currentUser: AuthenticatedUser | null;
+    sessionId: string | null;
+  }
+}
+
+const SESSION_TTL_DAYS = Number(process.env.AUTH_SESSION_TTL_DAYS || 14);
+const PUBLIC_ROUTE_PATTERNS = new Set(['/health', '/db-health', '/auth/login']);
+
+const toClientPermissions = (permissions: PermissionMap) => {
+  return ALL_PERMISSION_KEYS.map((key) => ({ key, isAllowed: permissions[key] }));
+};
+
+const resolveCurrentUser = async (token: string): Promise<{ user: AuthenticatedUser; sessionId: string } | null> => {
+  const tokenHash = hashToken(token);
+  const session = await prisma.authSession.findUnique({
+    where: { tokenHash },
+    include: { user: true },
+  });
+  if (!session) return null;
+  if (session.revokedAt || session.expiresAt < new Date()) return null;
+  if (!session.user.isActive) return null;
+  const overrides = await prisma.userPermissionOverride.findMany({
+    where: { userId: session.user.id },
+  });
+  const permissions = buildPermissionMap(session.user.role, overrides);
+  const user: AuthenticatedUser = {
+    id: session.user.id,
+    email: session.user.email,
+    fullName: session.user.fullName,
+    role: session.user.role,
+    isActive: session.user.isActive,
+    permissions,
+  };
+  return { user, sessionId: session.id };
+};
+
+const requireAuth = async (request: FastifyRequest, reply: FastifyReply) => {
+  if (!request.currentUser) {
+    await reply.code(401).send({ message: 'Authentication required' });
+    return null;
+  }
+  return request.currentUser;
+};
+
+const hasPermission = (user: AuthenticatedUser, key: PermissionKey): boolean => {
+  return Boolean(user.permissions[key]);
+};
+
+const requirePermission = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  key: PermissionKey
+) => {
+  const user = await requireAuth(request, reply);
+  if (!user) return null;
+  if (!hasPermission(user, key)) {
+    await reply.code(403).send({ message: 'Nincs jogosultság ehhez a művelethez.' });
+    return null;
+  }
+  return user;
+};
+
+const logActivity = async (
+  userId: string,
+  action: string,
+  opts?: { page?: string; entityType?: string; entityId?: string; details?: Record<string, unknown>; ipAddress?: string }
+) => {
+  try {
+    await prisma.userActivityLog.create({
+      data: {
+        id: randomUUID(),
+        userId,
+        action,
+        page: opts?.page || null,
+        entityType: opts?.entityType || null,
+        entityId: opts?.entityId || null,
+        details: opts?.details ? toInputJson(opts.details) : undefined,
+        ipAddress: opts?.ipAddress || null,
+      },
+    });
+  } catch {
+    // Best-effort logging; do not break the main flow
+  }
+};
+
+server.decorateRequest('currentUser', null as AuthenticatedUser | null);
+server.decorateRequest('sessionId', null as string | null);
+
+server.addHook('preHandler', async (request) => {
+  request.currentUser = null;
+  request.sessionId = null;
+
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.toLowerCase().startsWith('bearer ')) {
+    return;
+  }
+
+  const token = authHeader.slice(7).trim();
+  if (!token) return;
+
+  const resolved = await resolveCurrentUser(token);
+  if (!resolved) return;
+
+  request.currentUser = resolved.user;
+  request.sessionId = resolved.sessionId;
+
+  await prisma.authSession.update({
+    where: { id: resolved.sessionId },
+    data: { lastSeenAt: new Date() },
+  });
+});
+
+server.addHook('preHandler', async (request, reply) => {
+  const routeUrl = request.routeOptions.url || request.url;
+  if (PUBLIC_ROUTE_PATTERNS.has(routeUrl)) return;
+  if (!request.currentUser) {
+    await reply.code(401).send({ message: 'Authentication required' });
+  }
+});
 
 server.get('/health', async () => ({ status: 'ok' }));
 
@@ -93,6 +325,11 @@ server.get('/db/stats', async () => {
     'OdontogramCurrent',
     'OdontogramDaily',
     'OdontogramTimeline',
+    'User',
+    'AuthSession',
+    'UserPermissionOverride',
+    'PermissionAuditLog',
+    'UserActivityLog',
   ] as const;
 
   const dbMeta = await prisma.$queryRaw<Array<{ database_name: string; database_size: bigint | number }>>`
@@ -123,7 +360,7 @@ server.get('/db/stats', async () => {
     })
   );
 
-  tableStats.sort((a, b) => b.totalBytes - a.totalBytes);
+  tableStats.sort((a, b) => a.tableName.localeCompare(b.tableName));
 
   return {
     generatedAt: new Date().toISOString(),
@@ -134,6 +371,362 @@ server.get('/db/stats', async () => {
     totalTableBytes: tableStats.reduce((sum, item) => sum + item.totalBytes, 0),
     tables: tableStats,
   };
+});
+
+server.post('/auth/login', async (request, reply) => {
+  const body = request.body as { email?: string; password?: string };
+  const email = String(body?.email || '').trim().toLowerCase();
+  const password = String(body?.password || '');
+
+  if (!email || !password) {
+    return reply.code(400).send({ message: 'E-mail és jelszó kötelező.' });
+  }
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user || !user.isActive) {
+    return reply.code(401).send({ message: 'Hibás belépési adatok.' });
+  }
+
+  const validPassword = await verifyPassword(password, user.passwordHash);
+  if (!validPassword) {
+    return reply.code(401).send({ message: 'Hibás belépési adatok.' });
+  }
+
+  const token = createToken();
+  const tokenHash = hashToken(token);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
+
+  const session = await prisma.authSession.create({
+    data: {
+      id: randomUUID(),
+      userId: user.id,
+      tokenHash,
+      createdAt: now,
+      expiresAt,
+      lastSeenAt: now,
+      userAgent: request.headers['user-agent'] ? String(request.headers['user-agent']) : null,
+      ipAddress: request.ip || null,
+    },
+  });
+
+  const overrides = await prisma.userPermissionOverride.findMany({ where: { userId: user.id } });
+  const permissions = buildPermissionMap(user.role, overrides);
+
+  await logActivity(user.id, 'login', { ipAddress: request.ip || undefined });
+
+  return {
+    token,
+    expiresAt: session.expiresAt.toISOString(),
+    user: toSafeUser(user),
+    permissions: toClientPermissions(permissions),
+  };
+});
+
+server.post('/auth/logout', async (request, reply) => {
+  const currentUser = await requireAuth(request, reply);
+  if (!currentUser) return;
+
+  if (request.sessionId) {
+    await prisma.authSession.update({
+      where: { id: request.sessionId },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  await logActivity(currentUser.id, 'logout', { ipAddress: request.ip || undefined });
+
+  return { status: 'ok' };
+});
+
+server.get('/auth/me', async (request, reply) => {
+  const currentUser = await requireAuth(request, reply);
+  if (!currentUser) return;
+
+  const user = await prisma.user.findUnique({ where: { id: currentUser.id } });
+  if (!user) {
+    return reply.code(401).send({ message: 'Authentication required' });
+  }
+
+  const overrides = await prisma.userPermissionOverride.findMany({ where: { userId: user.id } });
+  const permissions = buildPermissionMap(user.role, overrides);
+  return {
+    user: toSafeUser(user),
+    permissions: toClientPermissions(permissions),
+  };
+});
+
+server.get('/admin/users', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'admin.users.manage');
+  if (!currentUser) return;
+
+  const users = await prisma.user.findMany({ orderBy: [{ role: 'asc' }, { fullName: 'asc' }] });
+  const userIds = users.map((user) => user.id);
+  const allOverrides = await prisma.userPermissionOverride.findMany({
+    where: { userId: { in: userIds } },
+  });
+  const grouped = allOverrides.reduce((acc, override) => {
+    acc[override.userId] ||= [];
+    acc[override.userId].push(override);
+    return acc;
+  }, {} as Record<string, Array<{ key: string; isAllowed: boolean }>>);
+
+  return users.map((user) => {
+    const permissions = buildPermissionMap(user.role, grouped[user.id] || []);
+    return {
+      ...toSafeUser(user),
+      permissions: toClientPermissions(permissions),
+    };
+  });
+});
+
+server.post('/admin/users', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'admin.users.manage');
+  if (!currentUser) return;
+
+  const body = request.body as {
+    email?: string;
+    fullName?: string;
+    password?: string;
+    role?: UserRole;
+    isActive?: boolean;
+  };
+  const email = String(body.email || '').trim().toLowerCase();
+  const fullName = String(body.fullName || '').trim();
+  const password = String(body.password || '');
+  const role = (body.role && VALID_ROLES.includes(body.role)) ? body.role : 'user';
+
+  if (!email || !fullName || !password) {
+    return reply.code(400).send({ message: 'E-mail, név és jelszó kötelező.' });
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    if (existing.isActive) {
+      return reply.code(409).send({ message: 'Ez az e-mail már foglalt.' });
+    }
+    // Reactivate inactive user with new data
+    const updated = await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        fullName,
+        passwordHash: await hashPassword(password),
+        role,
+        isActive: true,
+        updatedAt: new Date(),
+      },
+    });
+    const permissions = getDefaultPermissions(updated.role);
+    return reply.code(201).send({
+      ...toSafeUser(updated),
+      permissions: toClientPermissions(permissions),
+    });
+  }
+
+  const user = await prisma.user.create({
+    data: {
+      id: randomUUID(),
+      email,
+      fullName,
+      passwordHash: await hashPassword(password),
+      role,
+      isActive: body.isActive === undefined ? true : Boolean(body.isActive),
+    },
+  });
+
+  const permissions = getDefaultPermissions(user.role);
+  return reply.code(201).send({
+    ...toSafeUser(user),
+    permissions: toClientPermissions(permissions),
+  });
+});
+
+server.patch('/admin/users/:userId', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'admin.users.manage');
+  if (!currentUser) return;
+
+  const { userId } = request.params as { userId: string };
+  const body = request.body as {
+    email?: string;
+    fullName?: string;
+    password?: string;
+    role?: UserRole;
+    isActive?: boolean;
+  };
+
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target) {
+    return reply.code(404).send({ message: 'Felhasználó nem található.' });
+  }
+
+  if (body.role && !VALID_ROLES.includes(body.role)) {
+    return reply.code(400).send({ message: 'Érvénytelen szerepkör.' });
+  }
+  if (body.role && body.role !== target.role && target.id === currentUser.id) {
+    return reply.code(400).send({ message: 'Saját admin szerepkör nem vonható vissza.' });
+  }
+  if (body.isActive === false && target.id === currentUser.id) {
+    return reply.code(400).send({ message: 'Saját fiók nem tiltható le.' });
+  }
+  if (body.isActive === false && target.role === 'admin' && currentUser.role === 'beta_tester') {
+    return reply.code(403).send({ message: 'Béta tesztelő nem deaktiválhat admin felhasználót.' });
+  }
+
+  const email = body.email === undefined ? undefined : String(body.email).trim().toLowerCase();
+  if (email) {
+    const duplicate = await prisma.user.findUnique({ where: { email } });
+    if (duplicate && duplicate.id !== userId) {
+      return reply.code(409).send({ message: 'Ez az e-mail már foglalt.' });
+    }
+  }
+
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      email: email === undefined ? undefined : email,
+      fullName: body.fullName === undefined ? undefined : String(body.fullName).trim(),
+      role: body.role === undefined ? undefined : body.role,
+      isActive: body.isActive === undefined ? undefined : Boolean(body.isActive),
+      passwordHash: body.password ? await hashPassword(String(body.password)) : undefined,
+    },
+  });
+
+  const overrides = await prisma.userPermissionOverride.findMany({ where: { userId: user.id } });
+  const permissions = buildPermissionMap(user.role, overrides);
+  return {
+    ...toSafeUser(user),
+    permissions: toClientPermissions(permissions),
+  };
+});
+
+server.get('/admin/permissions/:userId', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'admin.permissions.manage');
+  if (!currentUser) return;
+
+  const { userId } = request.params as { userId: string };
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    return reply.code(404).send({ message: 'Felhasználó nem található.' });
+  }
+  const overrides = await prisma.userPermissionOverride.findMany({ where: { userId } });
+  const permissions = buildPermissionMap(user.role, overrides);
+  return {
+    user: toSafeUser(user),
+    permissions: toClientPermissions(permissions),
+  };
+});
+
+server.put('/admin/permissions/:userId', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'admin.permissions.manage');
+  if (!currentUser) return;
+
+  const { userId } = request.params as { userId: string };
+  const body = request.body as { permissions?: Array<{ key?: string; isAllowed?: boolean }> };
+  const permissions = Array.isArray(body.permissions) ? body.permissions : [];
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    return reply.code(404).send({ message: 'Felhasználó nem található.' });
+  }
+  if (currentUser.id === userId && user.role === 'admin') {
+    return reply.code(400).send({ message: 'Saját admin jogosultságok nem módosíthatók.' });
+  }
+
+  const normalized = permissions
+    .map((entry) => ({
+      key: String(entry.key || ''),
+      isAllowed: Boolean(entry.isAllowed),
+    }))
+    .filter((entry) => ALL_PERMISSION_KEYS.includes(entry.key as PermissionKey));
+
+  // Build old permission map for audit diff
+  const oldOverrides = await prisma.userPermissionOverride.findMany({ where: { userId } });
+  const oldPermissionMap = buildPermissionMap(user.role, oldOverrides);
+
+  // Build new permission map from incoming data
+  const newPermissionMap = buildPermissionMap(user.role, normalized);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.userPermissionOverride.deleteMany({ where: { userId } });
+    for (const entry of normalized) {
+      await tx.userPermissionOverride.create({
+        data: {
+          id: randomUUID(),
+          userId,
+          key: entry.key,
+          isAllowed: entry.isAllowed,
+        },
+      });
+    }
+
+    // Audit log: record each permission that changed
+    for (const key of ALL_PERMISSION_KEYS) {
+      if (oldPermissionMap[key] !== newPermissionMap[key]) {
+        await tx.permissionAuditLog.create({
+          data: {
+            id: randomUUID(),
+            targetUserId: userId,
+            changedByUserId: currentUser.id,
+            key,
+            oldValue: oldPermissionMap[key],
+            newValue: newPermissionMap[key],
+          },
+        });
+      }
+    }
+  });
+
+  const applied = await prisma.userPermissionOverride.findMany({ where: { userId } });
+  const permissionMap = buildPermissionMap(user.role, applied);
+  return {
+    user: toSafeUser(user),
+    permissions: toClientPermissions(permissionMap),
+  };
+});
+
+server.get('/admin/audit-log/:userId', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'admin.permissions.manage');
+  if (!currentUser) return;
+
+  const { userId } = request.params as { userId: string };
+  const entries = await prisma.permissionAuditLog.findMany({
+    where: { targetUserId: userId },
+    include: { changedByUser: { select: { fullName: true } } },
+    orderBy: { changedAt: 'desc' },
+    take: 500,
+  });
+
+  return entries.map((e) => ({
+    id: e.id,
+    key: e.key,
+    oldValue: e.oldValue,
+    newValue: e.newValue,
+    changedAt: e.changedAt.toISOString(),
+    changedByName: e.changedByUser.fullName,
+  }));
+});
+
+server.get('/admin/activity-log/:userId', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'admin.users.manage');
+  if (!currentUser) return;
+
+  const { userId } = request.params as { userId: string };
+  const entries = await prisma.userActivityLog.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+  });
+
+  return entries.map((e) => ({
+    id: e.id,
+    action: e.action,
+    page: e.page,
+    entityType: e.entityType,
+    entityId: e.entityId,
+    details: e.details,
+    createdAt: e.createdAt.toISOString(),
+    ipAddress: e.ipAddress,
+  }));
 });
 
 // Bootstrap endpoint for frontend startup
@@ -180,6 +773,9 @@ server.get('/patients/:patientId', async (request, reply) => {
 });
 
 server.post('/patients', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.create');
+  if (!user) return;
+
   const body = request.body as JsonRecord;
   if (!body.lastName || !body.firstName || !body.sex || !body.birthDate) {
     return reply.code(400).send({ message: 'Missing required fields' });
@@ -207,13 +803,23 @@ server.post('/patients', async (request, reply) => {
       createdAt: body.createdAt ? toDate(String(body.createdAt)) : new Date(),
       updatedAt: body.updatedAt ? toDate(String(body.updatedAt)) : new Date(),
       isArchived: Boolean(body.isArchived),
+      createdByUserId: user.id,
     },
+  });
+
+  await logActivity(user.id, 'patient.create', {
+    entityType: 'Patient',
+    entityId: patient.patientId,
+    details: { patientName: `${patient.lastName} ${patient.firstName}` },
   });
 
   return reply.code(201).send(patient);
 });
 
 server.patch('/patients/:patientId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.update');
+  if (!user) return;
+
   const { patientId } = request.params as { patientId: string };
   const body = request.body as JsonRecord;
 
@@ -249,12 +855,39 @@ server.patch('/patients/:patientId', async (request, reply) => {
 });
 
 server.delete('/patients/:patientId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.delete');
+  if (!user) return;
+
   const { patientId } = request.params as { patientId: string };
   try {
-    return await prisma.patient.update({
+    const patient = await prisma.patient.update({
       where: { patientId },
       data: { isArchived: true, updatedAt: new Date() },
     });
+
+    await logActivity(user.id, 'patient.delete', {
+      entityType: 'Patient',
+      entityId: patientId,
+      details: { patientName: `${patient.lastName} ${patient.firstName}` },
+    });
+
+    return patient;
+  } catch {
+    return reply.code(404).send({ message: 'Patient not found' });
+  }
+});
+
+server.patch('/patients/:patientId/restore', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.delete');
+  if (!user) return;
+
+  const { patientId } = request.params as { patientId: string };
+  try {
+    const patient = await prisma.patient.update({
+      where: { patientId },
+      data: { isArchived: false, updatedAt: new Date() },
+    });
+    return patient;
   } catch {
     return reply.code(404).send({ message: 'Patient not found' });
   }
@@ -266,6 +899,9 @@ server.get('/catalog', async () => {
 });
 
 server.post('/catalog', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'catalog.create');
+  if (!user) return;
+
   const body = request.body as JsonRecord;
   const item = await prisma.catalogItem.upsert({
     where: { catalogItemId: String(body.catalogItemId || randomUUID()) },
@@ -303,6 +939,9 @@ server.post('/catalog', async (request, reply) => {
 });
 
 server.patch('/catalog/:catalogItemId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'catalog.update');
+  if (!user) return;
+
   const { catalogItemId } = request.params as { catalogItemId: string };
   const body = request.body as JsonRecord;
   try {
@@ -333,6 +972,9 @@ server.patch('/catalog/:catalogItemId', async (request, reply) => {
 });
 
 server.delete('/catalog/:catalogItemId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'catalog.delete');
+  if (!user) return;
+
   const { catalogItemId } = request.params as { catalogItemId: string };
   try {
     await prisma.catalogItem.delete({ where: { catalogItemId } });
@@ -342,7 +984,10 @@ server.delete('/catalog/:catalogItemId', async (request, reply) => {
   }
 });
 
-server.put('/catalog/reset', async (request) => {
+server.put('/catalog/reset', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'catalog.update');
+  if (!user) return;
+
   const body = request.body as { items?: JsonRecord[] };
   const items = Array.isArray(body.items) ? body.items : [];
   await prisma.$transaction([
@@ -377,6 +1022,9 @@ server.get('/quotes', async () => {
 });
 
 server.post('/quotes', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'quotes.create');
+  if (!user) return;
+
   const body = request.body as JsonRecord;
   const quoteId = String(body.quoteId || randomUUID());
   const createdAt = body.createdAt ? toDate(String(body.createdAt)) : new Date();
@@ -401,7 +1049,14 @@ server.post('/quotes', async (request, reply) => {
       lastStatusChangeAt,
       isDeleted: Boolean(body.isDeleted),
       data: toInputJson({ ...body, quoteId }),
+      createdByUserId: user.id,
     },
+  });
+
+  await logActivity(user.id, 'quote.create', {
+    entityType: 'Quote',
+    entityId: quoteId,
+    details: { patientId: String(body.patientId || '') },
   });
 
   return reply.code(201).send(row.data);
@@ -431,10 +1086,38 @@ server.patch('/quotes/:quoteId', async (request, reply) => {
 });
 
 server.delete('/quotes/:quoteId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'quotes.delete');
+  if (!user) return;
+
   const { quoteId } = request.params as { quoteId: string };
   try {
-    await prisma.quote.delete({ where: { quoteId } });
-    return { status: 'ok' };
+    const row = await prisma.quote.update({
+      where: { quoteId },
+      data: { isDeleted: true },
+    });
+
+    await logActivity(user.id, 'quote.delete', {
+      entityType: 'Quote',
+      entityId: quoteId,
+    });
+
+    return row.data;
+  } catch {
+    return reply.code(404).send({ message: 'Quote not found' });
+  }
+});
+
+server.patch('/quotes/:quoteId/restore', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'quotes.delete');
+  if (!user) return;
+
+  const { quoteId } = request.params as { quoteId: string };
+  try {
+    const row = await prisma.quote.update({
+      where: { quoteId },
+      data: { isDeleted: false },
+    });
+    return row.data;
   } catch {
     return reply.code(404).send({ message: 'Quote not found' });
   }
@@ -503,7 +1186,10 @@ server.get('/invoices', async () => {
   return rows.map((row) => row.data);
 });
 
-server.put('/invoices/:invoiceId', async (request) => {
+server.put('/invoices/:invoiceId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'invoices.issue');
+  if (!user) return;
+
   const { invoiceId } = request.params as { invoiceId: string };
   const body = request.body as JsonRecord;
   const createdAt = body.createdAt ? toDate(String(body.createdAt)) : new Date();
@@ -523,8 +1209,15 @@ server.put('/invoices/:invoiceId', async (request) => {
       status: String(body.status || 'draft'),
       createdAt,
       data: toInputJson({ ...body, id: invoiceId }),
+      createdByUserId: user.id,
     },
   });
+
+  await logActivity(user.id, 'invoice.create', {
+    entityType: 'Invoice',
+    entityId: invoiceId,
+  });
+
   return { status: 'ok' };
 });
 
@@ -725,6 +1418,8 @@ server.post('/data/import', async (request, reply) => {
     return reply.code(400).send({ message: 'Invalid import payload' });
   }
 
+  const importUserId = request.currentUser?.id || null;
+
   await prisma.$transaction(async (tx) => {
     await tx.odontogramTimeline.deleteMany({});
     await tx.odontogramDaily.deleteMany({});
@@ -759,6 +1454,7 @@ server.post('/data/import', async (request, reply) => {
           createdAt: rawPatient.createdAt ? toDate(String(rawPatient.createdAt)) : new Date(),
           updatedAt: rawPatient.updatedAt ? toDate(String(rawPatient.updatedAt)) : new Date(),
           isArchived: Boolean(rawPatient.isArchived),
+          createdByUserId: importUserId,
         },
       });
     }
@@ -795,6 +1491,7 @@ server.post('/data/import', async (request, reply) => {
             : new Date(),
           isDeleted: Boolean(rawQuote.isDeleted),
           data: toInputJson(rawQuote),
+          createdByUserId: importUserId,
         },
       });
     }
@@ -820,6 +1517,7 @@ server.post('/data/import', async (request, reply) => {
           status: String(rawInvoice.status || 'draft'),
           createdAt: rawInvoice.createdAt ? toDate(String(rawInvoice.createdAt)) : new Date(),
           data: toInputJson(rawInvoice),
+          createdByUserId: importUserId,
         },
       });
     }
@@ -955,7 +1653,7 @@ const normalizePaymentMethod = (value: string) => {
 const validateAndNormalizePayload = (input: JsonRecord) => {
   const errors: string[] = [];
   if (!input || typeof input !== 'object') {
-    return { errors: ['Hianyzo payload'] };
+    return { errors: ['Hiányzó payload'] };
   }
 
   const seller = (input.seller as JsonRecord) || {};
@@ -963,27 +1661,27 @@ const validateAndNormalizePayload = (input: JsonRecord) => {
   const invoice = (input.invoice as JsonRecord) || {};
   const items = Array.isArray(input.items) ? (input.items as JsonRecord[]) : [];
 
-  if (!seller.name) errors.push('Elado neve kotelezo');
-  if (!buyer.name) errors.push('Vevo neve kotelezo');
-  if (items.length === 0) errors.push('Legalabb egy tetel kotelezo');
+  if (!seller.name) errors.push('Eladó neve kötelező');
+  if (!buyer.name) errors.push('Vevő neve kötelező');
+  if (items.length === 0) errors.push('Legalább egy tétel kötelező');
 
   const normalizedItems = items.map((item, index) => {
     const qty = Number(item.qty);
     const unitPriceNet = Number(item.unitPriceNet ?? item.unitPrice ?? 0);
     const vatRate = Number(item.vatRate ?? 27);
 
-    if (!Number.isFinite(qty) || qty <= 0) errors.push(`Tetel ${index + 1}: qty > 0 kotelezo`);
+    if (!Number.isFinite(qty) || qty <= 0) errors.push(`Tétel ${index + 1}: qty > 0 kötelező`);
     if (!Number.isFinite(unitPriceNet) || unitPriceNet < 0)
-      errors.push(`Tetel ${index + 1}: unitPriceNet >= 0 kotelezo`);
+      errors.push(`Tétel ${index + 1}: unitPriceNet >= 0 kötelező`);
     if (!Number.isFinite(vatRate) || vatRate < 0)
-      errors.push(`Tetel ${index + 1}: vatRate >= 0 kotelezo`);
+      errors.push(`Tétel ${index + 1}: vatRate >= 0 kötelező`);
 
     const net = round(qty * unitPriceNet);
     const vat = round((net * vatRate) / 100);
     const gross = round(net + vat);
 
     return {
-      name: item.name || `Tetel ${index + 1}`,
+      name: item.name || `Tétel ${index + 1}`,
       unit: item.unit || 'db',
       qty,
       unitPriceNet,
@@ -1186,7 +1884,7 @@ server.post('/api/szamlazz/preview-invoice', async (request, reply) => {
   try {
     const { errors, payload } = validateAndNormalizePayload(request.body as JsonRecord);
     if (errors.length > 0 || !payload) {
-      return reply.code(400).send({ success: false, message: 'Ervenytelen adatok', errors });
+      return reply.code(400).send({ success: false, message: 'Érvénytelen adatok', errors });
     }
 
     const xml = buildInvoiceXml(payload as never);
@@ -1200,16 +1898,19 @@ server.post('/api/szamlazz/preview-invoice', async (request, reply) => {
     request.log.error(error);
     return reply.code(500).send({
       success: false,
-      message: 'Szerver hiba a preview-invoice feldolgozas kozben.',
+      message: 'Szerverhiba a preview-invoice feldolgozás közben.',
     });
   }
 });
 
 server.post('/api/szamlazz/create-invoice', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'invoices.issue');
+  if (!user) return;
+
   try {
     const { errors, payload } = validateAndNormalizePayload(request.body as JsonRecord);
     if (errors.length > 0 || !payload) {
-      return reply.code(400).send({ success: false, message: 'Ervenytelen adatok', errors });
+      return reply.code(400).send({ success: false, message: 'Érvénytelen adatok', errors });
     }
 
     const xml = buildInvoiceXml(payload as never);
@@ -1224,7 +1925,7 @@ server.post('/api/szamlazz/create-invoice', async (request, reply) => {
     }
 
     if (!AGENT_KEY) {
-      return reply.code(500).send({ success: false, message: 'Hianyzik a SZAMLAZZ_AGENT_KEY' });
+      return reply.code(500).send({ success: false, message: 'Hiányzik a SZAMLAZZ_AGENT_KEY' });
     }
 
     const form = new FormData();
@@ -1238,29 +1939,32 @@ server.post('/api/szamlazz/create-invoice', async (request, reply) => {
     return reply.code(502).send({
       mode: 'live',
       success: false,
-      message: 'A szamla letrehozas szerver oldalon sikertelen.',
+      message: 'A számla létrehozás szerver oldalon sikertelen.',
     });
   }
 });
 
 server.post('/api/szamlazz/storno-invoice', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'invoices.storno');
+  if (!user) return;
+
   try {
     const body = request.body as JsonRecord;
     const invoiceNumber = String(body.invoiceNumber || '');
     if (!invoiceNumber) {
-      return reply.code(400).send({ success: false, message: 'Hianyzik a szamlaszam (invoiceNumber)' });
+      return reply.code(400).send({ success: false, message: 'Hiányzik a számlaszám (invoiceNumber)' });
     }
 
     if (INVOICE_MODE !== 'live') {
       return {
         mode: 'preview',
         success: true,
-        message: 'Sztorno preview mod - nem kuldtuk el.',
+        message: 'Sztornó preview mód - nem küldtük el.',
       };
     }
 
     if (!AGENT_KEY) {
-      return reply.code(500).send({ success: false, message: 'Hianyzik a SZAMLAZZ_AGENT_KEY' });
+      return reply.code(500).send({ success: false, message: 'Hiányzik a SZAMLAZZ_AGENT_KEY' });
     }
 
     const today = new Date().toISOString().slice(0, 10);
@@ -1293,13 +1997,21 @@ server.post('/api/szamlazz/storno-invoice', async (request, reply) => {
 
     const response = await fetch(SZAMLAZZ_ENDPOINT, { method: 'POST', body: form });
     const parsed = await parseSzamlazzResponse(response);
+
+    if (parsed.success) {
+      await logActivity(user.id, 'invoice.storno', {
+        entityType: 'Invoice',
+        details: { invoiceNumber },
+      });
+    }
+
     return reply.code(response.ok ? 200 : 502).send({ mode: 'live', ...parsed });
   } catch (error) {
     request.log.error(error);
     return reply.code(502).send({
       mode: 'live',
       success: false,
-      message: 'A sztorno szamla letrehozas szerver oldalon sikertelen.',
+      message: 'A sztornó számla létrehozás szerver oldalon sikertelen.',
     });
   }
 });
@@ -1400,10 +2112,31 @@ server.post('/api/neak/jogviszony', async (request, reply) => {
 });
 
 const port = Number(process.env.PORT || 4000);
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@dentalquote.local').trim().toLowerCase();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin123!';
+const ADMIN_FULL_NAME = process.env.ADMIN_FULL_NAME || 'System Admin';
+
+const ensureBootstrapAdmin = async () => {
+  const existingUsers = await prisma.user.count();
+  if (existingUsers > 0) return;
+
+  await prisma.user.create({
+    data: {
+      id: randomUUID(),
+      email: ADMIN_EMAIL,
+      fullName: ADMIN_FULL_NAME,
+      passwordHash: await hashPassword(ADMIN_PASSWORD),
+      role: 'admin',
+      isActive: true,
+    },
+  });
+  server.log.info(`Bootstrap admin created: ${ADMIN_EMAIL}`);
+};
 
 const start = async () => {
   try {
     await prisma.$connect();
+    await ensureBootstrapAdmin();
     await server.listen({ port, host: '0.0.0.0' });
   } catch (error) {
     server.log.error(error);

@@ -45,8 +45,7 @@ export function useQuotes() {
 
   const inProgressQuotes = useMemo(
     () => activeQuotes.filter((q) =>
-      q.quoteStatus === 'closed_pending' ||
-      q.quoteStatus === 'accepted_in_progress' ||
+      q.quoteStatus === 'closed' ||
       q.quoteStatus === 'started'
     ),
     [activeQuotes]
@@ -65,7 +64,7 @@ export function useQuotes() {
   // Get doctor name by ID
   const getDoctorName = useCallback((doctorId: string): string => {
     const doctor = settings.doctors.find((d) => d.id === doctorId);
-    return doctor?.name || 'Ismeretlen orvos';
+    return doctor?.name || '';
   }, [settings.doctors]);
 
   // Create a new quote
@@ -261,7 +260,7 @@ export function useQuotes() {
     (quoteId: string): Quote | undefined => {
       const existing = getQuote(quoteId);
       if (!existing || existing.quoteStatus !== 'draft') return undefined;
-      return changeStatus(quoteId, 'closed_pending', 'closed');
+      return changeStatus(quoteId, 'closed', 'closed');
     },
     [getQuote, changeStatus]
   );
@@ -269,7 +268,7 @@ export function useQuotes() {
   const reopenQuote = useCallback(
     (quoteId: string): Quote | undefined => {
       const existing = getQuote(quoteId);
-      if (!existing || existing.quoteStatus !== 'closed_pending') return undefined;
+      if (!existing || existing.quoteStatus !== 'closed') return undefined;
       return changeStatus(quoteId, 'draft', 'reopened');
     },
     [getQuote, changeStatus]
@@ -278,8 +277,8 @@ export function useQuotes() {
   const acceptQuote = useCallback(
     (quoteId: string): Quote | undefined => {
       const existing = getQuote(quoteId);
-      if (!existing || existing.quoteStatus !== 'closed_pending') return undefined;
-      return changeStatus(quoteId, 'accepted_in_progress', 'accepted');
+      if (!existing || existing.quoteStatus !== 'closed') return undefined;
+      return changeStatus(quoteId, 'started', 'accepted');
     },
     [getQuote, changeStatus]
   );
@@ -287,7 +286,7 @@ export function useQuotes() {
   const rejectQuote = useCallback(
     (quoteId: string): Quote | undefined => {
       const existing = getQuote(quoteId);
-      if (!existing || existing.quoteStatus !== 'closed_pending') return undefined;
+      if (!existing || existing.quoteStatus !== 'closed') return undefined;
       return changeStatus(quoteId, 'rejected', 'rejected');
     },
     [getQuote, changeStatus]
@@ -296,8 +295,8 @@ export function useQuotes() {
   const revokeAcceptance = useCallback(
     (quoteId: string): Quote | undefined => {
       const existing = getQuote(quoteId);
-      if (!existing || existing.quoteStatus !== 'accepted_in_progress') return undefined;
-      return changeStatus(quoteId, 'closed_pending', 'acceptance_revoked');
+      if (!existing || existing.quoteStatus !== 'started') return undefined;
+      return changeStatus(quoteId, 'closed', 'acceptance_revoked');
     },
     [getQuote, changeStatus]
   );
@@ -306,25 +305,7 @@ export function useQuotes() {
     (quoteId: string): Quote | undefined => {
       const existing = getQuote(quoteId);
       if (!existing || existing.quoteStatus !== 'rejected') return undefined;
-      return changeStatus(quoteId, 'closed_pending', 'rejection_revoked');
-    },
-    [getQuote, changeStatus]
-  );
-
-  const startTreatment = useCallback(
-    (quoteId: string): Quote | undefined => {
-      const existing = getQuote(quoteId);
-      if (!existing || existing.quoteStatus !== 'accepted_in_progress') return undefined;
-      return changeStatus(quoteId, 'started', 'started');
-    },
-    [getQuote, changeStatus]
-  );
-
-  const revokeStart = useCallback(
-    (quoteId: string): Quote | undefined => {
-      const existing = getQuote(quoteId);
-      if (!existing || existing.quoteStatus !== 'started') return undefined;
-      return changeStatus(quoteId, 'accepted_in_progress', 'start_revoked');
+      return changeStatus(quoteId, 'closed', 'rejection_revoked');
     },
     [getQuote, changeStatus]
   );
@@ -353,9 +334,8 @@ export function useQuotes() {
       const existing = getQuote(quoteId);
       if (!existing) return false;
 
-      // Cannot delete if accepted, started, or completed
+      // Cannot delete if started or completed
       if (
-        existing.quoteStatus === 'accepted_in_progress' ||
         existing.quoteStatus === 'started' ||
         existing.quoteStatus === 'completed'
       ) {
@@ -392,7 +372,6 @@ export function useQuotes() {
     const existing = getQuote(quoteId);
     if (!existing) return false;
     return (
-      existing.quoteStatus !== 'accepted_in_progress' &&
       existing.quoteStatus !== 'started' &&
       existing.quoteStatus !== 'completed'
     );
@@ -402,7 +381,7 @@ export function useQuotes() {
   const canReopenQuote = useCallback((quoteId: string): boolean => {
     const existing = getQuote(quoteId);
     if (!existing) return false;
-    return existing.quoteStatus === 'closed_pending';
+    return existing.quoteStatus === 'closed';
   }, [getQuote]);
 
   const duplicateQuote = useCallback(
@@ -462,15 +441,11 @@ export function useQuotes() {
     return {
       total: allQuotes.length,
       deleted: settings.quote.deletedCount,
-      closed: active.filter((q) =>
-        q.quoteStatus !== 'draft' && q.events.some((e) => e.type === 'closed')
-      ).length,
-      acceptedInProgress: active.filter((q) => q.quoteStatus === 'accepted_in_progress').length,
+      closed: active.filter((q) => q.quoteStatus === 'closed').length,
       started: active.filter((q) => q.quoteStatus === 'started').length,
       completed: active.filter((q) => q.quoteStatus === 'completed').length,
       rejected: active.filter((q) => q.quoteStatus === 'rejected').length,
       draft: active.filter((q) => q.quoteStatus === 'draft').length,
-      closedPending: active.filter((q) => q.quoteStatus === 'closed_pending').length,
     };
   }, [quotes, settings.quote.deletedCount]);
 
@@ -501,8 +476,6 @@ export function useQuotes() {
     rejectQuote,
     revokeAcceptance,
     revokeRejection,
-    startTreatment,
-    revokeStart,
     completeTreatment,
     reopenTreatment,
     // Other

@@ -24,11 +24,22 @@ const normalizeNumbering = (value: string): OdontogramNumberingSystem | null => 
 };
 
 export const getOdontogramLanguage = (): OdontogramLanguage => {
+  if (isLanguage(currentLanguage) && currentLanguage !== DEFAULT_LANGUAGE) {
+    return currentLanguage;
+  }
+  const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('dqc_app_language') : null;
+  if (stored && isLanguage(stored)) {
+    currentLanguage = stored;
+    return stored;
+  }
   return isLanguage(currentLanguage) ? currentLanguage : DEFAULT_LANGUAGE;
 };
 
 export const setOdontogramLanguage = (language: OdontogramLanguage): void => {
   currentLanguage = language;
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('dqc_app_language', language);
+  }
 };
 
 export const getOdontogramNumbering = (): OdontogramNumberingSystem => {

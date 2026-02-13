@@ -1,12 +1,23 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Card, CardContent } from '../components/common';
 import { formatCurrency, formatDate } from '../utils';
+import { usePatients } from '../hooks';
+import { PatientFormModal } from './PatientsPage';
+import { PatientFormData } from '../types';
+import { checkJogviszony, saveCheck } from '../modules/neak';
 
 export function DashboardPage() {
   const { t } = useSettings();
+  const { hasPermission } = useAuth();
   const { patients, quotes } = useApp();
+  const { createPatient } = usePatients();
+  const navigate = useNavigate();
+  const [isNewPatientOpen, setIsNewPatientOpen] = useState(false);
 
   const activePatients = patients.filter((p) => !p.isArchived);
   const activeQuotes = quotes.filter((q) => !q.isDeleted);
@@ -31,7 +42,7 @@ export function DashboardPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">{t.nav.dashboard}</h1>
-        <p className="text-gray-500 mt-1">Fogászati árajánlat-készítő rendszer</p>
+        <p className="text-gray-500 mt-1">{t.dashboard.subtitle}</p>
       </div>
 
       {/* Stats Cards */}
@@ -107,7 +118,7 @@ export function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Piszkozat érték</p>
+                <p className="text-sm text-gray-500">{t.dashboard.draftValue}</p>
                 <p className="text-2xl font-bold text-gray-900">{formatCurrency(draftTotal)}</p>
               </div>
             </div>
@@ -119,46 +130,51 @@ export function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardContent>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Gyors műveletek</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.quickActions}</h2>
             <div className="space-y-3">
-              <Link
-                to="/patients"
-                className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-dental-50 transition-colors"
-              >
-                <svg
-                  className="w-5 h-5 text-dental-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+              {hasPermission('patients.create') && (
+                <button
+                  type="button"
+                  onClick={() => setIsNewPatientOpen(true)}
+                  className="flex w-full items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-dental-50 transition-colors"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
-                  />
-                </svg>
-                <span className="text-gray-700">{t.patients.newPatient}</span>
-              </Link>
-              <Link
-                to="/catalog"
-                className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-dental-50 transition-colors"
-              >
-                <svg
-                  className="w-5 h-5 text-dental-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+                  <svg
+                    className="w-5 h-5 text-dental-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
+                    />
+                  </svg>
+                  <span className="text-gray-700">{t.patients.newPatient}</span>
+                </button>
+              )}
+              {hasPermission('catalog.view') && (
+                <Link
+                  to="/catalog"
+                  className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-dental-50 transition-colors"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                  />
-                </svg>
-                <span className="text-gray-700">{t.catalog.title}</span>
-              </Link>
+                  <svg
+                    className="w-5 h-5 text-dental-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                    />
+                  </svg>
+                  <span className="text-gray-700">{t.catalog.title}</span>
+                </Link>
+              )}
               <Link
                 to="/data"
                 className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-dental-50 transition-colors"
@@ -186,9 +202,9 @@ export function DashboardPage() {
         <Card>
           <CardContent>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Legutóbbi páciensek</h2>
+              <h2 className="text-lg font-semibold text-gray-900">{t.dashboard.recentPatients}</h2>
               <Link to="/patients" className="text-sm text-dental-600 hover:text-dental-700">
-                Összes megtekintése
+                {t.dashboard.viewAll}
               </Link>
             </div>
             {recentPatients.length > 0 ? (
@@ -232,13 +248,13 @@ export function DashboardPage() {
       {recentQuotes.length > 0 && (
         <Card>
           <CardContent>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Legutóbbi árajánlatok</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.recentQuotes}</h2>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="text-left text-sm text-gray-500 border-b">
                     <th className="pb-3 font-medium">{t.quotes.quoteId}</th>
-                    <th className="pb-3 font-medium">Páciens</th>
+                    <th className="pb-3 font-medium">{t.quotes.patient}</th>
                     <th className="pb-3 font-medium">{t.quotes.status}</th>
                     <th className="pb-3 font-medium">{t.quotes.createdAt}</th>
                     <th className="pb-3 font-medium text-right">{t.quotes.total}</th>
@@ -264,7 +280,7 @@ export function DashboardPage() {
                         <td className="py-3">
                           {patient
                             ? `${patient.lastName} ${patient.firstName}`
-                            : 'Ismeretlen páciens'}
+                            : t.dashboard.unknownPatient}
                         </td>
                         <td className="py-3">
                           <span
@@ -279,8 +295,7 @@ export function DashboardPage() {
                             }`}
                           >
                             {quote.quoteStatus === 'draft' ? t.quotes.statusDraft :
-                             quote.quoteStatus === 'closed_pending' ? t.quotes.statusClosedPending :
-                             quote.quoteStatus === 'accepted_in_progress' ? t.quotes.statusAcceptedInProgress :
+                             quote.quoteStatus === 'closed' ? t.quotes.statusClosed :
                              quote.quoteStatus === 'rejected' ? t.quotes.statusRejected :
                              quote.quoteStatus === 'started' ? t.quotes.statusStarted :
                              t.quotes.statusCompleted}
@@ -297,6 +312,27 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       )}
+
+      <PatientFormModal
+        isOpen={isNewPatientOpen}
+        onClose={() => setIsNewPatientOpen(false)}
+        onSubmit={(data: PatientFormData) => {
+          const newPatient = createPatient(data);
+          setIsNewPatientOpen(false);
+          // Fire-and-forget NEAK auto-check
+          const tajDigits = data.insuranceNum?.replace(/-/g, '') || '';
+          if (data.patientType?.toLowerCase().includes('neak') && tajDigits.length === 9 && newPatient) {
+            const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            checkJogviszony(tajDigits, date).then(result => {
+              saveCheck({ id: nanoid(), patientId: newPatient.patientId, taj: tajDigits, checkedAt: new Date().toISOString(), date, result });
+            }).catch(() => {});
+          }
+          if (newPatient) {
+            navigate(`/patients/${newPatient.patientId}`);
+          }
+        }}
+        title={t.patients.newPatient}
+      />
     </div>
   );
 }

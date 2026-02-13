@@ -1,7 +1,13 @@
+import { clearAuthSession, getAuthToken } from './auth';
+
 export function requestJsonSync<T>(method: string, url: string, body?: unknown): T {
   const xhr = new XMLHttpRequest();
   xhr.open(method, url, false);
   xhr.setRequestHeader('Content-Type', 'application/json');
+  const token = getAuthToken();
+  if (token) {
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+  }
 
   try {
     xhr.send(body === undefined ? null : JSON.stringify(body));
@@ -10,14 +16,19 @@ export function requestJsonSync<T>(method: string, url: string, body?: unknown):
   }
 
   if (xhr.status < 200 || xhr.status >= 300) {
+    if (xhr.status === 401) {
+      clearAuthSession();
+    }
     const fallback = `HTTP ${xhr.status}`;
     if (xhr.responseText) {
+      let errorMessage = fallback;
       try {
         const parsed = JSON.parse(xhr.responseText) as { message?: string };
-        throw new Error(parsed.message || fallback);
+        if (parsed.message) errorMessage = parsed.message;
       } catch {
-        throw new Error(fallback);
+        // response is not JSON, use fallback
       }
+      throw new Error(errorMessage);
     }
     throw new Error(fallback);
   }

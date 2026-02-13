@@ -35,6 +35,7 @@ import { generateQuotePdf } from '../components/pdf/QuotePdfGenerator';
 import { OdontogramHost } from '../modules/odontogram/OdontogramHost';
 import { loadCurrent } from '../modules/odontogram/odontogramStorage';
 import type { OdontogramState } from '../modules/odontogram/types';
+import { useAuth } from '../context/AuthContext';
 import { previewInvoice, createInvoice } from '../modules/invoicing/api';
 import { saveInvoice, getInvoicesByQuote } from '../modules/invoicing/storage';
 import type { InvoiceRecord } from '../types/invoice';
@@ -64,12 +65,11 @@ export function QuoteEditorPage() {
     rejectQuote,
     revokeAcceptance,
     revokeRejection,
-    startTreatment,
-    revokeStart,
     completeTreatment,
     reopenTreatment,
   } = useQuotes();
   const { activeItems, itemsByCategory } = useCatalog();
+  const { hasPermission } = useAuth();
 
   const [isItemSelectorOpen, setIsItemSelectorOpen] = useState(false);
   const [itemSearchQuery, setItemSearchQuery] = useState('');
@@ -187,12 +187,12 @@ export function QuoteEditorPage() {
   }, [quoteInvoices]);
   const remainingAmount = Math.max(0, totals.total - invoicedAmount);
 
-  const canInvoice = (quote?.quoteStatus === 'accepted_in_progress' || quote?.quoteStatus === 'started') && remainingAmount > 0;
+  const canInvoice = quote?.quoteStatus === 'started' && remainingAmount > 0;
 
   const invoiceDisabledReason = (() => {
     if (!quote) return '';
     if (quote.quoteStatus === 'completed') return t.invoices.quoteSettled;
-    if (quote.quoteStatus !== 'accepted_in_progress' && quote.quoteStatus !== 'started') return t.invoices.quoteNotAccepted;
+    if (quote.quoteStatus !== 'started') return t.invoices.quoteNotAccepted;
     if (remainingAmount <= 0) return t.invoices.quoteFullyInvoiced;
     return '';
   })();
@@ -219,9 +219,9 @@ export function QuoteEditorPage() {
   if (!patient || !quote) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-gray-900">Árajánlat nem található</h2>
+        <h2 className="text-xl font-semibold text-gray-900">{t.quotes.notFound}</h2>
         <Link to="/patients" className="text-dental-600 hover:text-dental-700 mt-4 inline-block">
-          Vissza a páciensekhez
+          {t.quotes.backToPatients}
         </Link>
       </div>
     );
@@ -506,7 +506,7 @@ export function QuoteEditorPage() {
       const newInvoicedAmount = updatedInvoices
         .filter((inv) => inv.status !== 'storno')
         .reduce((sum, inv) => sum + (inv.totalGross || 0), 0);
-      if (newInvoicedAmount >= totals.total && (quote.quoteStatus === 'accepted_in_progress' || quote.quoteStatus === 'started')) {
+      if (newInvoicedAmount >= totals.total && quote.quoteStatus === 'started') {
         completeTreatment(quote.quoteId);
       }
     } catch (error) {
@@ -557,8 +557,7 @@ export function QuoteEditorPage() {
               }
             >
               {quote.quoteStatus === 'draft' ? t.quotes.statusDraft :
-               quote.quoteStatus === 'closed_pending' ? t.quotes.statusClosedPending :
-               quote.quoteStatus === 'accepted_in_progress' ? t.quotes.statusAcceptedInProgress :
+               quote.quoteStatus === 'closed' ? t.quotes.statusClosed :
                quote.quoteStatus === 'rejected' ? t.quotes.statusRejected :
                quote.quoteStatus === 'started' ? t.quotes.statusStarted :
                t.quotes.statusCompleted}
@@ -582,7 +581,7 @@ export function QuoteEditorPage() {
             </>
           )}
 
-          {quote.quoteStatus === 'closed_pending' && (
+          {quote.quoteStatus === 'closed' && (
             <>
               <Button
                 variant="secondary"
@@ -608,25 +607,6 @@ export function QuoteEditorPage() {
             </>
           )}
 
-          {quote.quoteStatus === 'accepted_in_progress' && (
-            <>
-              <Button
-                variant="success"
-                onClick={() => startTreatment(quote.quoteId)}
-                className="border-2 border-green-500"
-              >
-                {t.quotes.startTreatment}
-              </Button>
-              <Button
-                variant="danger"
-                onClick={() => revokeAcceptance(quote.quoteId)}
-                className="border-2 border-red-500"
-              >
-                {t.quotes.revokeAcceptance}
-              </Button>
-            </>
-          )}
-
           {quote.quoteStatus === 'rejected' && (
             <Button
               variant="danger"
@@ -648,10 +628,10 @@ export function QuoteEditorPage() {
               </Button>
               <Button
                 variant="danger"
-                onClick={() => revokeStart(quote.quoteId)}
+                onClick={() => revokeAcceptance(quote.quoteId)}
                 className="border-2 border-red-500"
               >
-                {t.quotes.revokeStart}
+                {t.quotes.revokeAcceptance}
               </Button>
             </>
           )}
@@ -666,7 +646,7 @@ export function QuoteEditorPage() {
             </Button>
           )}
 
-          {/* Delete button - only for draft, closed_pending, rejected */}
+          {/* Delete button - only for draft, closed, rejected */}
           {canDeleteQuote(quote.quoteId) && (
             <Button
               variant="danger"
@@ -677,7 +657,7 @@ export function QuoteEditorPage() {
           )}
 
           {/* Invoicing button */}
-          {canInvoice ? (
+          {hasPermission('invoices.issue') && (canInvoice ? (
             <Button onClick={handleOpenInvoiceModal}>
               <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -695,7 +675,7 @@ export function QuoteEditorPage() {
               </svg>
               {t.invoices.invoicing}
             </Button>
-          ) : null}
+          ) : null)}
 
           {/* PDF Download button */}
           <Button onClick={handleDownloadPdf}>
@@ -737,7 +717,7 @@ export function QuoteEditorPage() {
                     onChange={(e) => handleDoctorChange(e.target.value)}
                     options={settings.doctors.map((doc) => ({
                       value: doc.id,
-                      label: doc.name || 'Névtelen orvos',
+                      label: doc.name || t.patients.unknownDoctor,
                     }))}
                     className="w-56"
                     disabled={quote.quoteStatus !== 'draft'}
@@ -747,40 +727,35 @@ export function QuoteEditorPage() {
                 {/* Expected Treatments and Discount Preset */}
                 <div className="flex items-center gap-3">
                   <label className="text-sm font-medium text-gray-700">
-                    Várható kezelések száma:
+                    {t.quotes.expectedTreatments}
                   </label>
                   <Select
                     value={String(quote.expectedTreatments || 1)}
                     onChange={(e) => handleExpectedTreatmentsChange(parseInt(e.target.value))}
                     options={[
-                      { value: '1', label: '1 kezelés' },
-                      { value: '2', label: '2 kezelés' },
-                      { value: '3', label: '3 kezelés' },
-                      { value: '4', label: '4 kezelés' },
-                      { value: '5', label: '5 kezelés' },
-                      { value: '6', label: '6 kezelés' },
-                      { value: '7', label: '7 kezelés' },
-                      { value: '8', label: '8 kezelés' },
-                      { value: '9', label: '9 kezelés' },
+                      ...Array.from({ length: 9 }, (_, i) => ({
+                        value: String(i + 1),
+                        label: `${i + 1} ${t.quotes.treatmentSession}`,
+                      })),
                     ]}
                     className="w-40"
                     disabled={quote.quoteStatus !== 'draft'}
                   />
                   <div className="flex items-center gap-3">
                     <label className="text-sm font-medium text-gray-700">
-                      Általános Kedvezmény:
+                      {t.quotes.generalDiscount}
                     </label>
                     <Select
                       value={lineDiscountPreset}
                       onChange={(e) => handleLineDiscountPresetChange(e.target.value as LineDiscountPreset)}
                       options={[
-                        { value: 'none', label: 'Nincs' },
+                        { value: 'none', label: t.common.none },
                         { value: '10', label: '10%' },
                         { value: '20', label: '20%' },
                         { value: '30', label: '30%' },
                         { value: '40', label: '40%' },
                         { value: '50', label: '50%' },
-                        { value: 'custom', label: 'Egyedi' },
+                        { value: 'custom', label: t.common.custom },
                       ]}
                       className="w-28"
                       disabled={quote.quoteStatus !== 'draft'}
@@ -818,7 +793,7 @@ export function QuoteEditorPage() {
                 <EmptyState
                   icon={<EmptyCatalogIcon />}
                   title={t.quotes.noItems}
-                  description="Adjon hozzá tételeket az árlistából"
+                  description={t.quotes.addItemsHint}
                   actionLabel={t.quotes.addItem}
                   onAction={() => setIsItemSelectorOpen(true)}
                 />
@@ -908,7 +883,7 @@ export function QuoteEditorPage() {
           {/* Patient Info */}
           <Card>
             <CardHeader>
-              <h3 className="font-semibold">Páciens</h3>
+              <h3 className="font-semibold">{t.quotes.patientCard}</h3>
             </CardHeader>
             <CardContent>
               <p className="font-medium">{formatPatientName(patient.lastName, patient.firstName, patient.title)}</p>
@@ -920,7 +895,7 @@ export function QuoteEditorPage() {
           {/* Totals */}
           <Card>
             <CardHeader>
-              <h3 className="font-semibold">Összesítés</h3>
+              <h3 className="font-semibold">{t.quotes.summary}</h3>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between">
@@ -930,7 +905,7 @@ export function QuoteEditorPage() {
 
               {totals.lineDiscounts > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Sor kedvezmények</span>
+                  <span className="text-gray-500">{t.quotes.lineDiscounts}</span>
                   <span className="text-red-600">-{formatCurrency(totals.lineDiscounts)}</span>
                 </div>
               )}
@@ -975,7 +950,7 @@ export function QuoteEditorPage() {
 
               {totals.globalDiscount > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Globális kedvezmény</span>
+                  <span className="text-gray-500">{t.quotes.globalDiscount}</span>
                   <span className="text-red-600">-{formatCurrency(totals.globalDiscount)}</span>
                 </div>
               )}
@@ -1421,8 +1396,6 @@ export function QuoteEditorPage() {
                          event.type === 'acceptance_revoked' ? t.quotes.eventAcceptanceRevoked :
                          event.type === 'rejected' ? t.quotes.eventRejected :
                          event.type === 'rejection_revoked' ? t.quotes.eventRejectionRevoked :
-                         event.type === 'started' ? t.quotes.eventStarted :
-                         event.type === 'start_revoked' ? t.quotes.eventStartRevoked :
                          event.type === 'completed' ? t.quotes.eventCompleted :
                          event.type === 'completion_revoked' ? t.quotes.eventCompletionRevoked :
                          event.type === 'deleted' ? t.quotes.eventDeleted :
@@ -1576,12 +1549,13 @@ function QuoteItemRow({
   onDragOver,
   onDragEnd,
 }: QuoteItemRowProps) {
+  const { t } = useSettings();
   const lineTotal = calculateLineTotal(item);
   const discountAmount = calculateLineDiscountAmount(item);
 
   const treatmentSessionOptions = Array.from({ length: expectedTreatments }, (_, i) => ({
     value: String(i + 1),
-    label: `${i + 1}. kezelés`,
+    label: `${i + 1}. ${t.quotes.treatmentSession}`,
   }));
 
   return (
@@ -1611,12 +1585,12 @@ function QuoteItemRow({
               <div className="flex flex-wrap items-center gap-3">
 
                 <div className="flex items-center gap-6 mr-14">
-                  <span className="text-gray-500">Egységár:</span>
+                  <span className="text-gray-500">{t.quotes.unitPrice}:</span>
                   <span className="font-medium">{formatCurrency(item.quoteUnitPriceGross)}</span>
                 </div>
 
                 <div className="flex items-center gap-2 mr-4">
-                  <span className="text-gray-500">Mennyiség:</span>
+                  <span className="text-gray-500">{t.quotes.quantity}:</span>
                   {isEditable ? (
                     <Input
                       type="number"
@@ -1633,7 +1607,7 @@ function QuoteItemRow({
 
                 {isEditable && lineDiscountPreset !== 'none' && item.quoteUnitPriceGross > 0 && (
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-500">Kedvezmény:</span>
+                    <span className="text-gray-500">{t.quotes.discountLabel}</span>
                     <Input
                       type="number"
                       value={item.quoteLineDiscountValue || ''}
@@ -1673,22 +1647,22 @@ function QuoteItemRow({
 
                 {!isEditable && item.treatmentSession && expectedTreatments > 1 && (
                   <span className="text-gray-500">
-                    Kezelés: <span className="font-medium">{item.treatmentSession}.</span>
+                    {t.quotes.treatmentLabel} <span className="font-medium">{item.treatmentSession}.</span>
                   </span>
                 )}
 
                 {item.toothNum && (
                   <span className="text-gray-500">
-                    Fog: <span className="font-medium">{item.toothNum}</span>
+                    {t.quotes.toothLabel} <span className="font-medium">{item.toothNum}</span>
                   </span>
                 )}
               </div>
 
               {/* Treated Area Selector (third row) */}
               <div className="flex items-center gap-2">
-                <span className="text-gray-500">Kezelt terület:</span>
+                <span className="text-gray-500">{t.quotes.treatedArea}</span>
                 {item.quoteUnit === 'alkalom' && (
-                  <span className="font-medium text-gray-700">Teljes szájüreg</span>
+                  <span className="font-medium text-gray-700">{t.quotes.fullMouth}</span>
                 )}
                 {item.quoteUnit === 'db' && (
                   isEditable ? (
@@ -1696,7 +1670,7 @@ function QuoteItemRow({
                       type="text"
                       value={item.treatedArea || ''}
                       onChange={(e) => onUpdate({ treatedArea: e.target.value })}
-                      placeholder="Pl. frontfogak"
+                      placeholder={t.quotes.toothPlaceholder}
                       className="w-48"
                     />
                   ) : (
@@ -1713,17 +1687,17 @@ function QuoteItemRow({
                         onUpdate({ treatedArea: value, quoteQty: newQty });
                       }}
                       options={[
-                        { value: 'lower', label: 'Alsó állcsont' },
-                        { value: 'upper', label: 'Felső állcsont' },
-                        { value: 'both', label: 'Alsó és Felső állcsont' },
+                        { value: 'lower', label: t.quotes.lowerJaw },
+                        { value: 'upper', label: t.quotes.upperJaw },
+                        { value: 'both', label: t.quotes.bothJaws },
                       ]}
                       className="w-52"
                     />
                   ) : (
                     <span className="font-medium">
-                      {item.treatedArea === 'lower' ? 'Alsó állcsont' :
-                       item.treatedArea === 'upper' ? 'Felső állcsont' :
-                       item.treatedArea === 'both' ? 'Alsó és Felső állcsont' : '-'}
+                      {item.treatedArea === 'lower' ? t.quotes.lowerJaw :
+                       item.treatedArea === 'upper' ? t.quotes.upperJaw :
+                       item.treatedArea === 'both' ? t.quotes.bothJaws : '-'}
                     </span>
                   )
                 )}
@@ -1733,19 +1707,19 @@ function QuoteItemRow({
                       value={item.treatedArea || 'q1'}
                       onChange={(e) => onUpdate({ treatedArea: e.target.value, quoteQty: 1 })}
                       options={[
-                        { value: 'q1', label: '1-es kvadráns (jobb felül)' },
-                        { value: 'q2', label: '2-es kvadráns (bal felül)' },
-                        { value: 'q3', label: '3-as kvadráns (bal alul)' },
-                        { value: 'q4', label: '4-es kvadráns (jobb alul)' },
+                        { value: 'q1', label: t.quotes.quadrant1 },
+                        { value: 'q2', label: t.quotes.quadrant2 },
+                        { value: 'q3', label: t.quotes.quadrant3 },
+                        { value: 'q4', label: t.quotes.quadrant4 },
                       ]}
                       className="w-56"
                     />
                   ) : (
                     <span className="font-medium">
-                      {item.treatedArea === 'q1' ? '1-es kvadráns (jobb felül)' :
-                       item.treatedArea === 'q2' ? '2-es kvadráns (bal felül)' :
-                       item.treatedArea === 'q3' ? '3-as kvadráns (bal alul)' :
-                       item.treatedArea === 'q4' ? '4-es kvadráns (jobb alul)' : '-'}
+                      {item.treatedArea === 'q1' ? t.quotes.quadrant1 :
+                       item.treatedArea === 'q2' ? t.quotes.quadrant2 :
+                       item.treatedArea === 'q3' ? t.quotes.quadrant3 :
+                       item.treatedArea === 'q4' ? t.quotes.quadrant4 : '-'}
                     </span>
                   )
                 )}
@@ -1755,7 +1729,7 @@ function QuoteItemRow({
                       type="text"
                       value={item.treatedArea || ''}
                       onChange={(e) => onUpdate({ treatedArea: e.target.value })}
-                      placeholder="Pl. 11, 12, 21"
+                      placeholder={t.quotes.toothPlaceholder}
                       className="w-48"
                     />
                   ) : (
@@ -1767,7 +1741,7 @@ function QuoteItemRow({
               {/* Treatment Session Selector (fourth row) */}
               {isEditable && expectedTreatments > 1 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-500">Kezelés sorszáma:</span>
+                  <span className="text-gray-500">{t.quotes.treatmentSessionNumber}</span>
                   <Select
                     value={String(item.treatmentSession || 1)}
                     onChange={(e) => onUpdate({ treatmentSession: parseInt(e.target.value) })}
@@ -1790,7 +1764,7 @@ function QuoteItemRow({
               onClick={onRemove}
               className="mt-2 text-sm text-red-600 hover:text-red-700"
             >
-              Eltávolítás
+              {t.common.remove}
             </button>
           )}
         </div>

@@ -43,6 +43,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const setAppLanguage = useCallback((language: OdontogramLanguage) => {
     persistOdontogramLanguage(language);
+    localStorage.setItem('dqc_app_language', language);
     setAppLanguageState(language);
     setSettings((current) => {
       const next = { ...current, language };
