@@ -11,6 +11,13 @@ import { getAuthHeaders } from '../utils/auth';
 import type { OdontogramState, OdontogramToothState } from '../modules/odontogram/types';
 import { getBudapestDateKey, saveCurrent, saveDailySnapshot } from '../modules/odontogram/odontogramStorage';
 import { Button, Card, CardContent, CardHeader, ConfirmModal } from '../components/common';
+import {
+  allPatientsToJson,
+  singlePatientToJson,
+  patientsToCsv,
+  parsePatientExportJson,
+  parsePatientsFromCsv,
+} from '../utils/patientImportExport';
 
 type DbTableStat = {
   tableName: string;
@@ -190,16 +197,33 @@ const createOdontogramStateFromQuotes = (quotes: Quote[]): OdontogramState => {
 
 export function DataManagementPage() {
   const { t } = useSettings();
-  const { exportData, importData, refreshData } = useApp();
+  const {
+    patients: patientsFromContext,
+    quotes,
+    addPatient,
+    updatePatient,
+    addQuote,
+    updateQuote,
+    exportData,
+    importData,
+    refreshData,
+  } = useApp();
   const { exportCatalog, importCatalog, exportCatalogCSV, importCatalogCSV } = useCatalog();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const catalogJsonInputRef = useRef<HTMLInputElement>(null);
   const catalogCsvInputRef = useRef<HTMLInputElement>(null);
 
+  const patientAllJsonInputRef = useRef<HTMLInputElement>(null);
+  const patientAllCsvInputRef = useRef<HTMLInputElement>(null);
+  const patientSingleJsonInputRef = useRef<HTMLInputElement>(null);
+  const patientSingleCsvInputRef = useRef<HTMLInputElement>(null);
+
   const [importConfirm, setImportConfirm] = useState(false);
   const [clearAllConfirm, setClearAllConfirm] = useState(false);
   const [pendingImportData, setPendingImportData] = useState<string | null>(null);
   const [pendingCatalogImport, setPendingCatalogImport] = useState<{ format: 'json' | 'csv'; data: string } | null>(null);
+  const [selectedPatientId, setSelectedPatientId] = useState<string>('');
+  const [pendingPatientImport, setPendingPatientImport] = useState<{ data: string; format: 'json' | 'csv'; mode: 'all' | 'single' } | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const clearOdontogramStorageKeys = () => {
@@ -568,6 +592,179 @@ export function DataManagementPage() {
     setTimeout(() => setMessage(null), 5000);
   };
 
+  // ---- Patient export handlers ----
+  const handlePatientExportAllJson = () => {
+    const data = allPatientsToJson(patientsFromContext, quotes);
+    downloadFile(data, `patients_all_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+    setMessage({ type: 'success', text: t.dataManagement.patientData.exportSuccess });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const handlePatientExportAllCsv = () => {
+    const data = patientsToCsv(patientsFromContext);
+    downloadFile(data, `patients_all_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    setMessage({ type: 'success', text: t.dataManagement.patientData.exportSuccess });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const handlePatientExportSingleJson = () => {
+    if (!selectedPatientId) return;
+    const patient = patientsFromContext.find((p) => p.patientId === selectedPatientId);
+    if (!patient) return;
+    const patientQuotes = quotes.filter((q) => q.patientId === selectedPatientId);
+    const data = singlePatientToJson(patient, patientQuotes);
+    const safeName = `${patient.lastName}_${patient.firstName}`.replace(/\s+/g, '_');
+    downloadFile(data, `patient_${safeName}_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+    setMessage({ type: 'success', text: t.dataManagement.patientData.exportSuccess });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const handlePatientExportSingleCsv = () => {
+    if (!selectedPatientId) return;
+    const patient = patientsFromContext.find((p) => p.patientId === selectedPatientId);
+    if (!patient) return;
+    const data = patientsToCsv([patient]);
+    const safeName = `${patient.lastName}_${patient.firstName}`.replace(/\s+/g, '_');
+    downloadFile(data, `patient_${safeName}_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    setMessage({ type: 'success', text: t.dataManagement.patientData.exportSuccess });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  // ---- Patient import handlers ----
+  const handlePatientFileSelect = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    format: 'json' | 'csv',
+    mode: 'all' | 'single',
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      if (mode === 'all') {
+        setPendingPatientImport({ data: content, format, mode });
+      } else {
+        handlePatientImportSingle(content, format);
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  };
+
+  const handlePatientImportSingle = (content: string, format: 'json' | 'csv') => {
+    if (format === 'json') {
+      const parsed = parsePatientExportJson(content);
+      if (!parsed || parsed.patients.length === 0) {
+        setMessage({ type: 'error', text: t.dataManagement.patientData.importError });
+        setTimeout(() => setMessage(null), 5000);
+        return;
+      }
+      const patient = parsed.patients[0];
+      const existing = patientsFromContext.find((p) => p.patientId === patient.patientId);
+      if (existing) {
+        updatePatient(patient);
+      } else {
+        addPatient(patient);
+      }
+      for (const quote of parsed.quotes) {
+        const existingQuote = quotes.find((q) => q.quoteId === quote.quoteId);
+        if (existingQuote) {
+          updateQuote(quote);
+        } else {
+          addQuote(quote);
+        }
+      }
+    } else {
+      const parsed = parsePatientsFromCsv(content);
+      if (!parsed || parsed.length === 0) {
+        setMessage({ type: 'error', text: t.dataManagement.patientData.importError });
+        setTimeout(() => setMessage(null), 5000);
+        return;
+      }
+      const row = parsed[0];
+      if (row.patientId && row.lastName && row.firstName && row.sex && row.birthDate && row.createdAt && row.updatedAt && row.isArchived !== undefined) {
+        const patient = row as Patient;
+        const existing = patientsFromContext.find((p) => p.patientId === patient.patientId);
+        if (existing) {
+          updatePatient(patient);
+        } else {
+          addPatient(patient);
+        }
+      } else {
+        setMessage({ type: 'error', text: t.dataManagement.patientData.importError });
+        setTimeout(() => setMessage(null), 5000);
+        return;
+      }
+    }
+    refreshData();
+    setMessage({ type: 'success', text: t.dataManagement.patientData.importSuccess });
+    setTimeout(() => setMessage(null), 5000);
+  };
+
+  const handlePatientImportConfirm = () => {
+    if (!pendingPatientImport) return;
+    const { data, format } = pendingPatientImport;
+
+    if (format === 'json') {
+      const parsed = parsePatientExportJson(data);
+      if (!parsed) {
+        setMessage({ type: 'error', text: t.dataManagement.patientData.importError });
+        setPendingPatientImport(null);
+        setTimeout(() => setMessage(null), 5000);
+        return;
+      }
+      const currentExport = JSON.parse(exportData()) as ExportData;
+      const payload: ExportData = {
+        version: '1.0.0',
+        exportedAt: new Date().toISOString(),
+        patients: parsed.patients,
+        catalog: currentExport.catalog,
+        quotes: parsed.quotes,
+        settings: currentExport.settings,
+        dentalStatusSnapshots: currentExport.dentalStatusSnapshots,
+      };
+      const success = importData(JSON.stringify(payload));
+      if (success) {
+        refreshData();
+        setMessage({ type: 'success', text: t.dataManagement.patientData.importSuccess });
+      } else {
+        setMessage({ type: 'error', text: t.dataManagement.patientData.importError });
+      }
+    } else {
+      const parsed = parsePatientsFromCsv(data);
+      if (!parsed) {
+        setMessage({ type: 'error', text: t.dataManagement.patientData.importError });
+        setPendingPatientImport(null);
+        setTimeout(() => setMessage(null), 5000);
+        return;
+      }
+      const currentExport = JSON.parse(exportData()) as ExportData;
+      const csvPatients = parsed.filter(
+        (row): row is Patient =>
+          !!row.patientId && !!row.lastName && !!row.firstName && !!row.sex && !!row.birthDate && !!row.createdAt && !!row.updatedAt && row.isArchived !== undefined,
+      );
+      const payload: ExportData = {
+        version: '1.0.0',
+        exportedAt: new Date().toISOString(),
+        patients: csvPatients,
+        catalog: currentExport.catalog,
+        quotes: currentExport.quotes,
+        settings: currentExport.settings,
+        dentalStatusSnapshots: currentExport.dentalStatusSnapshots,
+      };
+      const success = importData(JSON.stringify(payload));
+      if (success) {
+        refreshData();
+        setMessage({ type: 'success', text: t.dataManagement.patientData.importSuccess });
+      } else {
+        setMessage({ type: 'error', text: t.dataManagement.patientData.importError });
+      }
+    }
+
+    setPendingPatientImport(null);
+    setTimeout(() => setMessage(null), 5000);
+  };
+
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
@@ -689,6 +886,128 @@ export function DataManagementPage() {
                     variant="secondary"
                     onClick={() => catalogCsvInputRef.current?.click()}
                   >
+                    CSV
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Patient Data Card */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">{t.dataManagement.patientData.title}</h2>
+        </CardHeader>
+        <CardContent>
+          <input
+            ref={patientAllJsonInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => handlePatientFileSelect(e, 'json', 'all')}
+          />
+          <input
+            ref={patientAllCsvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => handlePatientFileSelect(e, 'csv', 'all')}
+          />
+          <input
+            ref={patientSingleJsonInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => handlePatientFileSelect(e, 'json', 'single')}
+          />
+          <input
+            ref={patientSingleCsvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => handlePatientFileSelect(e, 'csv', 'single')}
+          />
+          <div className="space-y-4">
+            {/* Row 1: Export all */}
+            <div className="rounded-lg border border-gray-200 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.exportAllTitle}</p>
+                  <p className="text-xs text-gray-500">{t.dataManagement.patientData.exportAllDescription}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" onClick={handlePatientExportAllJson}>
+                    JSON
+                  </Button>
+                  <Button size="sm" onClick={handlePatientExportAllCsv}>
+                    CSV
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Row 2: Export single patient */}
+            <div className="rounded-lg border border-gray-200 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.exportSingleTitle}</p>
+                  <p className="text-xs text-gray-500">{t.dataManagement.patientData.exportSingleDescription}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+                    value={selectedPatientId}
+                    onChange={(e) => setSelectedPatientId(e.target.value)}
+                  >
+                    <option value="">{t.dataManagement.patientData.selectPatient}</option>
+                    {patientsFromContext.map((p) => (
+                      <option key={p.patientId} value={p.patientId}>
+                        {p.lastName} {p.firstName}
+                      </option>
+                    ))}
+                  </select>
+                  <Button size="sm" onClick={handlePatientExportSingleJson} disabled={!selectedPatientId}>
+                    JSON
+                  </Button>
+                  <Button size="sm" onClick={handlePatientExportSingleCsv} disabled={!selectedPatientId}>
+                    CSV
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Row 3: Import all */}
+            <div className="rounded-lg border border-gray-200 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.importAllTitle}</p>
+                  <p className="text-xs text-gray-500">{t.dataManagement.patientData.importAllDescription}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => patientAllJsonInputRef.current?.click()}>
+                    JSON
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => patientAllCsvInputRef.current?.click()}>
+                    CSV
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Row 4: Import single patient */}
+            <div className="rounded-lg border border-gray-200 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.importSingleTitle}</p>
+                  <p className="text-xs text-gray-500">{t.dataManagement.patientData.importSingleDescription}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => patientSingleJsonInputRef.current?.click()}>
+                    JSON
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => patientSingleCsvInputRef.current?.click()}>
                     CSV
                   </Button>
                 </div>
@@ -827,6 +1146,18 @@ export function DataManagementPage() {
         title={t.common.confirm}
         message={t.dataManagement.databaseOnly.clearAllConfirm}
         confirmText={t.dataManagement.databaseOnly.clearAllButton}
+        cancelText={t.common.cancel}
+        variant="danger"
+      />
+
+      {/* Patient Import Confirmation (all mode only) */}
+      <ConfirmModal
+        isOpen={pendingPatientImport !== null}
+        onClose={() => setPendingPatientImport(null)}
+        onConfirm={handlePatientImportConfirm}
+        title={t.common.confirm}
+        message={t.dataManagement.patientData.importAllWarning}
+        confirmText={t.dataManagement.patientData.importAllTitle}
         cancelText={t.common.cancel}
         variant="danger"
       />

@@ -53,12 +53,17 @@ export function SettingsPage() {
     });
   };
 
-  const handlePdfChange = (field: keyof Settings['pdf'], value: string) => {
+  const [pdfLangTab, setPdfLangTab] = useState<'hu' | 'en' | 'de'>('hu');
+
+  const handlePdfLangChange = (lang: 'hu' | 'en' | 'de', field: 'footerText' | 'warrantyText', value: string) => {
     setFormData({
       ...formData,
       pdf: {
         ...formData.pdf,
-        [field]: value,
+        [lang]: {
+          ...formData.pdf[lang],
+          [field]: value,
+        },
       },
     });
   };
@@ -233,17 +238,33 @@ export function SettingsPage() {
           <h2 className="text-lg font-semibold">{t.settings.pdfSettings}</h2>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex border-b border-gray-200">
+            {(['hu', 'en', 'de'] as const).map((lang) => (
+              <button
+                key={lang}
+                type="button"
+                onClick={() => setPdfLangTab(lang)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  pdfLangTab === lang
+                    ? 'border-dental-500 text-dental-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {lang === 'hu' ? 'Magyar' : lang === 'en' ? 'English' : 'Deutsch'}
+              </button>
+            ))}
+          </div>
           <TextArea
             label={t.settings.footerText}
-            value={formData.pdf.footerText}
-            onChange={(e) => handlePdfChange('footerText', e.target.value)}
+            value={formData.pdf[pdfLangTab]?.footerText || ''}
+            onChange={(e) => handlePdfLangChange(pdfLangTab, 'footerText', e.target.value)}
             rows={3}
             helperText={t.settings.footerTextHelp}
           />
           <TextArea
             label={t.settings.warrantyText}
-            value={formData.pdf.warrantyText}
-            onChange={(e) => handlePdfChange('warrantyText', e.target.value)}
+            value={formData.pdf[pdfLangTab]?.warrantyText || ''}
+            onChange={(e) => handlePdfLangChange(pdfLangTab, 'warrantyText', e.target.value)}
             rows={20}
             helperText={t.settings.warrantyTextHelp}
             className="font-mono text-sm"
@@ -257,6 +278,23 @@ export function SettingsPage() {
           <h2 className="text-lg font-semibold">{t.settings.quoteSettings}</h2>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Quote Language */}
+          <Select
+            label={t.settings.quoteLang}
+            value={formData.quote.quoteLang || 'hu'}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                quote: { ...formData.quote, quoteLang: e.target.value as 'hu' | 'en' | 'de' },
+              })
+            }
+            options={[
+              { value: 'hu', label: 'Magyar' },
+              { value: 'en', label: 'English' },
+              { value: 'de', label: 'Deutsch' },
+            ]}
+          />
+
           {/* Prefix and Counter */}
           <div className="grid grid-cols-2 gap-4">
             <div>

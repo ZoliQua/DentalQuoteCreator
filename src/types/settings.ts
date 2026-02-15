@@ -12,9 +12,15 @@ export interface Doctor {
   stampNumber: string; // New: 6-digit stamp number
 }
 
-export interface PdfSettings {
+export interface PdfLangSettings {
   footerText: string;
   warrantyText: string;
+}
+
+export interface PdfSettings {
+  hu: PdfLangSettings;
+  en: PdfLangSettings;
+  de: PdfLangSettings;
 }
 
 export interface QuoteSettings {
@@ -22,6 +28,7 @@ export interface QuoteSettings {
   counter: number; // Current counter value
   deletedCount: number; // Count of deleted quotes
   perPage?: number;
+  quoteLang: 'hu' | 'en' | 'de';
 }
 
 export type DateFormat =

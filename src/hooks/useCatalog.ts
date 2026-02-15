@@ -174,9 +174,29 @@ export function useCatalog() {
         catalogVatRate: Number.isFinite(vatValue) ? vatValue : 0,
         catalogTechnicalPrice: Number.isFinite(technicalValue) ? technicalValue : 0,
         catalogCategory: category,
+        svgLayer: item.svgLayer?.toString() || '',
+        hasLayer: Boolean(item.hasLayer),
         hasTechnicalPrice: Number.isFinite(technicalValue) ? technicalValue > 0 : false,
         isFullMouth: isFullMouthValue,
         isArch: isArchValue,
+        isQuadrant: (() => {
+          const val = item.isQuadrant as unknown;
+          if (typeof val === 'boolean') return val;
+          if (typeof val === 'string') return ['true', '1'].includes(val.trim().toLowerCase());
+          return false;
+        })(),
+        maxTeethPerArch: item.maxTeethPerArch != null ? Number(item.maxTeethPerArch) : undefined,
+        allowedTeeth: Array.isArray(item.allowedTeeth)
+          ? (item.allowedTeeth as number[]).map(Number).filter((n) => Number.isFinite(n))
+          : undefined,
+        milkToothOnly: (() => {
+          const val = item.milkToothOnly as unknown;
+          if (typeof val === 'boolean') return val;
+          if (typeof val === 'string') return ['true', '1'].includes(val.trim().toLowerCase());
+          return false;
+        })(),
+        catalogNameEn: item.catalogNameEn?.toString() || '',
+        catalogNameDe: item.catalogNameDe?.toString() || '',
         isActive,
       });
     }

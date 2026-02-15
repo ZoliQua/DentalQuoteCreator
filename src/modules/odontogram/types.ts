@@ -25,7 +25,8 @@ export type OdontogramBridgeUnit =
   | 'removable'
   | 'zircon'
   | 'metal'
-  | 'temporary';
+  | 'temporary'
+  | 'bar-prosthesis';
 
 export type OdontogramMobility = 'none' | 'm1' | 'm2' | 'm3';
 

@@ -128,7 +128,7 @@ export class LocalStorageRepository implements StorageRepository {
     if (!getAuthToken()) return defaultSettings;
     try {
       const settings = requestJsonSync<Settings>('GET', `${API_PREFIX}/settings`);
-      return settings || defaultSettings;
+      return normalizeSettings(settings) || defaultSettings;
     } catch {
       return defaultSettings;
     }
@@ -241,9 +241,67 @@ function normalizeCatalogItem(item: Partial<CatalogItem>): CatalogItem {
     catalogVatRate: Number.isFinite(vatValue) ? vatValue : 0,
     catalogTechnicalPrice: Number.isFinite(technicalPriceValue) ? technicalPriceValue : 0,
     catalogCategory: normalizedCategory,
+    svgLayer: item.svgLayer ? item.svgLayer.toString() : '',
+    hasLayer: toBoolean(item.hasLayer),
     hasTechnicalPrice: Number.isFinite(technicalPriceValue) ? technicalPriceValue > 0 : false,
     isFullMouth: toBoolean(item.isFullMouth),
     isArch: toBoolean(item.isArch),
+    isQuadrant: toBoolean(item.isQuadrant),
+    maxTeethPerArch: item.maxTeethPerArch != null ? Number(item.maxTeethPerArch) : undefined,
+    allowedTeeth: Array.isArray(item.allowedTeeth)
+      ? (item.allowedTeeth as number[]).map(Number).filter((n) => Number.isFinite(n))
+      : undefined,
+    milkToothOnly: toBoolean(item.milkToothOnly),
+    catalogNameEn: item.catalogNameEn ? item.catalogNameEn.toString() : '',
+    catalogNameDe: item.catalogNameDe ? item.catalogNameDe.toString() : '',
     isActive: toBoolean(item.isActive, true),
   };
+}
+
+function normalizeSettings(raw: Settings | null | undefined): Settings | null {
+  if (!raw) return null;
+
+  // Migrate old flat pdf format { footerText, warrantyText }
+  // to new per-language format { hu: {...}, en: {...}, de: {...} }
+  const pdf = raw.pdf as unknown;
+  if (pdf && typeof pdf === 'object' && !Array.isArray(pdf)) {
+    const pdfObj = pdf as Record<string, unknown>;
+    // Detect old format: has footerText/warrantyText at top level (not hu/en/de keys)
+    if (typeof pdfObj.footerText === 'string' || typeof pdfObj.warrantyText === 'string') {
+      raw.pdf = {
+        hu: {
+          footerText: (pdfObj.footerText as string) || defaultSettings.pdf.hu.footerText,
+          warrantyText: (pdfObj.warrantyText as string) || defaultSettings.pdf.hu.warrantyText,
+        },
+        en: { ...defaultSettings.pdf.en },
+        de: { ...defaultSettings.pdf.de },
+      };
+    } else {
+      // New format but ensure all languages exist with fallbacks
+      const typedPdf = pdfObj as Record<string, Record<string, string> | undefined>;
+      raw.pdf = {
+        hu: {
+          footerText: typedPdf.hu?.footerText || defaultSettings.pdf.hu.footerText,
+          warrantyText: typedPdf.hu?.warrantyText || defaultSettings.pdf.hu.warrantyText,
+        },
+        en: {
+          footerText: typedPdf.en?.footerText || defaultSettings.pdf.en.footerText,
+          warrantyText: typedPdf.en?.warrantyText || defaultSettings.pdf.en.warrantyText,
+        },
+        de: {
+          footerText: typedPdf.de?.footerText || defaultSettings.pdf.de.footerText,
+          warrantyText: typedPdf.de?.warrantyText || defaultSettings.pdf.de.warrantyText,
+        },
+      };
+    }
+  } else {
+    raw.pdf = { ...defaultSettings.pdf };
+  }
+
+  // Ensure quote.quoteLang exists
+  if (!raw.quote?.quoteLang) {
+    raw.quote = { ...raw.quote, quoteLang: raw.quote?.quoteLang || 'hu' };
+  }
+
+  return raw;
 }

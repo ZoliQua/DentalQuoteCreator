@@ -37,6 +37,9 @@ export interface QuoteItem {
   jaw?: Jaw;
   treatedArea?: string;
   treatmentSession?: number;
+  selectedSurfaces?: string[];
+  selectedMaterial?: string;
+  resolvedLayers?: string[];
 }
 
 export interface Quote {
@@ -58,6 +61,8 @@ export interface Quote {
   expectedTreatments: number;
   events: QuoteEvent[]; // New: event log
   isDeleted?: boolean; // New: soft delete flag
+  quoteType?: 'itemized' | 'visual';
+  quoteLang?: 'hu' | 'en' | 'de';
 }
 
 export interface QuoteTotals {

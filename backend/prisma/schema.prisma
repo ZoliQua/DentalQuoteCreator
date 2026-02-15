@@ -168,9 +168,17 @@ model CatalogItem {
   catalogVatRate        Float
   catalogTechnicalPrice Float
   catalogCategory       String
+  svgLayer              String  @default("")
+  hasLayer              Boolean @default(false)
   hasTechnicalPrice     Boolean @default(false)
   isFullMouth           Boolean @default(false)
   isArch                Boolean @default(false)
+  isQuadrant            Boolean @default(false)
+  maxTeethPerArch       Int?
+  allowedTeeth          Int[]   @default([])
+  milkToothOnly         Boolean @default(false)
+  catalogNameEn         String  @default("")
+  catalogNameDe         String  @default("")
   isActive              Boolean @default(true)
 }
 
@@ -194,13 +202,19 @@ model Invoice {
 }
 
 model NeakCheck {
-  id        String   @id
-  patientId String
-  checkedAt DateTime
-  data      Json
+  id              String   @id
+  patientId       String
+  taj             String?
+  checkedAt       DateTime
+  neakHibakod     String?
+  neakSuccess     Boolean?
+  neakJogviszony  String?
+  neakTranKod     String?
+  data            Json
 
   @@index([patientId])
   @@index([checkedAt])
+  @@index([neakTranKod])
 }
 
 model OdontogramCurrent {

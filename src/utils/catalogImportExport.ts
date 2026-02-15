@@ -1,6 +1,7 @@
 import { CatalogItem } from '../types';
 
-const CATALOG_CSV_HEADERS = [
+// All columns in the CSV export. Order matters for the output file.
+const ALL_CSV_HEADERS = [
   'catalogItemId',
   'catalogCode',
   'catalogName',
@@ -10,13 +11,27 @@ const CATALOG_CSV_HEADERS = [
   'catalogVatRate',
   'catalogTechnicalPrice',
   'catalogCategory',
+  'svgLayer',
+  'hasLayer',
   'hasTechnicalPrice',
   'isFullMouth',
   'isArch',
+  'isQuadrant',
+  'maxTeethPerArch',
+  'allowedTeeth',
+  'milkToothOnly',
+  'catalogNameEn',
+  'catalogNameDe',
   'isActive',
 ] as const;
 
-type CatalogCsvHeader = (typeof CATALOG_CSV_HEADERS)[number];
+// Minimum required headers for a valid import (everything else gets defaults)
+const REQUIRED_CSV_HEADERS: readonly string[] = [
+  'catalogCode',
+  'catalogName',
+  'catalogUnit',
+  'catalogCategory',
+];
 
 const needsEscaping = /["\n,]/;
 
@@ -56,9 +71,14 @@ function parseCsvLine(line: string): string[] {
 }
 
 export function catalogToCsv(items: CatalogItem[]): string {
-  const header = CATALOG_CSV_HEADERS.join(',');
+  const header = ALL_CSV_HEADERS.join(',');
   const rows = items.map((item) =>
-    CATALOG_CSV_HEADERS.map((key) => {
+    ALL_CSV_HEADERS.map((key) => {
+      // allowedTeeth is a number[] → serialize as pipe-separated string
+      if (key === 'allowedTeeth') {
+        const arr = item.allowedTeeth;
+        return arr && arr.length > 0 ? escapeCsvValue(arr.join('|')) : '';
+      }
       const value = (item as unknown as Record<string, unknown>)[key];
       return escapeCsvValue(value);
     }).join(',')
@@ -82,8 +102,9 @@ export function parseCatalogCsv(data: string): Partial<CatalogItem>[] | null {
   const headerIndexMap = new Map<string, number>();
   headerValues.forEach((value, index) => headerIndexMap.set(value, index));
 
-  const missingHeaders = CATALOG_CSV_HEADERS.filter((headerKey) => !headerIndexMap.has(headerKey));
-  if (missingHeaders.length > 0) {
+  // Only require essential headers — new fields are optional for backward compat
+  const missingRequired = REQUIRED_CSV_HEADERS.filter((h) => !headerIndexMap.has(h));
+  if (missingRequired.length > 0) {
     return null;
   }
 
@@ -95,14 +116,23 @@ export function parseCatalogCsv(data: string): Partial<CatalogItem>[] | null {
     }
 
     const values = parseCsvLine(rawLine);
-    const row: Partial<CatalogItem> = {};
+    const row: Record<string, unknown> = {};
 
-    CATALOG_CSV_HEADERS.forEach((headerKey) => {
-      const value = values[headerIndexMap.get(headerKey)!] ?? '';
-      (row as unknown as Record<CatalogCsvHeader, string>)[headerKey] = value;
-    });
+    // Read all known headers that are present in the CSV
+    for (const key of ALL_CSV_HEADERS) {
+      if (headerIndexMap.has(key)) {
+        row[key] = values[headerIndexMap.get(key)!] ?? '';
+      }
+    }
 
-    rows.push(row);
+    // Parse allowedTeeth from pipe-separated string to number array
+    if (typeof row.allowedTeeth === 'string' && row.allowedTeeth.trim()) {
+      row.allowedTeeth = row.allowedTeeth.split('|').map(Number).filter((n: number) => Number.isFinite(n));
+    } else {
+      delete row.allowedTeeth;
+    }
+
+    rows.push(row as Partial<CatalogItem>);
   }
 
   return rows;

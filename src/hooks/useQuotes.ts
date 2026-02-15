@@ -69,7 +69,7 @@ export function useQuotes() {
 
   // Create a new quote
   const createQuote = useCallback(
-    (patientId: string, patientName?: string): Quote => {
+    (patientId: string, patientName?: string, quoteType?: 'itemized' | 'visual'): Quote => {
       const now = getCurrentDateString();
       const defaultDoctorId = settings.doctors.length > 0 ? settings.doctors[0].id : '';
       const defaultQuoteName = patientName ? `${patientName} árajánlata` : 'Új árajánlat';
@@ -106,6 +106,7 @@ export function useQuotes() {
         internalNotes: '',
         expectedTreatments: 1,
         events: [createEvent('created', doctorName)],
+        ...(quoteType ? { quoteType } : {}),
       };
       addQuote(quote);
       return quote;
@@ -200,7 +201,7 @@ export function useQuotes() {
   );
 
   const editQuote = useCallback(
-    (quoteId: string, data: Partial<Omit<Quote, 'quoteId' | 'quoteNumber' | 'createdAt' | 'items' | 'events'>>): Quote | undefined => {
+    (quoteId: string, data: Partial<Omit<Quote, 'quoteId' | 'quoteNumber' | 'createdAt'>>): Quote | undefined => {
       const existing = getQuote(quoteId);
       if (!existing) return undefined;
 

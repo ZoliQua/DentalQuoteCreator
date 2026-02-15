@@ -18,6 +18,7 @@ import {
   EmptyState,
   EmptyCatalogIcon,
   ConfirmModal,
+  QuoteProgressBar,
 } from '../components/common';
 import {
   formatCurrency,
@@ -36,9 +37,11 @@ import { OdontogramHost } from '../modules/odontogram/OdontogramHost';
 import { loadCurrent } from '../modules/odontogram/odontogramStorage';
 import type { OdontogramState } from '../modules/odontogram/types';
 import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 import { previewInvoice, createInvoice } from '../modules/invoicing/api';
 import { saveInvoice, getInvoicesByQuote } from '../modules/invoicing/storage';
 import type { InvoiceRecord } from '../types/invoice';
+import { getCatalogDisplayName } from '../utils/catalogLocale';
 
 // Per-line discount preset type
 type LineDiscountPreset = 'none' | '10' | '20' | '30' | '40' | '50' | 'custom';
@@ -46,7 +49,7 @@ type LineDiscountPreset = 'none' | '10' | '20' | '30' | '40' | '50' | 'custom';
 export function QuoteEditorPage() {
   const { patientId, quoteId } = useParams<{ patientId: string; quoteId: string }>();
   const navigate = useNavigate();
-  const { t, settings } = useSettings();
+  const { t, settings, appLanguage } = useSettings();
   const { getPatient } = usePatients();
   const {
     getQuote,
@@ -58,7 +61,6 @@ export function QuoteEditorPage() {
     editQuote,
     addEventToQuote,
     deleteQuote,
-    canDeleteQuote,
     closeQuote,
     reopenQuote,
     acceptQuote,
@@ -70,6 +72,7 @@ export function QuoteEditorPage() {
   } = useQuotes();
   const { activeItems, itemsByCategory } = useCatalog();
   const { hasPermission } = useAuth();
+  const { restoreQuote } = useApp();
 
   const [isItemSelectorOpen, setIsItemSelectorOpen] = useState(false);
   const [itemSearchQuery, setItemSearchQuery] = useState('');
@@ -122,6 +125,7 @@ export function QuoteEditorPage() {
   }, [patientId, quoteId, patient, createQuote, navigate]);
 
   const quote = quoteId ? getQuote(quoteId) : undefined;
+  const effectiveQuoteLang: 'hu' | 'en' | 'de' = quote?.quoteLang ?? settings.quote.quoteLang ?? 'hu';
 
   useEffect(() => {
     if (!patientId) return;
@@ -228,7 +232,14 @@ export function QuoteEditorPage() {
   }
 
   const handleAddItem = (catalogItem: CatalogItem) => {
-    addItemToQuote(quote.quoteId, catalogItem);
+    const result = addItemToQuote(quote.quoteId, catalogItem);
+    if (result) {
+      const lastItem = result.items[result.items.length - 1];
+      const localizedName = getCatalogDisplayName(catalogItem, effectiveQuoteLang);
+      if (localizedName !== lastItem.quoteName) {
+        updateQuoteItem(quote.quoteId, lastItem.lineId, { quoteName: localizedName });
+      }
+    }
   };
 
   const handleUpdateItem = (lineId: string, data: Partial<QuoteItem>) => {
@@ -547,7 +558,9 @@ export function QuoteEditorPage() {
             </div>
             <Badge
               variant={
-                quote.quoteStatus === 'draft'
+                quote.isDeleted
+                  ? 'danger'
+                  : quote.quoteStatus === 'draft'
                   ? 'warning'
                   : quote.quoteStatus === 'completed'
                   ? 'default'
@@ -556,7 +569,8 @@ export function QuoteEditorPage() {
                   : 'success'
               }
             >
-              {quote.quoteStatus === 'draft' ? t.quotes.statusDraft :
+              {quote.isDeleted ? t.quotes.statusDeleted :
+               quote.quoteStatus === 'draft' ? t.quotes.statusDraft :
                quote.quoteStatus === 'closed' ? t.quotes.statusClosed :
                quote.quoteStatus === 'rejected' ? t.quotes.statusRejected :
                quote.quoteStatus === 'started' ? t.quotes.statusStarted :
@@ -565,99 +579,8 @@ export function QuoteEditorPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Status-dependent action buttons */}
-          {quote.quoteStatus === 'draft' && (
-            <>
-              <Button variant="secondary" onClick={() => navigate(`/patients/${patient.patientId}/quotes/${quote.quoteId}`)}>
-                {t.common.edit}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleClose}
-                className="border-2 border-blue-500"
-              >
-                {t.quotes.close}
-              </Button>
-            </>
-          )}
-
-          {quote.quoteStatus === 'closed' && (
-            <>
-              <Button
-                variant="secondary"
-                onClick={() => reopenQuote(quote.quoteId)}
-                className="border-2 border-gray-400"
-              >
-                {t.quotes.reopen}
-              </Button>
-              <Button
-                variant="success"
-                onClick={() => acceptQuote(quote.quoteId)}
-                className="border-2 border-green-500"
-              >
-                {t.quotes.accept}
-              </Button>
-              <Button
-                variant="danger"
-                onClick={() => rejectQuote(quote.quoteId)}
-                className="border-2 border-red-500"
-              >
-                {t.quotes.reject}
-              </Button>
-            </>
-          )}
-
-          {quote.quoteStatus === 'rejected' && (
-            <Button
-              variant="danger"
-              onClick={() => revokeRejection(quote.quoteId)}
-              className="border-2 border-red-500"
-            >
-              {t.quotes.revokeRejection}
-            </Button>
-          )}
-
-          {quote.quoteStatus === 'started' && (
-            <>
-              <Button
-                variant="success"
-                onClick={() => completeTreatment(quote.quoteId)}
-                className="border-2 border-green-500"
-              >
-                {t.quotes.completeTreatment}
-              </Button>
-              <Button
-                variant="danger"
-                onClick={() => revokeAcceptance(quote.quoteId)}
-                className="border-2 border-red-500"
-              >
-                {t.quotes.revokeAcceptance}
-              </Button>
-            </>
-          )}
-
-          {quote.quoteStatus === 'completed' && (
-            <Button
-              variant="danger"
-              onClick={() => reopenTreatment(quote.quoteId)}
-              className="border-2 border-red-500"
-            >
-              {t.quotes.reopenTreatment}
-            </Button>
-          )}
-
-          {/* Delete button - only for draft, closed, rejected */}
-          {canDeleteQuote(quote.quoteId) && (
-            <Button
-              variant="danger"
-              onClick={() => setDeleteConfirm(true)}
-            >
-              {t.common.delete}
-            </Button>
-          )}
-
           {/* Invoicing button */}
-          {hasPermission('invoices.issue') && (canInvoice ? (
+          {!quote.isDeleted && hasPermission('invoices.issue') && (canInvoice ? (
             <Button onClick={handleOpenInvoiceModal}>
               <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -724,7 +647,7 @@ export function QuoteEditorPage() {
                   />
                 </div>
 
-                {/* Expected Treatments and Discount Preset */}
+                {/* Expected Treatments, Language and Discount Preset */}
                 <div className="flex items-center gap-3">
                   <label className="text-sm font-medium text-gray-700">
                     {t.quotes.expectedTreatments}
@@ -737,6 +660,18 @@ export function QuoteEditorPage() {
                         value: String(i + 1),
                         label: `${i + 1} ${t.quotes.treatmentSession}`,
                       })),
+                    ]}
+                    className="w-40"
+                    disabled={quote.quoteStatus !== 'draft'}
+                  />
+                  <label className="text-sm font-medium text-gray-700">{t.quotes.quoteLang}</label>
+                  <Select
+                    value={effectiveQuoteLang}
+                    onChange={(e) => editQuote(quote.quoteId, { quoteLang: e.target.value as 'hu' | 'en' | 'de' })}
+                    options={[
+                      { value: 'hu', label: 'Magyar' },
+                      { value: 'en', label: 'English' },
+                      { value: 'de', label: 'Deutsch' },
                     ]}
                     className="w-40"
                     disabled={quote.quoteStatus !== 'draft'}
@@ -877,6 +812,175 @@ export function QuoteEditorPage() {
                   </svg>
                 </button>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Acceptance Card */}
+          <Card>
+            <CardHeader className="flex items-center justify-between">
+              <h3 className="font-semibold">{t.quotes.acceptanceCardTitle}</h3>
+              <QuoteProgressBar status={quote.quoteStatus} isDeleted={quote.isDeleted} />
+            </CardHeader>
+            <CardContent>
+              {quote.isDeleted ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">{t.quotes.acceptanceDeleted}</span>
+                  <button
+                    type="button"
+                    onClick={() => restoreQuote(quote.quoteId)}
+                    className="rounded-md border border-gray-200 p-1.5 text-green-600 hover:bg-green-50 transition-colors"
+                    title={t.quotes.restoreQuote}
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="1 4 1 10 7 10" />
+                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                    </svg>
+                  </button>
+                </div>
+              ) : quote.quoteStatus === 'draft' ? (
+                <div>
+                  <p className="text-sm text-gray-600 mb-3">{t.quotes.acceptanceDraft}</p>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" onClick={handleClose}>
+                      <svg className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                      </svg>
+                      {t.quotes.close}
+                    </Button>
+                    {hasPermission('quotes.delete') && (
+                      <Button size="sm" variant="danger" onClick={() => setDeleteConfirm(true)}>
+                        <svg className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                        {t.common.delete}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ) : quote.quoteStatus === 'closed' ? (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-gray-600">{t.quotes.acceptanceClosed}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => reopenQuote(quote.quoteId)}
+                        className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                        title={t.quotes.reopen}
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="1 4 1 10 7 10" />
+                          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                        </svg>
+                      </button>
+                      {hasPermission('quotes.delete') && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirm(true)}
+                          className="rounded-md border border-gray-200 p-1.5 text-red-600 hover:bg-red-50 transition-colors"
+                          title={t.common.delete}
+                        >
+                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="success" onClick={() => acceptQuote(quote.quoteId)}>
+                      <svg className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      {t.quotes.accept}
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => rejectQuote(quote.quoteId)}>
+                      <svg className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                      {t.quotes.reject}
+                    </Button>
+                  </div>
+                </div>
+              ) : quote.quoteStatus === 'started' ? (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-gray-600">{t.quotes.acceptanceStarted}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => revokeAcceptance(quote.quoteId)}
+                        className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                        title={t.quotes.revokeAcceptance}
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="1 4 1 10 7 10" />
+                          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="success" onClick={() => completeTreatment(quote.quoteId)}>
+                      <svg className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      {t.quotes.completeTreatment}
+                    </Button>
+                  </div>
+                </div>
+              ) : quote.quoteStatus === 'rejected' ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">{t.quotes.acceptanceRejected}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => revokeRejection(quote.quoteId)}
+                      className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                      title={t.quotes.revokeRejection}
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="1 4 1 10 7 10" />
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                      </svg>
+                    </button>
+                    {hasPermission('quotes.delete') && (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirm(true)}
+                        className="rounded-md border border-gray-200 p-1.5 text-red-600 hover:bg-red-50 transition-colors"
+                        title={t.common.delete}
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : quote.quoteStatus === 'completed' ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">{t.quotes.acceptanceCompleted}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => reopenTreatment(quote.quoteId)}
+                      className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                      title={t.quotes.reopenTreatment}
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="1 4 1 10 7 10" />
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -1344,7 +1448,7 @@ export function QuoteEditorPage() {
                   }}
                 >
                   <div>
-                    <p className="font-medium">{item.catalogName}</p>
+                    <p className="font-medium">{getCatalogDisplayName(item, appLanguage)}</p>
                     <p className="text-sm text-gray-500">
                       {item.catalogCode} | {item.catalogCategory}
                     </p>

@@ -46,6 +46,17 @@
   background: transparent;
 }
 
+/* Quote-builder mode: panel hidden, teeth clickable (no overlay) */
+.odontogram-host--quote-builder .panel-header,
+.odontogram-host--quote-builder .panel-body {
+  display: none;
+}
+
+.odontogram-host--quote-builder .tooth-tile:hover {
+  outline: 2px solid var(--accent, #3b82f6);
+  cursor: pointer;
+}
+
 /* Override Tailwind component classes (.btn, .card, .btn-danger) that
    collide with the odontogram engine's own class names.  After the
    engine moved into src/, Vite orders engine CSS before Tailwind CSS

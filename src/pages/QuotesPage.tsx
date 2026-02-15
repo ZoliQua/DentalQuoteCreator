@@ -12,10 +12,10 @@ import {
   EmptySearchIcon,
   ConfirmModal,
 } from '../components/common';
-import { formatDate, formatDateTime, formatCurrency, calculateQuoteTotals } from '../utils';
+import { formatDate, formatCurrency, calculateQuoteTotals } from '../utils';
 
 type FilterTab = 'all' | 'draft' | 'in_progress' | 'completed';
-type SortColumn = 'quoteName' | 'patient' | 'doctor' | 'status' | 'createdAt' | 'modifiedAt' | 'validUntil' | 'total';
+type SortColumn = 'quoteName' | 'patient' | 'doctor' | 'status' | 'createdAt' | 'validUntil' | 'total';
 type SortDirection = 'asc' | 'desc';
 
 export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
@@ -123,9 +123,6 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
         case 'createdAt':
           cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
           break;
-        case 'modifiedAt':
-          cmp = new Date(a.lastStatusChangeAt).getTime() - new Date(b.lastStatusChangeAt).getTime();
-          break;
         case 'validUntil':
           cmp = new Date(a.validUntil).getTime() - new Date(b.validUntil).getTime();
           break;
@@ -158,7 +155,8 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
     </span>
   );
 
-  const getStatusLabel = (status: QuoteStatus): string => {
+  const getStatusLabel = (status: QuoteStatus, isDeleted?: boolean): string => {
+    if (isDeleted) return t.quotes.statusDeleted;
     const labels: Record<QuoteStatus, string> = {
       draft: t.quotes.statusDraft,
       closed: t.quotes.statusClosed,
@@ -169,7 +167,8 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
     return labels[status];
   };
 
-  const getStatusBadgeStyle = (status: QuoteStatus): string => {
+  const getStatusBadgeStyle = (status: QuoteStatus, isDeleted?: boolean): string => {
+    if (isDeleted) return 'bg-red-100 text-red-800';
     const styles: Record<QuoteStatus, string> = {
       draft: 'bg-yellow-100 text-yellow-800',
       closed: 'bg-blue-100 text-blue-800',
@@ -217,7 +216,7 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
 
     if (status === 'draft') {
       btns.push(
-        <IconBtn key="edit" onClick={() => navigate(`/patients/${quote.patientId}/quotes/${quote.quoteId}`)} title={t.common.edit} className="text-gray-600 hover:bg-gray-100">
+        <IconBtn key="edit" onClick={() => navigate(quote.quoteType === 'visual' ? `/patients/${quote.patientId}/visual-quotes/${quote.quoteId}` : `/patients/${quote.patientId}/quotes/${quote.quoteId}`)} title={t.common.edit} className="text-gray-600 hover:bg-gray-100">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
@@ -375,11 +374,13 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <ThSortable column="quoteName">{t.quotes.quoteName}</ThSortable>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                    {t.quotes.quoteType}
+                  </th>
                   <ThSortable column="patient">{t.quotes.patient}</ThSortable>
                   <ThSortable column="doctor">{t.quotes.doctor}</ThSortable>
                   <ThSortable column="status">{t.quotes.status}</ThSortable>
                   <ThSortable column="createdAt">{t.quotes.createdAt}</ThSortable>
-                  <ThSortable column="modifiedAt">{t.quotes.modifiedAt}</ThSortable>
                   <ThSortable column="validUntil">{t.quotes.validUntil}</ThSortable>
                   <ThSortable column="total" align="right">{t.quotes.total}</ThSortable>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -389,17 +390,39 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {paginatedQuotes.map((quote) => (
-                  <tr key={quote.quoteId} className="hover:bg-gray-50">
+                  <tr key={quote.quoteId} className={
+                    quote.quoteStatus === 'draft' ? 'bg-yellow-50 hover:bg-yellow-100'
+                    : quote.quoteStatus === 'rejected' ? 'bg-red-50 hover:bg-red-100'
+                    : quote.quoteStatus === 'completed' ? 'bg-blue-50 hover:bg-blue-100'
+                    : 'hover:bg-gray-50'
+                  }>
                     <td className="px-4 py-3">
                       <div className="flex flex-col">
                         <span className="text-xs text-gray-400">{quote.quoteNumber}</span>
                         <Link
-                          to={`/patients/${quote.patientId}/quotes/${quote.quoteId}`}
+                          to={quote.quoteType === 'visual'
+                            ? `/patients/${quote.patientId}/visual-quotes/${quote.quoteId}`
+                            : `/patients/${quote.patientId}/quotes/${quote.quoteId}`}
                           className="text-dental-600 hover:text-dental-700 font-medium"
                         >
                           {quote.quoteName}
                         </Link>
                       </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {quote.quoteType === 'visual' ? (
+                        <span title={t.quotes.newQuoteVisual}>
+                          <svg className="w-5 h-5 text-dental-600 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                          </svg>
+                        </span>
+                      ) : (
+                        <span title={t.quotes.newQuoteItemized}>
+                          <svg className="w-5 h-5 text-dental-600 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                          </svg>
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       <Link to={`/patients/${quote.patientId}`} className="hover:text-dental-600">
@@ -411,17 +434,14 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
                     </td>
                     <td className="px-4 py-3">
                       <button
-                        onClick={() => navigate(`/patients/${quote.patientId}/quotes/${quote.quoteId}`)}
-                        className={`px-2 py-1 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 ${getStatusBadgeStyle(quote.quoteStatus)}`}
+                        onClick={() => navigate(quote.quoteType === 'visual' ? `/patients/${quote.patientId}/visual-quotes/${quote.quoteId}` : `/patients/${quote.patientId}/quotes/${quote.quoteId}`)}
+                        className={`px-2 py-1 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 ${getStatusBadgeStyle(quote.quoteStatus, quote.isDeleted)}`}
                       >
-                        {getStatusLabel(quote.quoteStatus)}
+                        {getStatusLabel(quote.quoteStatus, quote.isDeleted)}
                       </button>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
                       {formatDate(quote.createdAt)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {formatDateTime(quote.lastStatusChangeAt)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
                       {formatDate(quote.validUntil)}

@@ -62,6 +62,46 @@ export function CatalogPage() {
     {}
   );
 
+  type CatalogSortColumn = 'catalogCode' | 'catalogName' | 'catalogUnit' | 'catalogPrice' | 'catalogTechnicalPrice';
+  type SortDirection = 'asc' | 'desc';
+  const [sortColumn, setSortColumn] = useState<CatalogSortColumn>('catalogCode');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  const handleSort = (column: CatalogSortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortArrow = ({ column }: { column: CatalogSortColumn }) => (
+    <span className="ml-1 inline-block w-3">
+      {sortColumn === column ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+    </span>
+  );
+
+  const ThSortable = ({ column, children, align }: { column: CatalogSortColumn; children: React.ReactNode; align?: string }) => (
+    <th
+      className={`pb-3 font-medium cursor-pointer hover:text-gray-700 select-none ${align === 'right' ? 'text-right' : 'text-left'}`}
+      onClick={() => handleSort(column)}
+    >
+      {children}
+      <SortArrow column={column} />
+    </th>
+  );
+
+  const IconBtn = ({ onClick, title, className, children }: { onClick: () => void; title: string; className: string; children: React.ReactNode }) => (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`p-1.5 rounded-lg transition-colors ${className}`}
+    >
+      {children}
+    </button>
+  );
+
   const filteredItems = useMemo(() => {
     let items = searchCatalog(
       searchQuery,
@@ -106,8 +146,22 @@ export function CatalogPage() {
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(item);
     });
+    // Sort within each category
+    for (const cat of Object.keys(groups)) {
+      groups[cat].sort((a, b) => {
+        let cmp = 0;
+        switch (sortColumn) {
+          case 'catalogCode': cmp = a.catalogCode.localeCompare(b.catalogCode); break;
+          case 'catalogName': cmp = a.catalogName.localeCompare(b.catalogName); break;
+          case 'catalogUnit': cmp = a.catalogUnit.localeCompare(b.catalogUnit); break;
+          case 'catalogPrice': cmp = a.catalogPrice - b.catalogPrice; break;
+          case 'catalogTechnicalPrice': cmp = (a.catalogTechnicalPrice ?? 0) - (b.catalogTechnicalPrice ?? 0); break;
+        }
+        return sortDirection === 'asc' ? cmp : -cmp;
+      });
+    }
     return groups;
-  }, [filteredItems]);
+  }, [filteredItems, sortColumn, sortDirection]);
 
   const getNextCatalogCode = (category: CatalogCategory, items: CatalogItem[] = []) => {
     const prefix = CATEGORY_CODE_PREFIX[category] || category.slice(0, 4).toUpperCase();
@@ -135,6 +189,8 @@ export function CatalogPage() {
         [category]: {
           catalogCode: nextCode,
           catalogName: '',
+          catalogNameEn: '',
+          catalogNameDe: '',
           catalogUnit: 'alkalom',
           catalogPrice: 0,
           catalogPriceCurrency: 'HUF',
@@ -144,6 +200,10 @@ export function CatalogPage() {
           hasTechnicalPrice: false,
           isFullMouth: false,
           isArch: false,
+          isQuadrant: false,
+          maxTeethPerArch: undefined,
+          allowedTeeth: undefined,
+          milkToothOnly: false,
           isActive: true,
         },
       };
@@ -298,11 +358,13 @@ export function CatalogPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="text-left text-sm text-gray-500 border-b">
-                        <th className="pb-3 font-medium">{t.catalog.code}</th>
-                        <th className="pb-3 font-medium">{t.catalog.name}</th>
-                        <th className="pb-3 font-medium">{t.catalog.unit}</th>
-                        <th className="pb-3 font-medium text-right">{t.catalog.price}</th>
-                        <th className="pb-3 font-medium text-right">{t.catalog.technicalPrice}</th>
+                        <ThSortable column="catalogCode">{t.catalog.code}</ThSortable>
+                        <ThSortable column="catalogName">{t.catalog.name}</ThSortable>
+                        <ThSortable column="catalogUnit">{t.catalog.unit}</ThSortable>
+                        <ThSortable column="catalogPrice" align="right">{t.catalog.price}</ThSortable>
+                        <ThSortable column="catalogTechnicalPrice" align="right">{t.catalog.technicalPrice}</ThSortable>
+                        <th className="pb-3 font-medium text-center">SVG</th>
+                        <th className="pb-3 font-medium text-center">{t.catalog.applicability}</th>
                         <th className="pb-3 font-medium text-right">{t.common.actions}</th>
                       </tr>
                     </thead>
@@ -322,35 +384,68 @@ export function CatalogPage() {
                           <td className="py-3 text-right font-medium">
                             {item.hasTechnicalPrice ? formatCurrency(item.catalogTechnicalPrice) : '-'}
                           </td>
+                          <td className="py-3 text-center">
+                            {item.svgLayer ? (
+                              <svg className="w-4 h-4 text-green-500 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            ) : (
+                              <span className="text-gray-300">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 text-center">
+                            {item.isFullMouth ? (
+                              <span title={t.catalog.fullMouth}>
+                                <svg className="w-5 h-5 inline-block" viewBox="0 0 58 30" fill="none">
+                                  <path d="M6.5,11.4c-.2-.3,0-.8.4-1.2,0,0,.1-.1.2-.2,1.6-1.6,4.2-2.5,6.4-3.2,2.7-.8,5.7-1.6,8.5-1.4,3,0,5.8,1.6,8.8,1.6,1.7,0,3.4-.6,5.1-1,1.6-.4,3.3-.5,5.1-.4,3.7.3,7.5,1.3,10.8,3,.6.3,1.1.6,1.6,1,.8.5,2.5,1.9,1.7,2.6-1,.6-3,.5-4.8.5-1.9,0-3.9-.2-5.8-.3-5.1-.3-10-.5-15.1-.7-2.5,0-4.9-.1-7.3,0-1.7,0-3.2.5-4.9.7-1.5.2-3,.2-4.5.2-1.4,0-5.5,0-6.1-1.1h0Z" fill="#ff317b"/>
+                                  <path d="M51.3,22.9c-1.3,1.8-7.4,5.4-10,6.1-1.2.3-2.4.3-3.7.1-2.2-.3-4.4-.8-6.6-.9-1.4,0-2.3.4-3.8.5-1.3,0-3.1.4-4.4.5-1.3,0-2.7-.3-3.9-.6-3.9-1.1-9-6.8-12.1-10.4-2.3-2.9-1.4-3.1,1.5-1.5,2.3,1.3,4.7,2.8,7,4,1,.5,2,.9,3.2,1.1.5,0,1.1.2,1.7.2,3.8.4,7.6,1.3,11.4,1.5,1.7,0,3.4-.3,5.1-.7,2.5-.6,5-1.4,7.5-2,.8-.2,1.5-.5,2.2-.9,2.2-1.1,4.6-2.8,6.9-4,.6-.3,2.4-1.2,2.1,0-.1.5-.5,1-.8,1.5-1.1,1.8-2.2,3.8-3.4,5.5h0Z" fill="#ff317b"/>
+                                </svg>
+                              </span>
+                            ) : item.isArch ? (
+                              <span title={t.catalog.arch}>
+                                <svg className="w-5 h-5 inline-block" viewBox="0 0 58 56" fill="none">
+                                  <path d="M5.9,31.3c.2-5.2,0-10.1,1.9-14.9,2.4-5.6,9.2-11.1,16.2-12.1,7.4-.9,17.3-1.3,22.7,3.9,7.3,7.8,6.8,21.9,6.5,32.2-.3,4.1-1,7.9-2,9-1.3,1.4-2.2-.7-3.1-4-1.3-5.3-2.5-18.5-5.3-23.3-3.5-6.4-15.3-7.9-22-4.8-6.4,2.8-6.6,14.1-7,20.9s0,11.4-3.1,13.5c-2.3,1.3-4.9-6.3-5.3-9.1" fill="#0051bf"/>
+                                </svg>
+                              </span>
+                            ) : item.isQuadrant ? (
+                              <span title={t.catalog.quadrant}>
+                                <svg className="w-4 h-4 text-orange-500 inline-block" viewBox="0 0 24 24" fill="currentColor">
+                                  <rect x="3" y="3" width="8" height="8" rx="1" />
+                                  <rect x="13" y="3" width="8" height="8" rx="1" opacity="0.2" />
+                                  <rect x="3" y="13" width="8" height="8" rx="1" opacity="0.2" />
+                                  <rect x="13" y="13" width="8" height="8" rx="1" opacity="0.2" />
+                                </svg>
+                              </span>
+                            ) : (
+                              <span title={t.catalog.toothItem}>
+                                <svg className="w-5 h-5 inline-block" viewBox="0 0 42 64" fill="none">
+                                  <path d="M13.6,17.2c.3,1.9.9,4.3,2.6,5.3,1.5.9,2.9-.4,3.4-1.8,1.7-4.8.3-10.7,2.2-15.5.8-1.7,2.6-1.5,3.4.2,1,1.9,1.1,4.3,1.4,6.5.3,3.8-.7,7.3-1.6,11-1,4-1.2,8.3,0,12.4,1.8,8,7.5,21.1-2,24.4-1.4.2-2.9-.5-4.5-.9-3-1-5.1,1-8,1.5-8.9,1.4-6.7-14.5-4.9-19.4.9-2.3,1.9-4.7,2.1-7.3.3-5.2-1.1-10.8-.8-15.9,0-3.3.5-6.8,1.2-10.1.2-1.7,2.2-5.9,3.9-3.2,1.4,3.9.9,8.8,1.6,12.6,0,0,0,.2,0,.2Z" fill="#ebebeb" stroke="#0051bf" strokeMiterlimit={10}/>
+                                </svg>
+                              </span>
+                            )}
+                          </td>
                           <td className="py-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-1">
                               {hasPermission('catalog.update') && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setEditingItem(item)}
-                              >
-                                {t.common.edit}
-                              </Button>
+                                <IconBtn onClick={() => setEditingItem(item)} title={t.common.edit} className="text-gray-600 hover:bg-gray-100">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </IconBtn>
                               )}
                               {hasPermission('catalog.update') && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => toggleItemActive(item.catalogItemId)}
-                              >
-                                {item.isActive ? 'Deaktiválás' : 'Aktiválás'}
-                              </Button>
+                                <IconBtn onClick={() => toggleItemActive(item.catalogItemId)} title={item.isActive ? 'Deaktiválás' : 'Aktiválás'} className="text-red-600 hover:bg-red-50">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </IconBtn>
                               )}
                               {hasPermission('catalog.delete') && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setDeleteConfirm(item.catalogItemId)}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                {t.common.delete}
-                              </Button>
+                                <IconBtn onClick={() => setDeleteConfirm(item.catalogItemId)} title={t.common.delete} className="text-red-500 hover:bg-red-50">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </IconBtn>
                               )}
                             </div>
                           </td>
@@ -415,6 +510,8 @@ export function CatalogPage() {
                               placeholder={t.catalog.technicalPrice}
                             />
                           </td>
+                          <td className="py-3 text-center"><span className="text-gray-300">-</span></td>
+                          <td className="py-3 text-center"><span className="text-gray-300">-</span></td>
                           <td className="py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
                               <Button
@@ -457,6 +554,7 @@ export function CatalogPage() {
         onSubmit={editingItem ? handleEditItem : handleCreateItem}
         item={editingItem || undefined}
         title={editingItem ? t.catalog.editItem : t.catalog.newItem}
+        existingCodes={catalog.map((c) => c.catalogCode)}
       />
 
       {/* Delete Confirmation */}
@@ -492,6 +590,7 @@ interface CatalogItemFormModalProps {
   onSubmit: (data: CatalogItemFormData) => void;
   item?: CatalogItem;
   title: string;
+  existingCodes?: string[];
 }
 
 function CatalogItemFormModal({
@@ -500,6 +599,7 @@ function CatalogItemFormModal({
   onSubmit,
   item,
   title,
+  existingCodes,
 }: CatalogItemFormModalProps) {
   const { t } = useSettings();
   const formatGroupedNumber = (value: number): string => {
@@ -516,18 +616,26 @@ function CatalogItemFormModal({
   const [formData, setFormData] = useState<CatalogItemFormData>({
     catalogCode: item?.catalogCode || '',
     catalogName: item?.catalogName || '',
+    catalogNameEn: item?.catalogNameEn || '',
+    catalogNameDe: item?.catalogNameDe || '',
     catalogUnit: item?.catalogUnit || 'alkalom',
     catalogPrice: item?.catalogPrice ?? 10000,
     catalogPriceCurrency: item?.catalogPriceCurrency || 'HUF',
     catalogVatRate: item?.catalogVatRate || 0,
     catalogTechnicalPrice: item?.catalogTechnicalPrice || 0,
     catalogCategory: item?.catalogCategory || 'Diagnosztika',
+    svgLayer: item?.svgLayer || '',
+    hasLayer: item?.hasLayer ?? false,
     hasTechnicalPrice:
       item?.catalogTechnicalPrice !== undefined
         ? (item.catalogTechnicalPrice ?? 0) > 0
         : item?.hasTechnicalPrice ?? false,
     isFullMouth: item?.isFullMouth ?? false,
     isArch: item?.isArch ?? false,
+    isQuadrant: item?.isQuadrant ?? false,
+    maxTeethPerArch: item?.maxTeethPerArch,
+    allowedTeeth: item?.allowedTeeth,
+    milkToothOnly: item?.milkToothOnly ?? false,
     isActive: item?.isActive ?? true,
   });
   const [catalogPriceInput, setCatalogPriceInput] = useState<string>(
@@ -541,18 +649,26 @@ function CatalogItemFormModal({
     setFormData({
       catalogCode: item?.catalogCode || '',
       catalogName: item?.catalogName || '',
+      catalogNameEn: item?.catalogNameEn || '',
+      catalogNameDe: item?.catalogNameDe || '',
       catalogUnit: item?.catalogUnit || 'alkalom',
       catalogPrice: nextPrice,
       catalogPriceCurrency: item?.catalogPriceCurrency || 'HUF',
       catalogVatRate: item?.catalogVatRate || 0,
       catalogTechnicalPrice: item?.catalogTechnicalPrice || 0,
       catalogCategory: item?.catalogCategory || 'Diagnosztika',
+      svgLayer: item?.svgLayer || '',
+      hasLayer: item?.hasLayer ?? false,
       hasTechnicalPrice:
         item?.catalogTechnicalPrice !== undefined
           ? (item.catalogTechnicalPrice ?? 0) > 0
           : item?.hasTechnicalPrice ?? false,
       isFullMouth: item?.isFullMouth ?? false,
       isArch: item?.isArch ?? false,
+      isQuadrant: item?.isQuadrant ?? false,
+      maxTeethPerArch: item?.maxTeethPerArch,
+      allowedTeeth: item?.allowedTeeth,
+      milkToothOnly: item?.milkToothOnly ?? false,
       isActive: item?.isActive ?? true,
     });
     setCatalogPriceInput(formatGroupedNumber(nextPrice));
@@ -569,6 +685,15 @@ function CatalogItemFormModal({
     if (formData.catalogPrice < 0) newErrors.catalogPrice = t.catalog.priceNegative;
     if (formData.catalogTechnicalPrice < 0)
       newErrors.catalogTechnicalPrice = t.catalog.technicalPriceNegative;
+    if (existingCodes && formData.catalogCode.trim()) {
+      const isDuplicate = existingCodes.some(
+        (code) => code.toUpperCase() === formData.catalogCode.toUpperCase()
+      );
+      const originalCode = item?.catalogCode?.toUpperCase();
+      if (isDuplicate && formData.catalogCode.toUpperCase() !== originalCode) {
+        newErrors.catalogCode = t.catalog.codeDuplicate;
+      }
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -586,6 +711,15 @@ function CatalogItemFormModal({
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
+          <Select
+            label={t.catalog.category}
+            value={formData.catalogCategory}
+            onChange={(e) =>
+              setFormData({ ...formData, catalogCategory: e.target.value as CatalogCategory })
+            }
+            options={CATALOG_CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+            required
+          />
           <Input
             label={t.catalog.code}
             value={formData.catalogCode}
@@ -595,15 +729,6 @@ function CatalogItemFormModal({
             error={errors.catalogCode}
             required
             placeholder="pl. KONZ01"
-          />
-          <Select
-            label={t.catalog.category}
-            value={formData.catalogCategory}
-            onChange={(e) =>
-              setFormData({ ...formData, catalogCategory: e.target.value as CatalogCategory })
-            }
-            options={CATALOG_CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
-            required
           />
         </div>
 
@@ -615,6 +740,21 @@ function CatalogItemFormModal({
           required
           placeholder="pl. Konzultáció"
         />
+
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label={t.catalog.nameEn}
+            value={formData.catalogNameEn || ''}
+            onChange={(e) => setFormData({ ...formData, catalogNameEn: e.target.value })}
+            placeholder="e.g. Consultation"
+          />
+          <Input
+            label={t.catalog.nameDe}
+            value={formData.catalogNameDe || ''}
+            onChange={(e) => setFormData({ ...formData, catalogNameDe: e.target.value })}
+            placeholder="z.B. Beratung"
+          />
+        </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
           <div className="md:col-span-5">
@@ -730,25 +870,101 @@ function CatalogItemFormModal({
           placeholder="0"
         />
 
-        <div className="grid grid-cols-2 gap-4">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+        <Input
+          label={t.catalog.svgLayers}
+          type="text"
+          value={formData.svgLayer}
+          onChange={(e) => setFormData({ ...formData, svgLayer: e.target.value, hasLayer: e.target.value.trim().length > 0 })}
+          placeholder="filling-composite-[surfaces4]"
+        />
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {t.catalog.applicability}
+          </label>
+          <div className="flex flex-wrap gap-4">
+            {[
+              { value: 'fullMouth', label: t.catalog.fullMouth },
+              { value: 'arch', label: t.catalog.arch },
+              { value: 'quadrant', label: t.catalog.quadrant },
+              { value: 'tooth', label: t.catalog.toothItem },
+            ].map((opt) => {
+              const currentValue = formData.isFullMouth ? 'fullMouth'
+                : formData.isArch ? 'arch'
+                : formData.isQuadrant ? 'quadrant'
+                : 'tooth';
+              return (
+                <label key={opt.value} className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="radio"
+                    name="applicability"
+                    checked={currentValue === opt.value}
+                    onChange={() => setFormData({
+                      ...formData,
+                      isFullMouth: opt.value === 'fullMouth',
+                      isArch: opt.value === 'arch',
+                      isQuadrant: opt.value === 'quadrant',
+                    })}
+                    className="w-4 h-4 text-dental-600 focus:ring-dental-500"
+                  />
+                  {opt.label}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        {formData.isArch && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t.catalog.maxTeethPerArch ?? 'Max fog / állcsont'}
+            </label>
             <input
-              type="checkbox"
-              checked={formData.isFullMouth}
-              onChange={(e) => setFormData({ ...formData, isFullMouth: e.target.checked })}
-              className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
+              type="number"
+              value={formData.maxTeethPerArch ?? ''}
+              onChange={(e) => setFormData({ ...formData, maxTeethPerArch: e.target.value ? Number(e.target.value) : undefined })}
+              min={1}
+              max={14}
+              placeholder="—"
+              className="w-24 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500"
             />
-            {t.catalog.fullMouth}
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {t.catalog.restrictions ?? 'Korlátozás'}
           </label>
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input
               type="checkbox"
-              checked={formData.isArch}
-              onChange={(e) => setFormData({ ...formData, isArch: e.target.checked })}
+              checked={formData.milkToothOnly ?? false}
+              onChange={(e) => setFormData({ ...formData, milkToothOnly: e.target.checked })}
               className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
             />
-            {t.catalog.arch}
+            {t.catalog.milkToothOnly ?? 'Csak tejfogra'}
           </label>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {t.catalog.allowedTeeth ?? 'Engedélyezett fogak'}
+          </label>
+          <input
+            type="text"
+            value={formData.allowedTeeth?.join(', ') ?? ''}
+            onChange={(e) => {
+              const text = e.target.value.trim();
+              if (!text) {
+                setFormData({ ...formData, allowedTeeth: undefined });
+              } else {
+                const nums = text.split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0);
+                setFormData({ ...formData, allowedTeeth: nums.length > 0 ? nums : undefined });
+              }
+            }}
+            placeholder="14, 15, 24, 25, ..."
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500"
+          />
         </div>
 
         <div className="flex items-center gap-2">

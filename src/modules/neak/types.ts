@@ -7,6 +7,7 @@ export type NeakCheckResult = {
   hibaSzoveg?: string;
   torlesNapja?: string;
   kozlemeny?: string;
+  tranKod?: string;
   message?: string;
 };
 

@@ -35,9 +35,17 @@ export interface CatalogItem {
   catalogVatRate: number;
   catalogTechnicalPrice: number;
   catalogCategory: CatalogCategory;
+  svgLayer: string;
+  hasLayer: boolean;
   hasTechnicalPrice: boolean;
   isFullMouth: boolean;
   isArch: boolean;
+  isQuadrant?: boolean;
+  maxTeethPerArch?: number;
+  allowedTeeth?: number[];
+  milkToothOnly?: boolean;
+  catalogNameEn?: string;
+  catalogNameDe?: string;
   isActive: boolean;
 }
 

@@ -201,6 +201,7 @@ export function PatientDetailPage() {
   const [stornoConfirmInvoiceId, setStornoConfirmInvoiceId] = useState<string | null>(null);
   const [stornoLoading, setStornoLoading] = useState(false);
   const [stornoError, setStornoError] = useState<string | null>(null);
+  const [quoteTypeModalOpen, setQuoteTypeModalOpen] = useState(false);
 
   const patient = patientId ? getPatient(patientId) : undefined;
   const quotes = patientId ? getQuotesByPatient(patientId) : [];
@@ -217,8 +218,19 @@ export function PatientDetailPage() {
   }
 
   const handleNewQuote = () => {
-    const quote = createQuote(patient.patientId);
+    setQuoteTypeModalOpen(true);
+  };
+
+  const handleCreateItemizedQuote = () => {
+    const quote = createQuote(patient.patientId, undefined, 'itemized');
+    setQuoteTypeModalOpen(false);
     navigate(`/patients/${patient.patientId}/quotes/${quote.quoteId}`);
+  };
+
+  const handleCreateVisualQuote = () => {
+    const quote = createQuote(patient.patientId, undefined, 'visual');
+    setQuoteTypeModalOpen(false);
+    navigate(`/patients/${patient.patientId}/visual-quotes/${quote.quoteId}`);
   };
 
   const handleDuplicatePatient = () => {
@@ -244,9 +256,14 @@ export function PatientDetailPage() {
   };
 
   const handleDuplicateQuote = (quoteId: string) => {
+    const original = quotes.find((q) => q.quoteId === quoteId);
     const dup = duplicateQuote(quoteId);
     if (dup) {
-      navigate(`/patients/${patient.patientId}/quotes/${dup.quoteId}`);
+      navigate(
+        original?.quoteType === 'visual'
+          ? `/patients/${patient.patientId}/visual-quotes/${dup.quoteId}`
+          : `/patients/${patient.patientId}/quotes/${dup.quoteId}`
+      );
     }
   };
 
@@ -555,6 +572,11 @@ export function PatientDetailPage() {
                     </button>
                   )}
                 </div>
+                {neakChecks.length > 0 && neakChecks[0].result.tranKod && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    {t.neak.transactionCode}: <span className="font-mono">{neakChecks[0].result.tranKod}</span>
+                  </p>
+                )}
               </div>
             )}
             {(patient.zipCode || patient.city || patient.street) && (
@@ -635,7 +657,7 @@ export function PatientDetailPage() {
         <div id="patientQuotesSection" className="lg:col-span-2 space-y-4">
           <div id="patientQuotesHeader" className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">{t.quotes.title}</h2>
-            <Button id="patientNewQuoteBtn" onClick={handleNewQuote}>
+            <Button id="patientNewQuoteBtn" onClick={handleNewQuote} disabled={!hasPermission('quotes.create')}>
               <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
@@ -655,8 +677,8 @@ export function PatientDetailPage() {
                   icon={<EmptyQuoteIcon />}
                   title={t.quotes.noQuotes}
                   description={t.patients.createQuotePrompt}
-                  actionLabel={t.quotes.newQuote}
-                  onAction={handleNewQuote}
+                  actionLabel={hasPermission('quotes.create') ? t.quotes.newQuote : undefined}
+                  onAction={hasPermission('quotes.create') ? handleNewQuote : undefined}
                 />
               </CardContent>
             </Card>
@@ -668,7 +690,9 @@ export function PatientDetailPage() {
                   <Card key={quote.quoteId} hoverable>
                     <CardContent className="flex items-center justify-between">
                       <Link
-                        to={`/patients/${patient.patientId}/quotes/${quote.quoteId}`}
+                        to={quote.quoteType === 'visual'
+                          ? `/patients/${patient.patientId}/visual-quotes/${quote.quoteId}`
+                          : `/patients/${patient.patientId}/quotes/${quote.quoteId}`}
                         className="flex-1"
                       >
                         <div className="flex items-center gap-4">
@@ -848,24 +872,29 @@ export function PatientDetailPage() {
                     const badge = code ? badgeMap[code] : null;
                     return (
                       <Card key={entry.id}>
-                        <CardContent className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-gray-500">
-                              {formatDateTime(entry.checkedAt)}
-                            </p>
-                            <p className="text-xs text-gray-400">TAJ: {formatInsuranceNum(entry.taj)}</p>
+                        <CardContent>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm text-gray-500">
+                                {formatDateTime(entry.checkedAt)}
+                              </p>
+                              <p className="text-xs text-gray-400">TAJ: {formatInsuranceNum(entry.taj)}</p>
+                            </div>
+                            <div>
+                              {badge ? (
+                                <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${badge.color}`}>
+                                  {badge.label}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-red-500">
+                                  {entry.result.message || entry.result.hibaSzoveg || t.neak.errorGeneric}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            {badge ? (
-                              <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${badge.color}`}>
-                                {badge.label}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-red-500">
-                                {entry.result.message || entry.result.hibaSzoveg || t.neak.errorGeneric}
-                              </span>
-                            )}
-                          </div>
+                          {entry.result.tranKod && (
+                            <p className="text-xs text-gray-400 mt-1 font-mono">{t.neak.transactionCode}: {entry.result.tranKod}</p>
+                          )}
                         </CardContent>
                       </Card>
                     );
@@ -968,6 +997,66 @@ export function PatientDetailPage() {
           patientName={formatPatientName(patient.lastName, patient.firstName, patient.title)}
         />
       )}
+
+      <Modal
+        isOpen={quoteTypeModalOpen}
+        onClose={() => setQuoteTypeModalOpen(false)}
+        title={t.quotes.newQuoteTypeTitle}
+        size="md"
+      >
+        <div className="space-y-3">
+          <button
+            type="button"
+            className="w-full rounded-lg border border-gray-200 p-4 text-left hover:border-dental-400 hover:bg-dental-50 transition-colors"
+            onClick={handleCreateItemizedQuote}
+          >
+            <div className="flex items-center gap-3">
+              <svg className="h-8 w-8 text-dental-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
+              <div>
+                <p className="font-semibold text-gray-900">{t.quotes.newQuoteItemized}</p>
+                <p className="text-sm text-gray-500">{t.quotes.newQuoteItemizedDesc}</p>
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            className="w-full rounded-lg border border-gray-200 p-4 text-left hover:border-dental-400 hover:bg-dental-50 transition-colors"
+            onClick={handleCreateVisualQuote}
+          >
+            <div className="flex items-center gap-3">
+              <svg className="h-8 w-8 text-dental-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+              </svg>
+              <div>
+                <p className="font-semibold text-gray-900">{t.quotes.newQuoteVisual}</p>
+                <p className="text-sm text-gray-500">{t.quotes.newQuoteVisualDesc}</p>
+              </div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            className="w-full rounded-lg border border-gray-200 p-4 text-left opacity-50 cursor-not-allowed"
+            disabled
+          >
+            <div className="flex items-center gap-3">
+              <svg className="h-8 w-8 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-gray-500">{t.quotes.newQuoteAutomatic}</p>
+                  <Badge variant="default" size="sm">{t.common.comingSoon}</Badge>
+                </div>
+                <p className="text-sm text-gray-400">{t.quotes.newQuoteAutomaticDesc}</p>
+              </div>
+            </div>
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

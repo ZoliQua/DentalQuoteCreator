@@ -5,3 +5,4 @@ export * from './Card';
 export * from './SearchInput';
 export * from './Badge';
 export * from './EmptyState';
+export * from './QuoteProgressBar';

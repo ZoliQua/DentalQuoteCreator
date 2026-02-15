@@ -112,6 +112,11 @@ export function NeakCheckModal({ isOpen, onClose, patientId, taj, patientName }:
           ) : result ? (
             <div className="space-y-2">
               <div>{jogviszonyBadge(result.jogviszony as JogviszonyCode, t)}</div>
+              {result.tranKod && (
+                <p className="text-sm text-gray-600">
+                  {t.neak.transactionCode}: <span className="font-mono">{result.tranKod}</span>
+                </p>
+              )}
               {result.torlesNapja && (
                 <p className="text-sm text-gray-600">
                   {t.neak.deletedOn}: {result.torlesNapja}
@@ -147,17 +152,22 @@ export function NeakCheckModal({ isOpen, onClose, patientId, taj, patientName }:
               {history.map((entry) => (
                 <div
                   key={entry.id}
-                  className="flex items-center justify-between rounded border border-gray-100 px-3 py-2 text-sm"
+                  className="rounded border border-gray-100 px-3 py-2 text-sm"
                 >
-                  <span className="text-gray-500">
-                    {new Date(entry.checkedAt).toLocaleString()}
-                  </span>
-                  <span>
-                    {entry.result.jogviszony
-                      ? jogviszonyBadge(entry.result.jogviszony as JogviszonyCode, t)
-                      : <span className="text-red-500">{entry.result.message || entry.result.hibaSzoveg || t.neak.errorGeneric}</span>
-                    }
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500">
+                      {new Date(entry.checkedAt).toLocaleString()}
+                    </span>
+                    <span>
+                      {entry.result.jogviszony
+                        ? jogviszonyBadge(entry.result.jogviszony as JogviszonyCode, t)
+                        : <span className="text-red-500">{entry.result.message || entry.result.hibaSzoveg || t.neak.errorGeneric}</span>
+                      }
+                    </span>
+                  </div>
+                  {entry.result.tranKod && (
+                    <div className="text-xs text-gray-400 mt-1 font-mono">{entry.result.tranKod}</div>
+                  )}
                 </div>
               ))}
             </div>

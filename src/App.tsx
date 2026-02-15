@@ -14,6 +14,7 @@ import { InvoicesPage } from './pages/InvoicesPage';
 import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
 import { LoginPage } from './pages/LoginPage';
 import { AdminPage } from './pages/AdminPage';
+import { VisualQuoteEditorPage } from './pages/VisualQuoteEditorPage';
 
 function App() {
   const { isAuthenticated, hasPermission } = useAuth();
@@ -37,6 +38,7 @@ function App() {
         <Route path="/patients/:patientId" element={<PatientDetailPage />} />
         <Route path="/patients/:patientId/quotes/new" element={<QuoteEditorPage />} />
         <Route path="/patients/:patientId/quotes/:quoteId" element={<QuoteEditorPage />} />
+        <Route path="/patients/:patientId/visual-quotes/:quoteId" element={<VisualQuoteEditorPage />} />
         <Route path="/quotes" element={<QuotesPage />} />
         <Route path="/quotes/deleted" element={<QuotesPage showDeleted />} />
         <Route path="/catalog" element={<CatalogPage />} />

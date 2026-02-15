@@ -3,11 +3,11 @@ import { Quote, Patient, Settings } from '../../types';
 import {
   formatCurrency,
   formatPatientName,
-  formatQuoteId,
   calculateQuoteTotals,
   calculateLineTotal,
   calculateLineDiscountAmount,
 } from '../../utils';
+import { mergeQuoteItemsBySession, type MergedQuoteItem } from '../../utils/mergedQuoteItems';
 
 // Helper function to convert Hungarian special characters for PDF
 // jsPDF's built-in fonts don't support ő and ű (double acute), so we replace them
@@ -28,7 +28,53 @@ function formatPdfDate(dateString: string): string {
   return `${year}.${month}.${day}`;
 }
 
-export function generateQuotePdf(quote: Quote, patient: Patient, settings: Settings, doctorName?: string): void {
+export function generateQuotePdf(quote: Quote, patient: Patient, settings: Settings, doctorName?: string, odontogramImage?: string): void {
+  const quoteLang: 'hu' | 'en' | 'de' = (quote as { quoteLang?: 'hu' | 'en' | 'de' }).quoteLang ?? (settings.quote as { quoteLang?: 'hu' | 'en' | 'de' }).quoteLang ?? 'hu';
+  const pdfLangSettings = (settings.pdf as { hu?: { footerText: string; warrantyText: string }; en?: { footerText: string; warrantyText: string }; de?: { footerText: string; warrantyText: string }; footerText?: string; warrantyText?: string });
+  // Support both old flat format and new per-language format
+  const resolvedFooterText = pdfLangSettings[quoteLang]?.footerText ?? (pdfLangSettings as unknown as { footerText?: string }).footerText ?? '';
+  const resolvedWarrantyText = pdfLangSettings[quoteLang]?.warrantyText ?? (pdfLangSettings as unknown as { warrantyText?: string }).warrantyText ?? '';
+
+  // Localized PDF labels
+  const pdfLabels = {
+    hu: {
+      title: 'ÁRAJÁNLAT', doctor: 'Kezelőorvos:', id: 'Azonosító:', created: 'Készült:', valid: 'Érvényes:',
+      patient: 'Páciens:', birthDate: 'Születési dátum:', address: 'Lakóhely:', street: 'Cím:', phone: 'Telefonszám:', email: 'E-mail cím:',
+      dentalStatus: 'Célzott fogászati státusz', itemsTitle: 'Kezelések tételek szerint',
+      session: 'Alk.', name: 'Megnevezés', unitPrice: 'Egységár', qty: 'Mennyiség', total: 'Összesen',
+      sessionSummary: 'Kezelések összefoglalója', sessionCol: 'Alkalom', amountCol: 'Összeg', sessionLabel: 'alkalom',
+      subtotal: 'Részösszeg:', lineDiscounts: 'Kedvezmények:', globalDiscount: 'Globális kedvezmény:', grandTotal: 'FIZETENDÖ:',
+      comment: 'Megjegyzés:', warranty: 'GARANCIÁLIS FELTÉTELEK', location: 'Kelt:', patientSig: 'Páciens', doctorSig: 'Kezelőorvos',
+      unit: 'db', fullMouth: 'Teljes szájüreg', lowerJaw: 'Alsó állcsont', upperJaw: 'Felső állcsont', bothJaws: 'Alsó és Felső állcsont',
+      q1: '1-es kvadráns (jobb felül)', q2: '2-es kvadráns (bal felül)', q3: '3-as kvadráns (bal alul)', q4: '4-es kvadráns (jobb alul)',
+      discount: 'Kedv.', treatments: 'Kezelések',
+    },
+    en: {
+      title: 'QUOTE', doctor: 'Doctor:', id: 'ID:', created: 'Date:', valid: 'Valid until:',
+      patient: 'Patient:', birthDate: 'Date of birth:', address: 'City:', street: 'Address:', phone: 'Phone:', email: 'Email:',
+      dentalStatus: 'Targeted dental status', itemsTitle: 'Treatment items',
+      session: 'Ses.', name: 'Description', unitPrice: 'Unit price', qty: 'Quantity', total: 'Total',
+      sessionSummary: 'Treatment summary', sessionCol: 'Session', amountCol: 'Amount', sessionLabel: 'session',
+      subtotal: 'Subtotal:', lineDiscounts: 'Discounts:', globalDiscount: 'Global discount:', grandTotal: 'TOTAL:',
+      comment: 'Comment:', warranty: 'WARRANTY CONDITIONS', location: 'Date:', patientSig: 'Patient', doctorSig: 'Doctor',
+      unit: 'pcs', fullMouth: 'Full mouth', lowerJaw: 'Lower jaw', upperJaw: 'Upper jaw', bothJaws: 'Lower and Upper jaw',
+      q1: 'Quadrant 1 (upper right)', q2: 'Quadrant 2 (upper left)', q3: 'Quadrant 3 (lower left)', q4: 'Quadrant 4 (lower right)',
+      discount: 'Disc.', treatments: 'Treatments',
+    },
+    de: {
+      title: 'KOSTENVORANSCHLAG', doctor: 'Behandelnder Arzt:', id: 'ID:', created: 'Datum:', valid: 'Gültig bis:',
+      patient: 'Patient:', birthDate: 'Geburtsdatum:', address: 'Ort:', street: 'Adresse:', phone: 'Telefon:', email: 'E-Mail:',
+      dentalStatus: 'Gezielter Zahnstatus', itemsTitle: 'Behandlungspositionen',
+      session: 'Sitz.', name: 'Bezeichnung', unitPrice: 'Einzelpreis', qty: 'Menge', total: 'Gesamt',
+      sessionSummary: 'Behandlungsübersicht', sessionCol: 'Sitzung', amountCol: 'Betrag', sessionLabel: 'Sitzung',
+      subtotal: 'Zwischensumme:', lineDiscounts: 'Rabatte:', globalDiscount: 'Globalrabatt:', grandTotal: 'GESAMTBETRAG:',
+      comment: 'Anmerkung:', warranty: 'GARANTIEBEDINGUNGEN', location: 'Datum:', patientSig: 'Patient', doctorSig: 'Behandelnder Arzt',
+      unit: 'Stk', fullMouth: 'Gesamter Mund', lowerJaw: 'Unterkiefer', upperJaw: 'Oberkiefer', bothJaws: 'Unter- und Oberkiefer',
+      q1: 'Quadrant 1 (oben rechts)', q2: 'Quadrant 2 (oben links)', q3: 'Quadrant 3 (unten links)', q4: 'Quadrant 4 (unten rechts)',
+      discount: 'Rab.', treatments: 'Behandlungen',
+    },
+  }[quoteLang];
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -77,7 +123,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
     // Doctor's name
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(toPdfText(`Kezelőorvos:`), margin, yPos);
+    doc.text(toPdfText(pdfLabels.doctor), margin, yPos);
     const marginDoctorName = margin + 30;
     const yPosDoctorName = yPos;
     doc.text(toPdfText(doctorName || ''), marginDoctorName, yPosDoctorName);
@@ -87,19 +133,19 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
     // Right side - Quote info
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text(toPdfText('ÁRAJÁNLAT'), pageWidth - margin, margin, { align: 'right' });
+    doc.text(toPdfText(pdfLabels.title), pageWidth - margin, margin, { align: 'right' });
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(toPdfText(`Azonosító: ${formatQuoteId(quote.quoteId)}`), pageWidth - margin, margin + 7, {
+    doc.text(toPdfText(`${pdfLabels.id} ${quote.quoteNumber}`), pageWidth - margin, margin + 7, {
       align: 'right',
     });
-    doc.text(toPdfText(`Készült: ${formatPdfDate(quote.createdAt)}`), pageWidth - margin, margin + 12, {
+    doc.text(toPdfText(`${pdfLabels.created} ${formatPdfDate(quote.createdAt)}`), pageWidth - margin, margin + 12, {
       align: 'right',
     });
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
-    doc.text(toPdfText(`Érvényes: ${formatPdfDate(quote.validUntil)}`), pageWidth - margin, yPosDoctorName, {
+    doc.text(toPdfText(`${pdfLabels.valid} ${formatPdfDate(quote.validUntil)}`), pageWidth - margin, yPosDoctorName, {
       align: 'right',
     });
 
@@ -117,7 +163,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   // Patient info block
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text(toPdfText('Páciens:'), margin, yPos);
+  doc.text(toPdfText(pdfLabels.patient), margin, yPos);
   doc.setFont('helvetica', 'normal');
   doc.text(toPdfText(formatPatientName(patient.lastName, patient.firstName, patient.title)), margin + 27, yPos);
   yPos += 5;
@@ -125,19 +171,19 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   if (patient.birthDate) {
     yPos -= 5;
     doc.setFont('helvetica', 'bold');
-    doc.text(toPdfText('Születési dátum:'), margin + 80, yPos);
+    doc.text(toPdfText(pdfLabels.birthDate), margin + 80, yPos);
     doc.setFont('helvetica', 'normal');
     doc.text(toPdfText(formatPdfDate(patient.birthDate)), margin + 110, yPos);
     yPos += 5;
   }
 
   doc.setFont('helvetica', 'bold');
-  doc.text(toPdfText('Lakóhely:'), margin, yPos);
+  doc.text(toPdfText(pdfLabels.address), margin, yPos);
   doc.setFont('helvetica', 'normal');
   const zipCity = [patient.zipCode, patient.city].filter(Boolean).join(', ');
   doc.text(toPdfText(zipCity), margin + 27, yPos);
   doc.setFont('helvetica', 'bold');
-  doc.text(toPdfText('Cím:'), margin + 80, yPos);
+  doc.text(toPdfText(pdfLabels.street), margin + 80, yPos);
   doc.setFont('helvetica', 'normal');
   doc.text(toPdfText(patient.street || ''), margin + 110, yPos);
   yPos += 5;
@@ -146,11 +192,11 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   const contactInfo = [patient.phone, patient.email].filter(Boolean).join(' | ');
   if (contactInfo) {
     doc.setFont('helvetica', 'bold');
-    doc.text(toPdfText('Telefonszám:'), margin, yPos);
+    doc.text(toPdfText(pdfLabels.phone), margin, yPos);
     doc.setFont('helvetica', 'normal');
     doc.text(toPdfText(patient.phone || ''), margin + 27, yPos);
     doc.setFont('helvetica', 'bold');
-    doc.text(toPdfText('E-mail cím:'), margin + 80, yPos);
+    doc.text(toPdfText(pdfLabels.email), margin + 80, yPos);
     doc.setFont('helvetica', 'normal');
     doc.text(toPdfText(patient.email || ''), margin + 110, yPos);
     yPos += 5;
@@ -168,93 +214,115 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   const sessionNumbers = Object.keys(sessionTotals).map(Number).sort((a, b) => a - b);
   const numberOfSessions = sessionNumbers.length;
 
-  // Items table title
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text(toPdfText('Kezelések tételek szerint'), margin, yPos);
-  yPos += 6;
+  // Odontogram image (if provided)
+  if (odontogramImage) {
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(toPdfText(pdfLabels.dentalStatus), margin, yPos);
+    yPos += 6;
 
-  // Items table
+    const imgProps = doc.getImageProperties(odontogramImage);
+    const imgWidth = contentWidth * 0.75;
+    const imgHeight = (imgProps.height / imgProps.width) * imgWidth;
+    checkNewPage(imgHeight + 10);
+    const imgX = margin + (contentWidth - imgWidth) / 2;
+    doc.addImage(odontogramImage, 'PNG', imgX, yPos, imgWidth, imgHeight);
+    yPos += imgHeight + 6;
+  }
+
+  // Merged items by session (mirrors visual editor order)
+  const mergedBySession = mergeQuoteItemsBySession(quote.items);
+  const allSessions = Array.from(mergedBySession.keys()).sort((a, b) => a - b);
+  const isVisual = quote.quoteType === 'visual';
+
+  // Column widths — visual quotes don't need the "Alk." column
   const colWidths = {
     num: 7,
-    name: 100,
+    session: isVisual ? 0 : 7,
+    name: isVisual ? 107 : 100,
     qty: 24,
     unitPrice: 30,
     discount: 20,
     total: 30,
   };
 
-  // Table header
-  doc.setFillColor(240, 240, 240);
-  doc.rect(margin, yPos - 4, contentWidth, 8, 'F');
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  let xPos = margin + 2;
-  doc.text('#', xPos, yPos);
-  xPos += colWidths.num;
-  doc.text('Alk.', xPos, yPos);
-  xPos += colWidths.num;
-  doc.text(toPdfText('Megnevezés'), xPos, yPos);
-  xPos += colWidths.name;
-
-  // Egységár - jobbra igazítva
-  doc.text(toPdfText('Egységár'), pageWidth - margin - 38, yPos, { align: 'right' });
-  xPos += colWidths.unitPrice;
-  doc.text(toPdfText('Mennyiség'), pageWidth - margin - 20, yPos, { align: 'right' });
-  xPos += colWidths.qty;
-  doc.text(toPdfText('Összesen'), pageWidth - margin - 2, yPos, { align: 'right' });
-
-  yPos += 6;
-
-  // Helper function to get treated area display text
-  const getTreatedAreaText = (item: typeof quote.items[0]): string => {
-    if (item.quoteUnit === 'alkalom') return 'Teljes szájüreg';
-    if (item.quoteUnit === 'állcsont') {
-      if (item.treatedArea === 'lower') return 'Alsó állcsont';
-      if (item.treatedArea === 'upper') return 'Felső állcsont';
-      if (item.treatedArea === 'both') return 'Alsó és Felső állcsont';
-      return '';
+  // Helper: render table header row
+  const renderTableHeader = () => {
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 4, contentWidth, 8, 'F');
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    let x = margin + 2;
+    doc.text('#', x, yPos);
+    x += colWidths.num;
+    if (!isVisual) {
+      doc.text(toPdfText(pdfLabels.session), x, yPos);
+      x += colWidths.session;
     }
-    if (item.quoteUnit === 'kvadráns') {
-      if (item.treatedArea === 'q1') return '1-es kvadráns (jobb felül)';
-      if (item.treatedArea === 'q2') return '2-es kvadráns (bal felül)';
-      if (item.treatedArea === 'q3') return '3-as kvadráns (bal alul)';
-      if (item.treatedArea === 'q4') return '4-es kvadráns (jobb alul)';
-      return '';
-    }
-    // For 'db' and 'fog' - use treatedArea directly
-    return item.treatedArea || '';
+    doc.text(toPdfText(pdfLabels.name), x, yPos);
+    doc.text(toPdfText(pdfLabels.unitPrice), pageWidth - margin - 38, yPos, { align: 'right' });
+    doc.text(toPdfText(pdfLabels.qty), pageWidth - margin - 20, yPos, { align: 'right' });
+    doc.text(toPdfText(pdfLabels.total), pageWidth - margin - 2, yPos, { align: 'right' });
+    yPos += 6;
   };
 
-  // Table rows (two lines per item)
-  doc.setFont('helvetica', 'normal');
-  quote.items.forEach((item, index) => {
-    checkNewPage(14); // Two lines need more space
+  // Helper: localized treated area text for a merged group
+  const getMergedTreatedAreaText = (merged: MergedQuoteItem): string => {
+    const items = merged.items;
+    if (items.length === 0) return '';
 
-    const lineTotal = calculateLineTotal(item);
-    const discountAmount = calculateLineDiscountAmount(item);
+    if (items[0].quoteUnit === 'alkalom') return pdfLabels.fullMouth;
+    if (items[0].quoteUnit === 'állcsont') {
+      const areas = items.map((item) => {
+        if (item.treatedArea === 'upper') return pdfLabels.upperJaw;
+        if (item.treatedArea === 'lower') return pdfLabels.lowerJaw;
+        if (item.treatedArea === 'both') return pdfLabels.bothJaws;
+        return item.treatedArea || '';
+      });
+      return [...new Set(areas)].join(', ');
+    }
+    if (items[0].quoteUnit === 'kvadráns') {
+      const areas = items.map((item) => {
+        if (item.treatedArea === 'q1') return pdfLabels.q1;
+        if (item.treatedArea === 'q2') return pdfLabels.q2;
+        if (item.treatedArea === 'q3') return pdfLabels.q3;
+        if (item.treatedArea === 'q4') return pdfLabels.q4;
+        return item.treatedArea || '';
+      });
+      return [...new Set(areas)].join(', ');
+    }
+    // Tooth-based: use the merged treatedAreaText (sorted tooth numbers)
+    return merged.treatedAreaText;
+  };
 
-    // Alternate row background (taller for two lines)
-    if (index % 2 === 0) {
+  // Helper: render one merged item row, returns the line total (after discount)
+  const renderMergedRow = (merged: MergedQuoteItem, rowIndex: number, session?: number): number => {
+    checkNewPage(14);
+
+    let mergedTotal = 0;
+    let mergedDiscount = 0;
+    for (const item of merged.items) {
+      mergedTotal += calculateLineTotal(item);
+      mergedDiscount += calculateLineDiscountAmount(item);
+    }
+
+    if (rowIndex % 2 === 0) {
       doc.setFillColor(250, 250, 250);
       doc.rect(margin, yPos - 4, contentWidth, 12, 'F');
     }
 
-    // First line: #, Alk., Name, Unit Price, Qty (db), Total
-    xPos = margin + 2;
-    doc.text(`${index + 1}.`, xPos, yPos);
+    let xPos = margin + 2;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${rowIndex + 1}.`, xPos, yPos);
     xPos += colWidths.num;
 
-    // Alk. oszlop - kezelés sorszáma
-    doc.text(`${item.treatmentSession || 1}.`, xPos, yPos);
-    xPos += colWidths.num;
-
-    // Truncate name if too long
-    let itemName = toPdfText(item.quoteName);
-    if (item.toothNum) {
-      itemName += ` (${item.toothNum})`;
+    if (!isVisual && session !== undefined) {
+      doc.text(`${session}.`, xPos, yPos);
+      xPos += colWidths.session;
     }
+
+    let itemName = toPdfText(merged.quoteName);
     if (doc.getTextWidth(itemName) > colWidths.name - 2) {
       while (doc.getTextWidth(itemName + '...') > colWidths.name - 2) {
         itemName = itemName.slice(0, -1);
@@ -262,73 +330,130 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
       itemName += '...';
     }
     doc.text(itemName, xPos, yPos);
-    const nameXPos = xPos; // Save for second line
-    xPos += colWidths.name;
+    const nameXPos = xPos;
 
-    // Egységár - jobbra igazítva
-    doc.text(formatCurrency(item.quoteUnitPriceGross).trim(), pageWidth - margin - 38, yPos, {
-      align: 'right',
-    });
+    doc.text(formatCurrency(merged.quoteUnitPriceGross).trim(), pageWidth - margin - 38, yPos, { align: 'right' });
+    doc.text(toPdfText(`${merged.totalQty} ${pdfLabels.unit}`), pageWidth - margin - 20, yPos, { align: 'right' });
+    doc.text(formatCurrency(mergedTotal).replace('Ft', '').trim() + ' Ft', pageWidth - margin - 2, yPos, { align: 'right' });
 
-    // Mennyiség - always "db"
-    doc.text(toPdfText(`${item.quoteQty} db`), pageWidth - margin - 20, yPos, {
-      align: 'right',
-    });
-
-    // Összesen
-    doc.text(formatCurrency(lineTotal).replace('Ft', '').trim() + ' Ft', pageWidth - margin - 2, yPos, {
-      align: 'right',
-    });
-
-    // Second line: Treated Area under name, Discount under price (if any)
     yPos += 4;
     doc.setFontSize(8);
     doc.setTextColor(100);
 
-    // Treated area under name
-    const treatedAreaText = getTreatedAreaText(item);
+    const treatedAreaText = getMergedTreatedAreaText(merged);
     if (treatedAreaText) {
       doc.text(toPdfText(treatedAreaText), nameXPos, yPos);
     }
 
-    // Discount under total (if any)
-    if (discountAmount > 0) {
-      const discountText = item.quoteLineDiscountType === 'percent'
-        ? `Kedv.: ${item.quoteLineDiscountValue}% : ${formatCurrency(discountAmount)}`
-        : `Kedv.: ${formatCurrency(discountAmount)}`;
+    if (mergedDiscount > 0) {
+      const first = merged.items[0];
+      const discountText = first.quoteLineDiscountType === 'percent'
+        ? `${pdfLabels.discount}: ${first.quoteLineDiscountValue}% : ${formatCurrency(mergedDiscount)}`
+        : `${pdfLabels.discount}: ${formatCurrency(mergedDiscount)}`;
       doc.text(toPdfText(discountText), pageWidth - margin - 2, yPos, { align: 'right' });
     }
 
     doc.setFontSize(9);
     doc.setTextColor(0);
     yPos += 5;
-  });
 
-  // Sessions summary table (after items table)
-  if (numberOfSessions > 0) {
-    yPos += 8;
-    checkNewPage(30 + numberOfSessions * 5);
+    return mergedTotal;
+  };
 
+  if (isVisual) {
+    // Visual quote: per-session tables with subtotals
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text(toPdfText('Kezelések összefoglalója'), margin, yPos);
+    doc.text(toPdfText(pdfLabels.treatments), margin, yPos);
     yPos += 6;
 
-    // Summary table header
-    doc.setFontSize(9);
-    doc.setFillColor(240, 240, 240);
-    doc.rect(margin, yPos - 4, 140, 6, 'F');
-    doc.text(toPdfText('Alkalom'), margin + 2, yPos);
-    doc.text(toPdfText('Összeg'), margin + 120, yPos, { align: 'right' });
+    for (const session of allSessions) {
+      const sessionMerged = mergedBySession.get(session) || [];
+      if (sessionMerged.length === 0) continue;
+
+      checkNewPage(30);
+
+      // Session subtitle (only if multiple sessions)
+      if (numberOfSessions > 1) {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(toPdfText(`${session}. ${pdfLabels.sessionLabel}`), margin, yPos);
+        yPos += 6;
+      }
+
+      renderTableHeader();
+
+      let sessionTotal = 0;
+      for (let i = 0; i < sessionMerged.length; i++) {
+        sessionTotal += renderMergedRow(sessionMerged[i], i);
+      }
+
+      // Session subtotal line
+      if (numberOfSessions > 1) {
+        yPos += 2;
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(
+          toPdfText(`${session}. ${pdfLabels.sessionLabel} ${pdfLabels.total.toLowerCase()}:`),
+          pageWidth - margin - 60,
+          yPos,
+          { align: 'right' }
+        );
+        doc.text(
+          formatCurrency(sessionTotal),
+          pageWidth - margin - 2,
+          yPos,
+          { align: 'right' }
+        );
+        yPos += 8;
+        doc.setFont('helvetica', 'normal');
+      }
+    }
+    // No session summary for visual quotes
+  } else {
+    // Itemized quote: single table with session column + summary
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(toPdfText(pdfLabels.itemsTitle), margin, yPos);
     yPos += 6;
 
-    // Summary table rows
-    doc.setFont('helvetica', 'normal');
-    sessionNumbers.forEach((session) => {
-      doc.text(toPdfText(`${session}. alkalom`), margin + 2, yPos);
-      doc.text(formatCurrency(sessionTotals[session]), margin + 120, yPos, { align: 'right' });
+    renderTableHeader();
+
+    let globalIndex = 0;
+    for (const session of allSessions) {
+      const sessionMerged = mergedBySession.get(session) || [];
+      for (const merged of sessionMerged) {
+        renderMergedRow(merged, globalIndex, session);
+        globalIndex++;
+      }
+    }
+
+    // Sessions summary table (after items table)
+    if (numberOfSessions > 0) {
+      yPos += 8;
+      checkNewPage(30 + numberOfSessions * 5);
+
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(toPdfText(pdfLabels.sessionSummary), margin, yPos);
       yPos += 6;
-    });
+
+      // Summary table header
+      doc.setFontSize(9);
+      doc.setFillColor(240, 240, 240);
+      doc.rect(margin, yPos - 4, 140, 6, 'F');
+      doc.text(toPdfText(pdfLabels.sessionCol), margin + 2, yPos);
+      doc.text(toPdfText(pdfLabels.amountCol), margin + 120, yPos, { align: 'right' });
+      yPos += 6;
+
+      // Summary table rows
+      doc.setFont('helvetica', 'normal');
+      sessionNumbers.forEach((session) => {
+        doc.text(toPdfText(`${session}. ${pdfLabels.sessionLabel}`), margin + 2, yPos);
+        doc.text(formatCurrency(sessionTotals[session]), margin + 120, yPos, { align: 'right' });
+        yPos += 6;
+      });
+    }
   }
 
   // Totals section
@@ -346,13 +471,13 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
 
   // Subtotal
   doc.setFont('helvetica', 'normal');
-  doc.text(toPdfText('Részösszeg:'), totalsX, yPos);
+  doc.text(toPdfText(pdfLabels.subtotal), totalsX, yPos);
   doc.text(formatCurrency(totals.subtotal), pageWidth - margin - 2, yPos, { align: 'right' });
   yPos += 6;
 
   // Line discounts
   if (totals.lineDiscounts > 0) {
-    doc.text(toPdfText('Kedvezmények:'), totalsX, yPos);
+    doc.text(toPdfText(pdfLabels.lineDiscounts), totalsX, yPos);
     doc.setTextColor(200, 0, 0);
     doc.text(`-${formatCurrency(totals.lineDiscounts)}`, pageWidth - margin - 2, yPos, {
       align: 'right',
@@ -363,7 +488,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
 
   // Global discount
   if (totals.globalDiscount > 0) {
-    doc.text(toPdfText('Globális kedvezmény:'), totalsX, yPos);
+    doc.text(toPdfText(pdfLabels.globalDiscount), totalsX, yPos);
     doc.setTextColor(200, 0, 0);
     doc.text(`-${formatCurrency(totals.globalDiscount)}`, pageWidth - margin, yPos, {
       align: 'right',
@@ -380,7 +505,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
 
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text(toPdfText('FIZETENDÖ:'), totalsX, yPos);
+  doc.text(toPdfText(pdfLabels.grandTotal), totalsX, yPos);
   doc.text(formatCurrency(totals.total), pageWidth - margin, yPos, { align: 'right' });
 
   // Comment to patient
@@ -390,7 +515,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text(toPdfText('Megjegyzés:'), margin, yPos);
+    doc.text(toPdfText(pdfLabels.comment), margin, yPos);
     yPos += 5;
 
     doc.setFont('helvetica', 'normal');
@@ -406,13 +531,13 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   // Warranty title
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.text(toPdfText('GARANCIÁLIS FELTÉTELEK'), pageWidth / 2, yPos, { align: 'center' });
+  doc.text(toPdfText(pdfLabels.warranty), pageWidth / 2, yPos, { align: 'center' });
   yPos += 15;
 
   // Warranty text
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  const warrantyLines = doc.splitTextToSize(toPdfText(settings.pdf.warrantyText), contentWidth);
+  const warrantyLines = doc.splitTextToSize(toPdfText(resolvedWarrantyText), contentWidth);
 
   warrantyLines.forEach((line: string) => {
     checkNewPage(6);
@@ -436,7 +561,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
     .replace(/^\d{4}\s*/, '') // remove postal code at start
     .split(',')[0]
     .trim();
-  doc.text(toPdfText(`Kelt: ${city}, ${formatPdfDate(quote.createdAt)}`), margin, yPos);
+  doc.text(toPdfText(`${pdfLabels.location} ${city}, ${formatPdfDate(quote.createdAt)}`), margin, yPos);
   yPos += 20;
 
   // Signature lines
@@ -447,19 +572,30 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   doc.line(margin, sigY, margin + sigLineWidth, sigY);
   doc.setFontSize(9);
   doc.text(toPdfText(formatPatientName(patient.lastName, patient.firstName, patient.title)), margin + sigLineWidth / 2, sigY + 5, { align: 'center' });
-  doc.text(toPdfText('Páciens'), margin + sigLineWidth / 2, sigY + 9, { align: 'center' });
+  doc.text(toPdfText(pdfLabels.patientSig), margin + sigLineWidth / 2, sigY + 9, { align: 'center' });
 
   // Doctor signature
   doc.line(pageWidth - margin - sigLineWidth, sigY, pageWidth - margin, sigY);
   doc.text(toPdfText(doctorName || ''), pageWidth - margin - sigLineWidth / 2, sigY + 5, { align: 'center' });
-  doc.text(toPdfText('Kezelőorvos'), pageWidth - margin - sigLineWidth / 2, sigY + 9, { align: 'center' });
+  doc.text(toPdfText(pdfLabels.doctorSig), pageWidth - margin - sigLineWidth / 2, sigY + 9, { align: 'center' });
 
   // Disclaimer footer
   yPos = pageHeight - 20;
   doc.setFontSize(8);
   doc.setTextColor(100);
-  const disclaimerLines = doc.splitTextToSize(toPdfText(settings.pdf.footerText), contentWidth);
+  const disclaimerLines = doc.splitTextToSize(toPdfText(resolvedFooterText), contentWidth);
   doc.text(disclaimerLines, pageWidth / 2, yPos, { align: 'center' });
+
+  // Page numbers — centered at the bottom of every page
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${i} / ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+  }
+  doc.setTextColor(0);
 
   // Save PDF
   const fileName = `arajanlat_${quote.quoteNumber}_${patient.lastName}_${patient.firstName}.pdf`;

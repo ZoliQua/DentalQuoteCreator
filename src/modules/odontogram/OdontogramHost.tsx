@@ -9,17 +9,19 @@ import { useSettings } from '../../context/SettingsContext';
 
 export type OdontogramHostProps = {
   patientId: string;
-  mode: 'view' | 'edit';
+  mode: 'view' | 'edit' | 'quote-builder';
   initialState: OdontogramState | null;
   onChange: (nextState: OdontogramState) => void;
   panelContent?: ReactNode;
   hidePanel?: boolean;
+  onToothClick?: (toothNum: number) => void;
 };
 
 export type OdontogramHostHandle = {
   importState: (state: OdontogramState) => Promise<void>;
   exportState: () => Promise<OdontogramState | null>;
   syncViewMode: () => Promise<void>;
+  captureImage: (opts?: { width?: number }) => Promise<string | null>;
 };
 
 const EXPORT_BUTTON_ID = 'btnStatusExport';
@@ -169,7 +171,7 @@ const collapsePanelSectionsByDefault = (root: HTMLElement | null) => {
 };
 
 export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostProps>(
-  ({ mode, initialState, onChange, patientId, panelContent, hidePanel = false }, ref) => {
+  ({ mode, initialState, onChange, patientId, panelContent, hidePanel = false, onToothClick }, ref) => {
     const {
       appLanguage,
       setAppLanguage,
@@ -189,6 +191,39 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
         exportState: () => captureExportState(rootRef.current),
         syncViewMode: async () => {
           clearSelection();
+        },
+        captureImage: async (opts?: { width?: number }) => {
+          const root = rootRef.current;
+          if (!root) return null;
+          // Target the tooth grid only (excludes chart header with title/buttons)
+          const toothGrid = root.querySelector('#toothGrid, .tooth-grid') as HTMLElement | null;
+          const target = toothGrid || root;
+          try {
+            const html2canvas = (await import('html2canvas')).default;
+            const canvas = await html2canvas(target, {
+              backgroundColor: '#ffffff',
+              scale: 2,
+              useCORS: true,
+              logging: false,
+              width: target.scrollWidth,
+              height: target.scrollHeight,
+            });
+            if (opts?.width && canvas.width > 0) {
+              // Resize to requested width maintaining aspect ratio
+              const ratio = canvas.height / canvas.width;
+              const resized = document.createElement('canvas');
+              resized.width = opts.width;
+              resized.height = Math.round(opts.width * ratio);
+              const ctx = resized.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(canvas, 0, 0, resized.width, resized.height);
+                return resized.toDataURL('image/png');
+              }
+            }
+            return canvas.toDataURL('image/png');
+          } catch {
+            return null;
+          }
         },
       }),
       []
@@ -214,7 +249,7 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
         }
         if (!cancelled) {
           // In view mode, clear tooth selection after import finishes
-          if (mode === 'view') {
+          if (mode === 'view' || mode === 'quote-builder') {
             clearSelection();
           }
           window.setTimeout(() => {
@@ -235,7 +270,7 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
       if (!target) return;
 
       const observer = new MutationObserver(() => {
-        if (mode !== 'edit' || suppressMutationsRef.current) return;
+        if ((mode !== 'edit') || suppressMutationsRef.current) return;
         if (mutationTimerRef.current) {
           window.clearTimeout(mutationTimerRef.current);
         }
@@ -262,7 +297,7 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
     }, [mode, onChange]);
 
     useEffect(() => {
-      if (mode !== 'view') return;
+      if (mode !== 'view' && mode !== 'quote-builder') return;
       clearSelection();
     }, [mode]);
 
@@ -278,11 +313,10 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
       const root = rootRef.current;
       if (!root) return;
       const onClickCapture = (event: Event) => {
-        if (mode !== 'edit') return;
         const target = event.target as Element | null;
         const button = target?.closest('button[id]') as HTMLButtonElement | null;
         if (!button) return;
-        if (TOGGLE_TARGETS[button.id]) {
+        if (mode === 'edit' && TOGGLE_TARGETS[button.id]) {
           event.preventDefault();
           event.stopPropagation();
           togglePanelSection(rootRef.current, button.id);
@@ -320,6 +354,27 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
       return () => root.removeEventListener('click', onClickCapture, true);
     }, [mode]);
 
+    // Quote-builder tooth click handler
+    useEffect(() => {
+      if (mode !== 'quote-builder' || !onToothClick) return;
+      const root = rootRef.current;
+      if (!root) return;
+
+      const handleToothClick = (event: Event) => {
+        const target = event.target as Element | null;
+        const toothEl = target?.closest('[data-tooth]') as HTMLElement | null;
+        if (!toothEl) return;
+        const toothNum = parseInt(toothEl.getAttribute('data-tooth') || '', 10);
+        if (isNaN(toothNum)) return;
+        event.stopPropagation();
+        event.preventDefault();
+        onToothClick(toothNum);
+      };
+
+      root.addEventListener('click', handleToothClick, true);
+      return () => root.removeEventListener('click', handleToothClick, true);
+    }, [mode, onToothClick]);
+
     useEffect(() => {
       const root = rootRef.current;
       if (!root) return;
@@ -352,7 +407,7 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
     return (
       <div
         className={`odontogram-host odontogram-host--embedded ${
-          mode === 'view' ? 'odontogram-host--view' : 'odontogram-host--edit'
+          mode === 'edit' ? 'odontogram-host--edit' : mode === 'quote-builder' ? 'odontogram-host--quote-builder' : 'odontogram-host--view'
         } ${hidePanel ? 'odontogram-host--no-panel' : ''}`}
         ref={rootRef}
       >

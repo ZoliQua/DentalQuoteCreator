@@ -65,14 +65,24 @@ const defaultSettings: JsonRecord = {
   },
   doctors: [{ id: 'doc-1', name: 'Dr. Dul Zoltán', stampNumber: '' }],
   pdf: {
-    footerText:
-      'Az árajánlat tájékoztató jellegű és a fent jelölt ideig érvényes.',
-    warrantyText: 'Garanciális feltételek a rendelőben.',
+    hu: {
+      footerText: 'Az árajánlat tájékoztató jellegű és a fent jelölt ideig érvényes.',
+      warrantyText: 'Garanciális feltételek a rendelőben.',
+    },
+    en: {
+      footerText: 'This quote is for informational purposes only and valid until the date indicated above.',
+      warrantyText: 'Warranty conditions at the clinic.',
+    },
+    de: {
+      footerText: 'Dieses Angebot dient nur zur Information und ist bis zum oben angegebenen Datum gültig.',
+      warrantyText: 'Garantiebedingungen in der Praxis.',
+    },
   },
   quote: {
     prefix: 'MDKD',
     counter: 0,
     deletedCount: 0,
+    quoteLang: 'hu',
   },
   invoice: {
     invoiceType: 'paper',
@@ -908,30 +918,46 @@ server.post('/catalog', async (request, reply) => {
     update: {
       catalogCode: String(body.catalogCode || ''),
       catalogName: String(body.catalogName || ''),
+      catalogNameEn: String(body.catalogNameEn || ''),
+      catalogNameDe: String(body.catalogNameDe || ''),
       catalogUnit: String(body.catalogUnit || 'alkalom'),
       catalogPrice: Number(body.catalogPrice || 0),
       catalogPriceCurrency: String(body.catalogPriceCurrency || 'HUF'),
       catalogVatRate: Number(body.catalogVatRate || 0),
       catalogTechnicalPrice: Number(body.catalogTechnicalPrice || 0),
       catalogCategory: String(body.catalogCategory || 'Diagnosztika'),
+      svgLayer: String(body.svgLayer || ''),
+      hasLayer: Boolean(body.hasLayer),
       hasTechnicalPrice: Boolean(body.hasTechnicalPrice),
       isFullMouth: Boolean(body.isFullMouth),
       isArch: Boolean(body.isArch),
+      isQuadrant: Boolean(body.isQuadrant),
+      maxTeethPerArch: body.maxTeethPerArch != null ? Number(body.maxTeethPerArch) : null,
+      allowedTeeth: Array.isArray(body.allowedTeeth) ? (body.allowedTeeth as number[]).map(Number) : [],
+      milkToothOnly: Boolean(body.milkToothOnly),
       isActive: body.isActive === undefined ? true : Boolean(body.isActive),
     },
     create: {
       catalogItemId: String(body.catalogItemId || randomUUID()),
       catalogCode: String(body.catalogCode || ''),
       catalogName: String(body.catalogName || ''),
+      catalogNameEn: String(body.catalogNameEn || ''),
+      catalogNameDe: String(body.catalogNameDe || ''),
       catalogUnit: String(body.catalogUnit || 'alkalom'),
       catalogPrice: Number(body.catalogPrice || 0),
       catalogPriceCurrency: String(body.catalogPriceCurrency || 'HUF'),
       catalogVatRate: Number(body.catalogVatRate || 0),
       catalogTechnicalPrice: Number(body.catalogTechnicalPrice || 0),
       catalogCategory: String(body.catalogCategory || 'Diagnosztika'),
+      svgLayer: String(body.svgLayer || ''),
+      hasLayer: Boolean(body.hasLayer),
       hasTechnicalPrice: Boolean(body.hasTechnicalPrice),
       isFullMouth: Boolean(body.isFullMouth),
       isArch: Boolean(body.isArch),
+      isQuadrant: Boolean(body.isQuadrant),
+      maxTeethPerArch: body.maxTeethPerArch != null ? Number(body.maxTeethPerArch) : null,
+      allowedTeeth: Array.isArray(body.allowedTeeth) ? (body.allowedTeeth as number[]).map(Number) : [],
+      milkToothOnly: Boolean(body.milkToothOnly),
       isActive: body.isActive === undefined ? true : Boolean(body.isActive),
     },
   });
@@ -950,6 +976,8 @@ server.patch('/catalog/:catalogItemId', async (request, reply) => {
       data: {
         catalogCode: body.catalogCode === undefined ? undefined : String(body.catalogCode),
         catalogName: body.catalogName === undefined ? undefined : String(body.catalogName),
+        catalogNameEn: body.catalogNameEn === undefined ? undefined : String(body.catalogNameEn),
+        catalogNameDe: body.catalogNameDe === undefined ? undefined : String(body.catalogNameDe),
         catalogUnit: body.catalogUnit === undefined ? undefined : String(body.catalogUnit),
         catalogPrice: body.catalogPrice === undefined ? undefined : Number(body.catalogPrice),
         catalogPriceCurrency:
@@ -959,10 +987,16 @@ server.patch('/catalog/:catalogItemId', async (request, reply) => {
           body.catalogTechnicalPrice === undefined ? undefined : Number(body.catalogTechnicalPrice),
         catalogCategory:
           body.catalogCategory === undefined ? undefined : String(body.catalogCategory),
+        svgLayer: body.svgLayer === undefined ? undefined : String(body.svgLayer),
+        hasLayer: body.hasLayer === undefined ? undefined : Boolean(body.hasLayer),
         hasTechnicalPrice:
           body.hasTechnicalPrice === undefined ? undefined : Boolean(body.hasTechnicalPrice),
         isFullMouth: body.isFullMouth === undefined ? undefined : Boolean(body.isFullMouth),
         isArch: body.isArch === undefined ? undefined : Boolean(body.isArch),
+        isQuadrant: body.isQuadrant === undefined ? undefined : Boolean(body.isQuadrant),
+        maxTeethPerArch: body.maxTeethPerArch === undefined ? undefined : (body.maxTeethPerArch != null ? Number(body.maxTeethPerArch) : null),
+        allowedTeeth: body.allowedTeeth === undefined ? undefined : (Array.isArray(body.allowedTeeth) ? (body.allowedTeeth as number[]).map(Number) : []),
+        milkToothOnly: body.milkToothOnly === undefined ? undefined : Boolean(body.milkToothOnly),
         isActive: body.isActive === undefined ? undefined : Boolean(body.isActive),
       },
     });
@@ -998,15 +1032,23 @@ server.put('/catalog/reset', async (request, reply) => {
           catalogItemId: String(item.catalogItemId || randomUUID()),
           catalogCode: String(item.catalogCode || ''),
           catalogName: String(item.catalogName || ''),
+          catalogNameEn: String(item.catalogNameEn || ''),
+          catalogNameDe: String(item.catalogNameDe || ''),
           catalogUnit: String(item.catalogUnit || 'alkalom'),
           catalogPrice: Number(item.catalogPrice || 0),
           catalogPriceCurrency: String(item.catalogPriceCurrency || 'HUF'),
           catalogVatRate: Number(item.catalogVatRate || 0),
           catalogTechnicalPrice: Number(item.catalogTechnicalPrice || 0),
           catalogCategory: String(item.catalogCategory || 'Diagnosztika'),
+          svgLayer: String(item.svgLayer || ''),
+          hasLayer: Boolean(item.hasLayer),
           hasTechnicalPrice: Boolean(item.hasTechnicalPrice),
           isFullMouth: Boolean(item.isFullMouth),
           isArch: Boolean(item.isArch),
+          isQuadrant: Boolean(item.isQuadrant),
+          maxTeethPerArch: item.maxTeethPerArch != null ? Number(item.maxTeethPerArch) : null,
+          allowedTeeth: Array.isArray(item.allowedTeeth) ? (item.allowedTeeth as number[]).map(Number) : [],
+          milkToothOnly: Boolean(item.milkToothOnly),
           isActive: item.isActive === undefined ? true : Boolean(item.isActive),
         },
       })
@@ -1126,7 +1168,23 @@ server.patch('/quotes/:quoteId/restore', async (request, reply) => {
 // Settings
 server.get('/settings', async () => {
   const settings = await prisma.appSettings.findUnique({ where: { id: 'default' } });
-  return parseJsonObject(settings?.data, defaultSettings);
+  const result = parseJsonObject(settings?.data, defaultSettings);
+  // Migrate old flat pdf format { footerText, warrantyText } to per-language { hu: {...}, en: {...}, de: {...} }
+  const pdf = result.pdf as Record<string, unknown> | undefined;
+  if (pdf && (typeof pdf.footerText === 'string' || typeof pdf.warrantyText === 'string')) {
+    const defPdf = defaultSettings.pdf as Record<string, unknown>;
+    result.pdf = {
+      hu: { footerText: pdf.footerText || '', warrantyText: pdf.warrantyText || '' },
+      en: Object.assign({}, defPdf.en),
+      de: Object.assign({}, defPdf.de),
+    };
+  }
+  // Ensure quote.quoteLang exists
+  const quote = result.quote as Record<string, unknown> | undefined;
+  if (quote && !quote.quoteLang) {
+    quote.quoteLang = 'hu';
+  }
+  return result;
 });
 
 server.put('/settings', async (request) => {
@@ -1240,19 +1298,21 @@ server.put('/neak-checks/:id', async (request) => {
   const { id } = request.params as { id: string };
   const body = request.body as JsonRecord;
   const checkedAt = body.checkedAt ? toDate(String(body.checkedAt)) : new Date();
+  const result = (body.result || {}) as JsonRecord;
+  const shared = {
+    patientId: String(body.patientId || ''),
+    taj: body.taj ? String(body.taj) : null,
+    checkedAt,
+    neakHibakod: result.hibaKod ? String(result.hibaKod) : null,
+    neakSuccess: result.success === true,
+    neakJogviszony: result.jogviszony ? String(result.jogviszony) : null,
+    neakTranKod: result.tranKod ? String(result.tranKod) : null,
+    data: toInputJson({ ...body, id }),
+  };
   await prisma.neakCheck.upsert({
     where: { id },
-    update: {
-      patientId: String(body.patientId || ''),
-      checkedAt,
-      data: toInputJson({ ...body, id }),
-    },
-    create: {
-      id,
-      patientId: String(body.patientId || ''),
-      checkedAt,
-      data: toInputJson({ ...body, id }),
-    },
+    update: shared,
+    create: { id, ...shared },
   });
   return { status: 'ok' };
 });
@@ -1465,15 +1525,23 @@ server.post('/data/import', async (request, reply) => {
           catalogItemId: String(rawCatalog.catalogItemId || randomUUID()),
           catalogCode: String(rawCatalog.catalogCode || ''),
           catalogName: String(rawCatalog.catalogName || ''),
+          catalogNameEn: String(rawCatalog.catalogNameEn || ''),
+          catalogNameDe: String(rawCatalog.catalogNameDe || ''),
           catalogUnit: String(rawCatalog.catalogUnit || 'alkalom'),
           catalogPrice: Number(rawCatalog.catalogPrice || 0),
           catalogPriceCurrency: String(rawCatalog.catalogPriceCurrency || 'HUF'),
           catalogVatRate: Number(rawCatalog.catalogVatRate || 0),
           catalogTechnicalPrice: Number(rawCatalog.catalogTechnicalPrice || 0),
           catalogCategory: String(rawCatalog.catalogCategory || 'Diagnosztika'),
+          svgLayer: String(rawCatalog.svgLayer || ''),
+          hasLayer: Boolean(rawCatalog.hasLayer),
           hasTechnicalPrice: Boolean(rawCatalog.hasTechnicalPrice),
           isFullMouth: Boolean(rawCatalog.isFullMouth),
           isArch: Boolean(rawCatalog.isArch),
+          isQuadrant: Boolean(rawCatalog.isQuadrant),
+          maxTeethPerArch: rawCatalog.maxTeethPerArch != null ? Number(rawCatalog.maxTeethPerArch) : null,
+          allowedTeeth: Array.isArray(rawCatalog.allowedTeeth) ? (rawCatalog.allowedTeeth as number[]).map(Number) : [],
+          milkToothOnly: Boolean(rawCatalog.milkToothOnly),
           isActive: rawCatalog.isActive === undefined ? true : Boolean(rawCatalog.isActive),
         },
       });
@@ -2101,9 +2169,10 @@ server.post('/api/neak/jogviszony', async (request, reply) => {
     const hibaSzoveg = extractTag('hibaSzoveg');
     const torlesNapja = extractTag('torlesNapja');
     const kozlemeny = extractTag('kozlemeny');
+    const tranKod = extractTag('tranKod');
 
     const success = hibaKod === '0' && response.ok;
-    return { success, jogviszony, hibaKod, hibaSzoveg, torlesNapja, kozlemeny };
+    return { success, jogviszony, hibaKod, hibaSzoveg, torlesNapja, kozlemeny, tranKod };
   } catch (_error) {
     return reply
       .code(502)
