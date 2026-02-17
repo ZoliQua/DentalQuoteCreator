@@ -9,6 +9,7 @@ export type OdontogramEndoStatus =
   | 'none'
   | 'endo-medical-filling'
   | 'endo-filling'
+  | 'endo-filling-incomplete'
   | 'endo-glass-pin'
   | 'endo-metal-pin'
   | 'endo-resection';
@@ -33,6 +34,7 @@ export type OdontogramMobility = 'none' | 'm1' | 'm2' | 'm3';
 export type OdontogramCrownMaterial =
   | 'natural'
   | 'broken'
+  | 'radix'
   | 'emax'
   | 'zircon'
   | 'metal'
@@ -58,6 +60,7 @@ export type OdontogramToothState = {
   brokenDistal: boolean;
   extractionWound: boolean;
   extractionPlan: boolean;
+  parapulpalPin: boolean;
   bridgePillar: boolean;
   bridgeUnit: OdontogramBridgeUnit;
   mobility: OdontogramMobility;
