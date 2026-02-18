@@ -1,11 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
-import { useCatalog } from '../hooks';
+import { useCatalog, usePriceListCategories, usePriceLists, useCatalogCodeFormatter } from '../hooks';
 import {
   CatalogItem,
   CatalogItemFormData,
-  CatalogCategory,
   CatalogUnit,
   CATALOG_CATEGORIES,
   CATALOG_UNITS,
@@ -23,21 +22,10 @@ import {
   ConfirmModal,
 } from '../components/common';
 import { formatCurrency } from '../utils';
-
-const CATEGORY_CODE_PREFIX: Record<CatalogCategory, string> = {
-  Diagnosztika: 'DIAG',
-  Parodontológia: 'PARO',
-  Konzerváló: 'KONZ',
-  Endodoncia: 'ENDO',
-  Szájsebészet: 'SZAJ',
-  Implantáció: 'IMPL',
-  Protetika: 'PROT',
-  Gyerefogászat: 'GYER',
-  Fogszabályozás: 'SZAB',
-};
+import { getCatalogDisplayName, getPriceListDisplayName } from '../utils/catalogLocale';
 
 export function CatalogPage() {
-  const { t } = useSettings();
+  const { t, appLanguage } = useSettings();
   const { hasPermission } = useAuth();
   const {
     catalog,
@@ -47,18 +35,36 @@ export function CatalogPage() {
     editCatalogItem,
     deleteCatalogItem,
     toggleItemActive,
-    searchCatalog,
     resetCatalog,
   } = useCatalog();
+  const { activePriceLists, defaultPriceList } = usePriceLists();
+  const [selectedPriceListId, setSelectedPriceListId] = useState<string>(
+    defaultPriceList?.priceListId || activePriceLists[0]?.priceListId || ''
+  );
+  const { categories: priceListCategories, allCategories, getCategoryName } = usePriceListCategories(selectedPriceListId || undefined);
+  const { formatCode, prefixLookup } = useCatalogCodeFormatter();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<CatalogCategory | 'all'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  // Dynamic category names for filter dropdown — scoped to the selected price list
+  const categoryNames = useMemo(() => {
+    if (priceListCategories.length > 0) {
+      return priceListCategories.map((c) => c.catalogCategoryHu);
+    }
+    if (allCategories.length > 0) {
+      return allCategories
+        .filter((c) => c.isActive && !c.isDeleted)
+        .map((c) => c.catalogCategoryHu);
+    }
+    return CATALOG_CATEGORIES as unknown as string[];
+  }, [priceListCategories, allCategories]);
   const [showInactive, setShowInactive] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [resetConfirm, setResetConfirm] = useState(false);
-  const [inlineItems, setInlineItems] = useState<Partial<Record<CatalogCategory, CatalogItemFormData>>>(
+  const [inlineItems, setInlineItems] = useState<Partial<Record<string, CatalogItemFormData>>>(
     {}
   );
 
@@ -102,19 +108,77 @@ export function CatalogPage() {
     </button>
   );
 
-  const filteredItems = useMemo(() => {
-    let items = searchCatalog(
-      searchQuery,
-      selectedCategory === 'all' ? undefined : selectedCategory,
-      !showInactive
-    );
+  // Set of category names belonging to the selected price list
+  const priceListCategoryNames = useMemo(
+    () => new Set(priceListCategories.map((c) => c.catalogCategoryHu)),
+    [priceListCategories]
+  );
 
+  // Reverse lookup: prefix → category name (e.g. "MILK" → "Gyerefogászat")
+  const prefixToCategoryName = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const cat of priceListCategories) {
+      map[cat.catalogCategoryPrefix.toLowerCase()] = cat.catalogCategoryHu;
+    }
+    return map;
+  }, [priceListCategories]);
+
+  // Set of category IDs that are deleted — used to exclude their items
+  const deletedCategoryNames = useMemo(
+    () => new Set(allCategories.filter((c) => c.isDeleted).map((c) => c.catalogCategoryHu)),
+    [allCategories]
+  );
+
+  const filteredItems = useMemo(() => {
+    // 1. Start from active or full catalog
+    let source = !showInactive ? activeItems : catalog;
     if (showInactive) {
-      items = items.filter((item) => !item.isActive);
+      source = source.filter((item) => !item.isActive);
     }
 
-    return items;
-  }, [searchCatalog, searchQuery, selectedCategory, showInactive]);
+    // 2. Filter to selected price list
+    if (selectedPriceListId && priceListCategoryNames.size > 0) {
+      source = source.filter(
+        (item) =>
+          item.priceListId === selectedPriceListId ||
+          priceListCategoryNames.has(item.catalogCategory)
+      );
+    }
+
+    // 2b. Exclude items belonging to deleted categories
+    if (deletedCategoryNames.size > 0) {
+      source = source.filter(
+        (item) => !item.catalogCategory || !deletedCategoryNames.has(item.catalogCategory)
+      );
+    }
+
+    // 3. Filter by selected category dropdown
+    if (selectedCategory !== 'all') {
+      source = source.filter((item) => item.catalogCategory === selectedCategory);
+    }
+
+    // 4. Text search (includes prefix-aware code and category prefix matching)
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return source;
+
+    const qNoDash = q.replace(/-/g, '');
+    return source.filter((item) => {
+      // Match item name
+      if (item.catalogName.toLowerCase().includes(q)) return true;
+      // Match category name (Hungarian)
+      if (item.catalogCategory && item.catalogCategory.toLowerCase().includes(q)) return true;
+      // Match raw code
+      if (item.catalogCode.toLowerCase().replace(/-/g, '').includes(qNoDash)) return true;
+      // Match formatted code with prefix (e.g. "PROT-01" or "PROT01")
+      const formatted = formatCode(item).toLowerCase().replace(/-/g, '');
+      if (formatted.includes(qNoDash)) return true;
+      // Match category prefix (e.g. "MILK" → finds all items in that category)
+      if (prefixToCategoryName[qNoDash]) {
+        return item.catalogCategory === prefixToCategoryName[qNoDash];
+      }
+      return false;
+    });
+  }, [catalog, activeItems, showInactive, selectedPriceListId, priceListCategoryNames, deletedCategoryNames, selectedCategory, searchQuery, formatCode, prefixToCategoryName]);
 
   const handleCreateItem = (data: CatalogItemFormData) => {
     createCatalogItem(data);
@@ -163,8 +227,7 @@ export function CatalogPage() {
     return groups;
   }, [filteredItems, sortColumn, sortDirection]);
 
-  const getNextCatalogCode = (category: CatalogCategory, items: CatalogItem[] = []) => {
-    const prefix = CATEGORY_CODE_PREFIX[category] || category.slice(0, 4).toUpperCase();
+  const getNextCatalogCode = (_category: string, items: CatalogItem[] = []) => {
     let maxNumber = 0;
     items.forEach((item) => {
       const match = item.catalogCode.match(/(\d+)$/);
@@ -176,10 +239,10 @@ export function CatalogPage() {
       }
     });
     const nextNumber = maxNumber + 1;
-    return `${prefix}${String(nextNumber).padStart(2, '0')}`;
+    return String(nextNumber).padStart(2, '0');
   };
 
-  const startInlineItem = (category: CatalogCategory) => {
+  const startInlineItem = (category: string) => {
     setInlineItems((prev) => {
       if (prev[category]) return prev;
       const itemsForCategory = catalog.filter((item) => item.catalogCategory === category);
@@ -197,6 +260,8 @@ export function CatalogPage() {
           catalogVatRate: 0,
           catalogTechnicalPrice: 0,
           catalogCategory: category,
+          svgLayer: '',
+          hasLayer: false,
           hasTechnicalPrice: false,
           isFullMouth: false,
           isArch: false,
@@ -210,7 +275,7 @@ export function CatalogPage() {
     });
   };
 
-  const updateInlineItem = (category: CatalogCategory, updates: Partial<CatalogItemFormData>) => {
+  const updateInlineItem = (category: string, updates: Partial<CatalogItemFormData>) => {
     setInlineItems((prev) => {
       const item = prev[category];
       if (!item) return prev;
@@ -232,7 +297,7 @@ export function CatalogPage() {
     });
   };
 
-  const cancelInlineItem = (category: CatalogCategory) => {
+  const cancelInlineItem = (category: string) => {
     setInlineItems((prev) => {
       const updated = { ...prev };
       delete updated[category];
@@ -240,7 +305,7 @@ export function CatalogPage() {
     });
   };
 
-  const saveInlineItem = (category: CatalogCategory) => {
+  const saveInlineItem = (category: string) => {
     const item = inlineItems[category];
     if (!item) return;
 
@@ -258,7 +323,11 @@ export function CatalogPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t.catalog.title}</h1>
           <p className="text-gray-500 mt-1">
-            {activeItems.length} {t.common.active}, {inactiveItems.length} inaktív tétel
+            {selectedPriceListId && priceListCategoryNames.size > 0
+              ? activeItems.filter((i) => i.priceListId === selectedPriceListId || priceListCategoryNames.has(i.catalogCategory)).length
+              : activeItems.length} {t.common.active}, {selectedPriceListId && priceListCategoryNames.size > 0
+              ? inactiveItems.filter((i) => i.priceListId === selectedPriceListId || priceListCategoryNames.has(i.catalogCategory)).length
+              : inactiveItems.length} {t.catalog.inactiveItems}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -278,19 +347,35 @@ export function CatalogPage() {
         </div>
       </div>
 
+      {/* Price List Selector */}
+      <div className="flex items-center gap-4">
+        <Select
+          value={selectedPriceListId}
+          onChange={(e) => { setSelectedPriceListId(e.target.value); setSelectedCategory('all'); }}
+          options={[
+            { value: '', label: t.priceList.selectPriceList },
+            ...activePriceLists.map((pl) => ({
+              value: pl.priceListId,
+              label: getPriceListDisplayName(pl, appLanguage),
+            })),
+          ]}
+          className="w-64"
+        />
+      </div>
+
       <div className="flex flex-wrap items-center gap-4">
         <SearchInput
           value={searchQuery}
           onChange={setSearchQuery}
-          placeholder="Keresés név vagy kód alapján..."
+          placeholder={t.catalog.searchPlaceholder}
           className="flex-1 min-w-64"
         />
         <Select
           value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value as CatalogCategory | 'all')}
+          onChange={(e) => setSelectedCategory(e.target.value)}
           options={[
             { value: 'all', label: t.common.all },
-            ...CATALOG_CATEGORIES.map((cat) => ({ value: cat, label: cat })),
+            ...categoryNames.map((cat) => ({ value: cat, label: getCategoryName(cat, appLanguage) })),
           ]}
           className="w-48"
         />
@@ -309,7 +394,7 @@ export function CatalogPage() {
               showInactive ? 'bg-dental-100 text-dental-700' : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
-            Inaktív
+            {t.common.inactive}
           </button>
         </div>
       </div>
@@ -320,7 +405,7 @@ export function CatalogPage() {
             <EmptyState
               icon={<EmptyCatalogIcon />}
               title={t.catalog.noItems}
-              description="Adja hozzá az első tételt az árlistához"
+              description={t.catalog.addFirstItem}
               actionLabel={t.catalog.newItem}
               onAction={() => setIsModalOpen(true)}
             />
@@ -329,8 +414,7 @@ export function CatalogPage() {
       ) : (
         <div className="space-y-6">
           {Object.entries(groupedItems).map(([category, items]) => {
-            const catalogCategory = category as CatalogCategory;
-            const inlineItem = inlineItems[catalogCategory];
+            const inlineItem = inlineItems[category];
             const isInlineValid = inlineItem
               ? inlineItem.catalogName.trim().length > 0 &&
                 inlineItem.catalogUnit.trim().length > 0 &&
@@ -342,12 +426,12 @@ export function CatalogPage() {
               <Card key={category}>
                 <CardContent>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">{category}</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">{getCategoryName(category, appLanguage)}</h3>
                     {hasPermission('catalog.create') && (
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => startInlineItem(catalogCategory)}
+                      onClick={() => startInlineItem(category)}
                       disabled={Boolean(inlineItem)}
                     >
                       {t.common.add}
@@ -371,10 +455,10 @@ export function CatalogPage() {
                     <tbody>
                       {items.map((item) => (
                         <tr key={item.catalogItemId} className="border-b last:border-0">
-                          <td className="py-3 font-mono text-sm">{item.catalogCode}</td>
+                          <td className="py-3 font-mono text-sm">{formatCode(item)}</td>
                           <td className="py-3">
                             <span className={!item.isActive ? 'text-gray-400 line-through' : ''}>
-                              {item.catalogName}
+                              {getCatalogDisplayName(item, appLanguage)}
                             </span>
                           </td>
                           <td className="py-3 text-gray-500">{item.catalogUnit}</td>
@@ -434,11 +518,19 @@ export function CatalogPage() {
                                 </IconBtn>
                               )}
                               {hasPermission('catalog.update') && (
-                                <IconBtn onClick={() => toggleItemActive(item.catalogItemId)} title={item.isActive ? 'Deaktiválás' : 'Aktiválás'} className="text-red-600 hover:bg-red-50">
+                                item.isActive ? (
+                                <IconBtn onClick={() => toggleItemActive(item.catalogItemId)} title="Deaktiválás" className="text-red-600 hover:bg-red-50">
                                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                   </svg>
                                 </IconBtn>
+                                ) : (
+                                <IconBtn onClick={() => toggleItemActive(item.catalogItemId)} title="Aktiválás" className="text-green-600 hover:bg-green-50">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </IconBtn>
+                                )
                               )}
                               {hasPermission('catalog.delete') && (
                                 <IconBtn onClick={() => setDeleteConfirm(item.catalogItemId)} title={t.common.delete} className="text-red-500 hover:bg-red-50">
@@ -453,13 +545,18 @@ export function CatalogPage() {
                       ))}
                       {inlineItem && (
                         <tr className="border-b last:border-0 bg-gray-50">
-                          <td className="py-3 font-mono text-sm">{inlineItem.catalogCode}</td>
+                          <td className="py-3 font-mono text-sm">
+                            {(() => {
+                              const pfx = prefixLookup.byName[inlineItem.catalogCategory as string] || '';
+                              return pfx ? `${pfx}-${inlineItem.catalogCode}` : inlineItem.catalogCode;
+                            })()}
+                          </td>
                           <td className="py-3">
                             <input
                               type="text"
                               value={inlineItem.catalogName}
                               onChange={(e) =>
-                                updateInlineItem(catalogCategory, { catalogName: e.target.value })
+                                updateInlineItem(category, { catalogName: e.target.value })
                               }
                               className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-dental-500 focus:ring-dental-500"
                               placeholder="Megnevezés"
@@ -469,7 +566,7 @@ export function CatalogPage() {
                             <select
                               value={inlineItem.catalogUnit}
                               onChange={(e) =>
-                                updateInlineItem(catalogCategory, {
+                                updateInlineItem(category, {
                                   catalogUnit: e.target.value as CatalogItemFormData['catalogUnit'],
                                 })
                               }
@@ -488,7 +585,7 @@ export function CatalogPage() {
                               min="0"
                               value={inlineItem.catalogPrice}
                               onChange={(e) =>
-                                updateInlineItem(catalogCategory, {
+                                updateInlineItem(category, {
                                   catalogPrice: Number(e.target.value) || 0,
                                 })
                               }
@@ -502,7 +599,7 @@ export function CatalogPage() {
                               min="0"
                               value={inlineItem.catalogTechnicalPrice}
                               onChange={(e) =>
-                                updateInlineItem(catalogCategory, {
+                                updateInlineItem(category, {
                                   catalogTechnicalPrice: Number(e.target.value) || 0,
                                 })
                               }
@@ -518,7 +615,7 @@ export function CatalogPage() {
                                 size="sm"
                                 variant="success"
                                 disabled={!isInlineValid}
-                                onClick={() => saveInlineItem(catalogCategory)}
+                                onClick={() => saveInlineItem(category)}
                               >
                                 Rögzítés
                               </Button>
@@ -526,7 +623,7 @@ export function CatalogPage() {
                                 size="sm"
                                 variant="ghost"
                                 className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                onClick={() => cancelInlineItem(catalogCategory)}
+                                onClick={() => cancelInlineItem(category)}
                               >
                                 Törlés
                               </Button>
@@ -555,6 +652,8 @@ export function CatalogPage() {
         item={editingItem || undefined}
         title={editingItem ? t.catalog.editItem : t.catalog.newItem}
         existingCodes={catalog.map((c) => c.catalogCode)}
+        categoryNames={categoryNames}
+        getCategoryLabel={(cat) => getCategoryName(cat, appLanguage)}
       />
 
       {/* Delete Confirmation */}
@@ -591,6 +690,8 @@ interface CatalogItemFormModalProps {
   item?: CatalogItem;
   title: string;
   existingCodes?: string[];
+  categoryNames?: string[];
+  getCategoryLabel?: (name: string) => string;
 }
 
 function CatalogItemFormModal({
@@ -600,6 +701,8 @@ function CatalogItemFormModal({
   item,
   title,
   existingCodes,
+  categoryNames,
+  getCategoryLabel,
 }: CatalogItemFormModalProps) {
   const { t } = useSettings();
   const formatGroupedNumber = (value: number): string => {
@@ -623,7 +726,7 @@ function CatalogItemFormModal({
     catalogPriceCurrency: item?.catalogPriceCurrency || 'HUF',
     catalogVatRate: item?.catalogVatRate || 0,
     catalogTechnicalPrice: item?.catalogTechnicalPrice || 0,
-    catalogCategory: item?.catalogCategory || 'Diagnosztika',
+    catalogCategory: item?.catalogCategory || (categoryNames && categoryNames.length > 0 ? categoryNames[0] : 'Diagnosztika'),
     svgLayer: item?.svgLayer || '',
     hasLayer: item?.hasLayer ?? false,
     hasTechnicalPrice:
@@ -656,7 +759,7 @@ function CatalogItemFormModal({
       catalogPriceCurrency: item?.catalogPriceCurrency || 'HUF',
       catalogVatRate: item?.catalogVatRate || 0,
       catalogTechnicalPrice: item?.catalogTechnicalPrice || 0,
-      catalogCategory: item?.catalogCategory || 'Diagnosztika',
+      catalogCategory: item?.catalogCategory || (categoryNames && categoryNames.length > 0 ? categoryNames[0] : 'Diagnosztika'),
       svgLayer: item?.svgLayer || '',
       hasLayer: item?.hasLayer ?? false,
       hasTechnicalPrice:
@@ -715,9 +818,9 @@ function CatalogItemFormModal({
             label={t.catalog.category}
             value={formData.catalogCategory}
             onChange={(e) =>
-              setFormData({ ...formData, catalogCategory: e.target.value as CatalogCategory })
+              setFormData({ ...formData, catalogCategory: e.target.value })
             }
-            options={CATALOG_CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+            options={(categoryNames && categoryNames.length > 0 ? categoryNames : CATALOG_CATEGORIES as unknown as string[]).map((cat) => ({ value: cat, label: getCategoryLabel ? getCategoryLabel(cat) : cat }))}
             required
           />
           <Input

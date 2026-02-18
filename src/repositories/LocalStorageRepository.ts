@@ -1,10 +1,10 @@
 import {
-  CatalogCategory,
-  CATALOG_CATEGORIES,
   CATALOG_UNITS,
   CatalogItem,
   DentalStatusSnapshot,
   Patient,
+  PriceList,
+  PriceListCategory,
   Quote,
   Settings,
 } from '../types';
@@ -85,6 +85,70 @@ export class LocalStorageRepository implements StorageRepository {
 
   resetCatalog(items: CatalogItem[]): void {
     requestJsonSync('PUT', `${API_PREFIX}/catalog/reset`, { items });
+  }
+
+  // PriceLists
+  getPriceLists(): PriceList[] {
+    if (!getAuthToken()) return [];
+    try {
+      const lists = requestJsonSync<PriceList[]>('GET', `${API_PREFIX}/pricelists`);
+      return Array.isArray(lists) ? lists : [];
+    } catch {
+      return [];
+    }
+  }
+
+  savePriceList(priceList: PriceList): void {
+    try {
+      requestJsonSync('POST', `${API_PREFIX}/pricelists`, priceList);
+    } catch {
+      // ignore
+    }
+  }
+
+  deletePriceList(priceListId: string): void {
+    requestJsonSync('DELETE', `${API_PREFIX}/pricelists/${priceListId}`);
+  }
+
+  resetPriceLists(pricelists: PriceList[], categories: PriceListCategory[], items: CatalogItem[]): void {
+    requestJsonSync('PUT', `${API_PREFIX}/pricelists/reset`, { pricelists, categories, items });
+  }
+
+  // PriceList Categories
+  getPriceListCategories(priceListId?: string): PriceListCategory[] {
+    if (!getAuthToken()) return [];
+    try {
+      if (priceListId) {
+        const cats = requestJsonSync<PriceListCategory[]>('GET', `${API_PREFIX}/pricelists/${priceListId}/categories`);
+        return Array.isArray(cats) ? cats : [];
+      }
+      // If no priceListId, get all pricelists and merge categories
+      const lists = this.getPriceLists();
+      const allCats: PriceListCategory[] = [];
+      for (const list of lists) {
+        try {
+          const cats = requestJsonSync<PriceListCategory[]>('GET', `${API_PREFIX}/pricelists/${list.priceListId}/categories`);
+          if (Array.isArray(cats)) allCats.push(...cats);
+        } catch {
+          // ignore
+        }
+      }
+      return allCats;
+    } catch {
+      return [];
+    }
+  }
+
+  savePriceListCategory(category: PriceListCategory): void {
+    try {
+      requestJsonSync('POST', `${API_PREFIX}/pricelist-categories`, category);
+    } catch {
+      // ignore
+    }
+  }
+
+  deletePriceListCategory(catalogCategoryId: string): void {
+    requestJsonSync('DELETE', `${API_PREFIX}/pricelist-categories/${catalogCategoryId}`);
   }
 
   // Quotes
@@ -225,22 +289,24 @@ function normalizeCatalogItem(item: Partial<CatalogItem>): CatalogItem {
   const normalizedUnit = CATALOG_UNITS.includes(item.catalogUnit as (typeof CATALOG_UNITS)[number])
     ? (item.catalogUnit as (typeof CATALOG_UNITS)[number])
     : 'alkalom';
-  const normalizedCategory =
-    item.catalogCategory &&
-    (CATALOG_CATEGORIES as readonly CatalogCategory[]).includes(item.catalogCategory as CatalogCategory)
-      ? (item.catalogCategory as CatalogCategory)
-      : CATALOG_CATEGORIES[0];
+  // Accept any non-empty category string (dynamic categories from DB)
+  const normalizedCategory = item.catalogCategory
+    ? String(item.catalogCategory)
+    : 'Diagnosztika';
 
   return {
     catalogItemId: item.catalogItemId || '',
     catalogCode: item.catalogCode ? item.catalogCode.toString().toUpperCase() : '',
-    catalogName: item.catalogName ? item.catalogName.toString() : '',
+    catalogName: item.catalogName ? item.catalogName.toString() : (item.catalogNameHu ? item.catalogNameHu.toString() : ''),
+    catalogNameHu: item.catalogNameHu ? item.catalogNameHu.toString() : (item.catalogName ? item.catalogName.toString() : ''),
     catalogUnit: normalizedUnit,
     catalogPrice: Number.isFinite(catalogPriceValue) ? catalogPriceValue : 0,
     catalogPriceCurrency: item.catalogPriceCurrency === 'EUR' ? 'EUR' : 'HUF',
     catalogVatRate: Number.isFinite(vatValue) ? vatValue : 0,
     catalogTechnicalPrice: Number.isFinite(technicalPriceValue) ? technicalPriceValue : 0,
     catalogCategory: normalizedCategory,
+    catalogCategoryId: item.catalogCategoryId ? String(item.catalogCategoryId) : undefined,
+    priceListId: item.priceListId ? String(item.priceListId) : undefined,
     svgLayer: item.svgLayer ? item.svgLayer.toString() : '',
     hasLayer: toBoolean(item.hasLayer),
     hasTechnicalPrice: Number.isFinite(technicalPriceValue) ? technicalPriceValue > 0 : false,

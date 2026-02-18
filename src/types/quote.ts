@@ -19,6 +19,7 @@ export interface QuoteEvent {
   invoiceNumber?: string;
   invoiceAmount?: number;
   invoiceCurrency?: string;
+  invoiceType?: import('./invoice').InvoiceType;
 }
 
 export interface QuoteItem {

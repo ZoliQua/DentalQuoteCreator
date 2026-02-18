@@ -158,16 +158,49 @@ model DentalStatusSnapshot {
   @@index([takenAt])
 }
 
-model CatalogItem {
+model PriceList {
+  priceListId     String  @id
+  priceListNameHu String
+  priceListNameEn String  @default("")
+  priceListNameDe String  @default("")
+  isActive        Boolean @default(true)
+  isDeleted       Boolean @default(false)
+  isDefault       Boolean @default(false)
+  isUserLocked    Boolean @default(false)
+  listOfUsers     Json    @default("[]")
+
+  categories PriceListCategory[]
+  items      PriceListCatalogItem[]
+}
+
+model PriceListCategory {
+  catalogCategoryId     String  @id
+  priceListId           String
+  catalogCategoryPrefix String
+  catalogCategoryHu     String
+  catalogCategoryEn     String  @default("")
+  catalogCategoryDe     String  @default("")
+  isActive              Boolean @default(true)
+  isDeleted             Boolean @default(false)
+
+  priceList PriceList @relation(fields: [priceListId], references: [priceListId])
+  items     PriceListCatalogItem[]
+
+  @@index([priceListId])
+}
+
+model PriceListCatalogItem {
   catalogItemId         String  @id
   catalogCode           String
-  catalogName           String
+  catalogNameHu         String  @map("catalogName")
   catalogUnit           String
   catalogPrice          Float
   catalogPriceCurrency  String
   catalogVatRate        Float
   catalogTechnicalPrice Float
   catalogCategory       String
+  catalogCategoryId     String?
+  priceListId           String?
   svgLayer              String  @default("")
   hasLayer              Boolean @default(false)
   hasTechnicalPrice     Boolean @default(false)
@@ -180,6 +213,12 @@ model CatalogItem {
   catalogNameEn         String  @default("")
   catalogNameDe         String  @default("")
   isActive              Boolean @default(true)
+
+  priceList         PriceList?         @relation(fields: [priceListId], references: [priceListId])
+  priceListCategory PriceListCategory? @relation(fields: [catalogCategoryId], references: [catalogCategoryId])
+
+  @@index([catalogCategoryId])
+  @@index([priceListId])
 }
 
 model AppSettings {

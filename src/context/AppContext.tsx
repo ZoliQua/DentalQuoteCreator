@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Patient, CatalogItem, Quote, DentalStatusSnapshot } from '../types';
+import { Patient, CatalogItem, Quote, DentalStatusSnapshot, PriceList, PriceListCategory } from '../types';
 import { storage } from '../repositories';
 import { defaultCatalog } from '../data/defaultCatalog';
 import { useAuth } from './AuthContext';
@@ -37,6 +37,19 @@ interface AppContextType {
   importData: (data: string) => boolean;
   refreshData: () => void;
 
+  // PriceLists
+  pricelists: PriceList[];
+  addPriceList: (priceList: PriceList) => void;
+  updatePriceList: (priceList: PriceList) => void;
+  deletePriceList: (priceListId: string) => void;
+  resetPriceLists: (pricelists: PriceList[], categories: PriceListCategory[], items: CatalogItem[]) => void;
+
+  // PriceList Categories
+  pricelistCategories: PriceListCategory[];
+  addPriceListCategory: (category: PriceListCategory) => void;
+  updatePriceListCategory: (category: PriceListCategory) => void;
+  deletePriceListCategory: (catalogCategoryId: string) => void;
+
   // Dental status snapshots
   dentalStatusSnapshots: DentalStatusSnapshot[];
   getDentalStatusSnapshots: (patientId: string) => DentalStatusSnapshot[];
@@ -52,6 +65,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [pricelists, setPricelists] = useState<PriceList[]>([]);
+  const [pricelistCategories, setPricelistCategories] = useState<PriceListCategory[]>([]);
   const [dentalStatusSnapshots, setDentalStatusSnapshots] = useState<DentalStatusSnapshot[]>([]);
 
   // Load data on mount
@@ -60,12 +75,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setPatients([]);
       setCatalog([]);
       setQuotes([]);
+      setPricelists([]);
+      setPricelistCategories([]);
       setDentalStatusSnapshots([]);
       return;
     }
     setPatients(storage.getPatients());
     setCatalog(storage.getCatalog());
     setQuotes(storage.getQuotes());
+    setPricelists(storage.getPriceLists());
+    setPricelistCategories(storage.getPriceListCategories());
     setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
   }, [isAuthenticated]);
 
@@ -77,6 +96,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setPatients(storage.getPatients());
       setCatalog(storage.getCatalog());
       setQuotes(storage.getQuotes());
+      setPricelists(storage.getPriceLists());
+      setPricelistCategories(storage.getPriceListCategories());
       setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
     };
 
@@ -174,6 +195,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [quotes]
   );
 
+  // PriceLists
+  const addPriceList = useCallback((priceList: PriceList) => {
+    storage.savePriceList(priceList);
+    setPricelists(storage.getPriceLists());
+  }, []);
+
+  const updatePriceList = useCallback((priceList: PriceList) => {
+    storage.savePriceList(priceList);
+    setPricelists(storage.getPriceLists());
+  }, []);
+
+  const deletePriceList = useCallback((priceListId: string) => {
+    storage.deletePriceList(priceListId);
+    setPricelists(storage.getPriceLists());
+  }, []);
+
+  const resetPriceLists = useCallback((pls: PriceList[], cats: PriceListCategory[], items: CatalogItem[]) => {
+    storage.resetPriceLists(pls, cats, items);
+    setPricelists(storage.getPriceLists());
+    setPricelistCategories(storage.getPriceListCategories());
+    setCatalog(storage.getCatalog());
+  }, []);
+
+  // PriceList Categories
+  const addPriceListCategory = useCallback((category: PriceListCategory) => {
+    storage.savePriceListCategory(category);
+    setPricelistCategories(storage.getPriceListCategories());
+  }, []);
+
+  const updatePriceListCategory = useCallback((category: PriceListCategory) => {
+    storage.savePriceListCategory(category);
+    setPricelistCategories(storage.getPriceListCategories());
+  }, []);
+
+  const deletePriceListCategory = useCallback((catalogCategoryId: string) => {
+    storage.deletePriceListCategory(catalogCategoryId);
+    setPricelistCategories(storage.getPriceListCategories());
+  }, []);
+
   // Dental status snapshots
   const getDentalStatusSnapshots = useCallback(
     (patientId: string) => {
@@ -233,6 +293,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setPatients(storage.getPatients());
       setCatalog(storage.getCatalog());
       setQuotes(storage.getQuotes());
+      setPricelists(storage.getPriceLists());
+      setPricelistCategories(storage.getPriceListCategories());
       setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
     }
     return success;
@@ -242,6 +304,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setPatients(storage.getPatients());
     setCatalog(storage.getCatalog());
     setQuotes(storage.getQuotes());
+    setPricelists(storage.getPriceLists());
+    setPricelistCategories(storage.getPriceListCategories());
     setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
   }, []);
 
@@ -265,6 +329,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteQuote,
         getQuote,
         getQuotesByPatient,
+        pricelists,
+        addPriceList,
+        updatePriceList,
+        deletePriceList,
+        resetPriceLists,
+        pricelistCategories,
+        addPriceListCategory,
+        updatePriceListCategory,
+        deletePriceListCategory,
         dentalStatusSnapshots,
         getDentalStatusSnapshots,
         getLatestDentalStatusSnapshot,

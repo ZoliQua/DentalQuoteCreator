@@ -7,6 +7,8 @@ import { PatientDetailPage } from './pages/PatientDetailPage';
 import { QuotesPage } from './pages/QuotesPage';
 import { QuoteEditorPage } from './pages/QuoteEditorPage';
 import { CatalogPage } from './pages/CatalogPage';
+import { PriceListsPage } from './pages/PriceListsPage';
+import { PriceListCategoriesPage } from './pages/PriceListCategoriesPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { DataManagementPage } from './pages/DataManagementPage';
 import { OdontogramLabPage } from './pages/OdontogramLabPage';
@@ -41,7 +43,10 @@ function App() {
         <Route path="/patients/:patientId/visual-quotes/:quoteId" element={<VisualQuoteEditorPage />} />
         <Route path="/quotes" element={<QuotesPage />} />
         <Route path="/quotes/deleted" element={<QuotesPage showDeleted />} />
-        <Route path="/catalog" element={<CatalogPage />} />
+        <Route path="/catalog" element={<Navigate to="/catalog/items" replace />} />
+        <Route path="/catalog/items" element={<CatalogPage />} />
+        <Route path="/catalog/lists" element={<PriceListsPage />} />
+        <Route path="/catalog/categories" element={<PriceListCategoriesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/invoices" element={<InvoicesPage />} />
         <Route path="/invoices/:invoiceId" element={<InvoiceDetailPage />} />

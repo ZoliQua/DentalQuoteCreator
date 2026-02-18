@@ -21,6 +21,14 @@ const ALL_PERMISSION_KEYS = [
   'catalog.create',
   'catalog.update',
   'catalog.delete',
+  'pricelist.view',
+  'pricelist.create',
+  'pricelist.update',
+  'pricelist.delete',
+  'pricelist.category.create',
+  'pricelist.category.delete',
+  'pricelist.restore',
+  'pricelist.category.restore',
   'patients.update',
   'patients.create',
   'patients.delete',
@@ -51,6 +59,8 @@ type ExportData = {
   dentalStatusSnapshots?: unknown[];
   invoices?: unknown[];
   neakChecks?: unknown[];
+  pricelists?: unknown[];
+  pricelistCategories?: unknown[];
 };
 
 const DATA_VERSION = '2.0.0';
@@ -144,8 +154,8 @@ const ROLE_PERMISSION_PRESETS: Record<UserRole, readonly PermissionKey[]> = {
   admin: [...ALL_PERMISSION_KEYS],
   beta_tester: [...ALL_PERMISSION_KEYS],
   receptionist: ALL_PERMISSION_KEYS.filter(k => !['admin.users.manage', 'admin.permissions.manage', 'lab.view'].includes(k)),
-  doctor: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update'],
-  assistant: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'patients.delete'],
+  doctor: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'pricelist.view', 'catalog.view'],
+  assistant: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'patients.delete', 'pricelist.view', 'catalog.view'],
   user: [],
 };
 
@@ -329,6 +339,8 @@ server.get('/db/stats', async () => {
     'Quote',
     'DentalStatusSnapshot',
     'CatalogItem',
+    'PriceList',
+    'PriceListCategory',
     'AppSettings',
     'Invoice',
     'NeakCheck',
@@ -741,25 +753,29 @@ server.get('/admin/activity-log/:userId', async (request, reply) => {
 
 // Bootstrap endpoint for frontend startup
 server.get('/bootstrap', async () => {
-  const [patients, catalog, quotes, settingsRow, dentalStatusSnapshots, invoices, neakChecks] =
+  const [patients, catalog, quotes, settingsRow, dentalStatusSnapshots, invoices, neakChecks, pricelists, pricelistCategories] =
     await Promise.all([
       prisma.patient.findMany({ orderBy: { createdAt: 'desc' } }),
-      prisma.catalogItem.findMany({ orderBy: { catalogCode: 'asc' } }),
+      prisma.priceListCatalogItem.findMany({ orderBy: { catalogCode: 'asc' } }),
       prisma.quote.findMany({ orderBy: { createdAt: 'desc' } }),
       prisma.appSettings.findUnique({ where: { id: 'default' } }),
       prisma.dentalStatusSnapshot.findMany({ orderBy: { takenAt: 'desc' } }),
       prisma.invoice.findMany({ orderBy: { createdAt: 'desc' } }),
       prisma.neakCheck.findMany({ orderBy: { checkedAt: 'desc' } }),
+      prisma.priceList.findMany({ orderBy: { priceListId: 'asc' } }),
+      prisma.priceListCategory.findMany({ orderBy: { catalogCategoryPrefix: 'asc' } }),
     ]);
 
   return {
     patients,
-    catalog,
+    catalog: catalog.map((i) => mapCatalogItem(i as unknown as Record<string, unknown>)),
     quotes: quotes.map((q) => q.data),
     settings: parseJsonObject(settingsRow?.data, defaultSettings),
     dentalStatusSnapshots,
     invoices: invoices.map((inv) => inv.data),
     neakChecks: neakChecks.map((entry) => entry.data),
+    pricelists,
+    pricelistCategories,
   };
 });
 
@@ -903,9 +919,15 @@ server.patch('/patients/:patientId/restore', async (request, reply) => {
   }
 });
 
+// Helper: map Prisma's catalogNameHu back to catalogName for frontend backward compat
+function mapCatalogItem(item: Record<string, unknown>): Record<string, unknown> {
+  return { ...item, catalogName: item.catalogNameHu ?? item.catalogName ?? '' };
+}
+
 // Catalog
 server.get('/catalog', async () => {
-  return prisma.catalogItem.findMany({ orderBy: { catalogCode: 'asc' } });
+  const items = await prisma.priceListCatalogItem.findMany({ orderBy: { catalogCode: 'asc' } });
+  return items.map((i) => mapCatalogItem(i as unknown as Record<string, unknown>));
 });
 
 server.post('/catalog', async (request, reply) => {
@@ -913,11 +935,20 @@ server.post('/catalog', async (request, reply) => {
   if (!user) return;
 
   const body = request.body as JsonRecord;
-  const item = await prisma.catalogItem.upsert({
-    where: { catalogItemId: String(body.catalogItemId || randomUUID()) },
+  const catalogNameHuValue = String(body.catalogNameHu || body.catalogName || '');
+  const catalogCategoryIdValue = body.catalogCategoryId ? String(body.catalogCategoryId) : null;
+  const priceListIdValue = body.priceListId ? String(body.priceListId) : null;
+  let catalogItemId = body.catalogItemId ? String(body.catalogItemId) : '';
+  if (!catalogItemId || !catalogItemId.startsWith('cat')) {
+    const last = await prisma.priceListCatalogItem.findMany({ where: { catalogItemId: { startsWith: 'cat' } }, orderBy: { catalogItemId: 'desc' }, take: 1 });
+    const lastNum = last.length > 0 ? parseInt(last[0].catalogItemId.replace('cat', ''), 10) || 0 : 0;
+    catalogItemId = `cat${String(lastNum + 1).padStart(5, '0')}`;
+  }
+  const item = await prisma.priceListCatalogItem.upsert({
+    where: { catalogItemId },
     update: {
       catalogCode: String(body.catalogCode || ''),
-      catalogName: String(body.catalogName || ''),
+      catalogNameHu: catalogNameHuValue,
       catalogNameEn: String(body.catalogNameEn || ''),
       catalogNameDe: String(body.catalogNameDe || ''),
       catalogUnit: String(body.catalogUnit || 'alkalom'),
@@ -925,7 +956,9 @@ server.post('/catalog', async (request, reply) => {
       catalogPriceCurrency: String(body.catalogPriceCurrency || 'HUF'),
       catalogVatRate: Number(body.catalogVatRate || 0),
       catalogTechnicalPrice: Number(body.catalogTechnicalPrice || 0),
-      catalogCategory: String(body.catalogCategory || 'Diagnosztika'),
+      catalogCategory: String(body.catalogCategory || ''),
+      catalogCategoryId: catalogCategoryIdValue,
+      priceListId: priceListIdValue,
       svgLayer: String(body.svgLayer || ''),
       hasLayer: Boolean(body.hasLayer),
       hasTechnicalPrice: Boolean(body.hasTechnicalPrice),
@@ -938,9 +971,9 @@ server.post('/catalog', async (request, reply) => {
       isActive: body.isActive === undefined ? true : Boolean(body.isActive),
     },
     create: {
-      catalogItemId: String(body.catalogItemId || randomUUID()),
+      catalogItemId,
       catalogCode: String(body.catalogCode || ''),
-      catalogName: String(body.catalogName || ''),
+      catalogNameHu: catalogNameHuValue,
       catalogNameEn: String(body.catalogNameEn || ''),
       catalogNameDe: String(body.catalogNameDe || ''),
       catalogUnit: String(body.catalogUnit || 'alkalom'),
@@ -948,7 +981,9 @@ server.post('/catalog', async (request, reply) => {
       catalogPriceCurrency: String(body.catalogPriceCurrency || 'HUF'),
       catalogVatRate: Number(body.catalogVatRate || 0),
       catalogTechnicalPrice: Number(body.catalogTechnicalPrice || 0),
-      catalogCategory: String(body.catalogCategory || 'Diagnosztika'),
+      catalogCategory: String(body.catalogCategory || ''),
+      catalogCategoryId: catalogCategoryIdValue,
+      priceListId: priceListIdValue,
       svgLayer: String(body.svgLayer || ''),
       hasLayer: Boolean(body.hasLayer),
       hasTechnicalPrice: Boolean(body.hasTechnicalPrice),
@@ -961,7 +996,7 @@ server.post('/catalog', async (request, reply) => {
       isActive: body.isActive === undefined ? true : Boolean(body.isActive),
     },
   });
-  return reply.code(201).send(item);
+  return reply.code(201).send(mapCatalogItem(item as unknown as Record<string, unknown>));
 });
 
 server.patch('/catalog/:catalogItemId', async (request, reply) => {
@@ -970,12 +1005,13 @@ server.patch('/catalog/:catalogItemId', async (request, reply) => {
 
   const { catalogItemId } = request.params as { catalogItemId: string };
   const body = request.body as JsonRecord;
+  const nameHuVal = body.catalogNameHu !== undefined ? String(body.catalogNameHu) : (body.catalogName !== undefined ? String(body.catalogName) : undefined);
   try {
-    return await prisma.catalogItem.update({
+    const updated = await prisma.priceListCatalogItem.update({
       where: { catalogItemId },
       data: {
         catalogCode: body.catalogCode === undefined ? undefined : String(body.catalogCode),
-        catalogName: body.catalogName === undefined ? undefined : String(body.catalogName),
+        catalogNameHu: nameHuVal,
         catalogNameEn: body.catalogNameEn === undefined ? undefined : String(body.catalogNameEn),
         catalogNameDe: body.catalogNameDe === undefined ? undefined : String(body.catalogNameDe),
         catalogUnit: body.catalogUnit === undefined ? undefined : String(body.catalogUnit),
@@ -987,6 +1023,8 @@ server.patch('/catalog/:catalogItemId', async (request, reply) => {
           body.catalogTechnicalPrice === undefined ? undefined : Number(body.catalogTechnicalPrice),
         catalogCategory:
           body.catalogCategory === undefined ? undefined : String(body.catalogCategory),
+        catalogCategoryId: body.catalogCategoryId === undefined ? undefined : (body.catalogCategoryId ? String(body.catalogCategoryId) : null),
+        priceListId: body.priceListId === undefined ? undefined : (body.priceListId ? String(body.priceListId) : null),
         svgLayer: body.svgLayer === undefined ? undefined : String(body.svgLayer),
         hasLayer: body.hasLayer === undefined ? undefined : Boolean(body.hasLayer),
         hasTechnicalPrice:
@@ -1000,6 +1038,7 @@ server.patch('/catalog/:catalogItemId', async (request, reply) => {
         isActive: body.isActive === undefined ? undefined : Boolean(body.isActive),
       },
     });
+    return mapCatalogItem(updated as unknown as Record<string, unknown>);
   } catch {
     return reply.code(404).send({ message: 'Catalog item not found' });
   }
@@ -1011,7 +1050,7 @@ server.delete('/catalog/:catalogItemId', async (request, reply) => {
 
   const { catalogItemId } = request.params as { catalogItemId: string };
   try {
-    await prisma.catalogItem.delete({ where: { catalogItemId } });
+    await prisma.priceListCatalogItem.delete({ where: { catalogItemId } });
     return { status: 'ok' };
   } catch {
     return reply.code(404).send({ message: 'Catalog item not found' });
@@ -1025,13 +1064,13 @@ server.put('/catalog/reset', async (request, reply) => {
   const body = request.body as { items?: JsonRecord[] };
   const items = Array.isArray(body.items) ? body.items : [];
   await prisma.$transaction([
-    prisma.catalogItem.deleteMany({}),
+    prisma.priceListCatalogItem.deleteMany({}),
     ...items.map((item) =>
-      prisma.catalogItem.create({
+      prisma.priceListCatalogItem.create({
         data: {
           catalogItemId: String(item.catalogItemId || randomUUID()),
           catalogCode: String(item.catalogCode || ''),
-          catalogName: String(item.catalogName || ''),
+          catalogNameHu: String(item.catalogNameHu || item.catalogName || ''),
           catalogNameEn: String(item.catalogNameEn || ''),
           catalogNameDe: String(item.catalogNameDe || ''),
           catalogUnit: String(item.catalogUnit || 'alkalom'),
@@ -1039,7 +1078,9 @@ server.put('/catalog/reset', async (request, reply) => {
           catalogPriceCurrency: String(item.catalogPriceCurrency || 'HUF'),
           catalogVatRate: Number(item.catalogVatRate || 0),
           catalogTechnicalPrice: Number(item.catalogTechnicalPrice || 0),
-          catalogCategory: String(item.catalogCategory || 'Diagnosztika'),
+          catalogCategory: String(item.catalogCategory || ''),
+          catalogCategoryId: item.catalogCategoryId ? String(item.catalogCategoryId) : null,
+          priceListId: item.priceListId ? String(item.priceListId) : null,
           svgLayer: String(item.svgLayer || ''),
           hasLayer: Boolean(item.hasLayer),
           hasTechnicalPrice: Boolean(item.hasTechnicalPrice),
@@ -1055,6 +1096,279 @@ server.put('/catalog/reset', async (request, reply) => {
     ),
   ]);
   return { status: 'ok' };
+});
+
+// Reset pricelists, categories, and catalog items to defaults (hard delete + re-seed)
+server.put('/pricelists/reset', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'pricelist.delete');
+  if (!user) return;
+
+  const body = request.body as {
+    pricelists?: JsonRecord[];
+    categories?: JsonRecord[];
+    items?: JsonRecord[];
+  };
+
+  const pricelists = Array.isArray(body.pricelists) ? body.pricelists : [];
+  const categories = Array.isArray(body.categories) ? body.categories : [];
+  const items = Array.isArray(body.items) ? body.items : [];
+
+  // Hard delete everything, then re-create from defaults
+  await prisma.$transaction([
+    prisma.priceListCatalogItem.deleteMany({}),
+    prisma.priceListCategory.deleteMany({}),
+    prisma.priceList.deleteMany({}),
+  ]);
+
+  // Re-create pricelists
+  for (const pl of pricelists) {
+    await prisma.priceList.create({
+      data: {
+        priceListId: String(pl.priceListId),
+        priceListNameHu: String(pl.priceListNameHu || ''),
+        priceListNameEn: String(pl.priceListNameEn || ''),
+        priceListNameDe: String(pl.priceListNameDe || ''),
+        isActive: pl.isActive !== false,
+        isDeleted: Boolean(pl.isDeleted),
+        isDefault: Boolean(pl.isDefault),
+        isUserLocked: Boolean(pl.isUserLocked),
+        listOfUsers: Array.isArray(pl.listOfUsers) ? pl.listOfUsers : [],
+      },
+    });
+  }
+
+  // Re-create categories
+  for (const cat of categories) {
+    await prisma.priceListCategory.create({
+      data: {
+        catalogCategoryId: String(cat.catalogCategoryId),
+        priceListId: String(cat.priceListId),
+        catalogCategoryPrefix: String(cat.catalogCategoryPrefix || ''),
+        catalogCategoryHu: String(cat.catalogCategoryHu || ''),
+        catalogCategoryEn: String(cat.catalogCategoryEn || ''),
+        catalogCategoryDe: String(cat.catalogCategoryDe || ''),
+        isActive: cat.isActive !== false,
+        isDeleted: Boolean(cat.isDeleted),
+      },
+    });
+  }
+
+  // Re-create catalog items
+  for (const item of items) {
+    await prisma.priceListCatalogItem.create({
+      data: {
+        catalogItemId: String(item.catalogItemId || randomUUID()),
+        catalogCode: String(item.catalogCode || ''),
+        catalogNameHu: String(item.catalogNameHu || item.catalogName || ''),
+        catalogNameEn: String(item.catalogNameEn || ''),
+        catalogNameDe: String(item.catalogNameDe || ''),
+        catalogUnit: String(item.catalogUnit || 'alkalom'),
+        catalogPrice: Number(item.catalogPrice || 0),
+        catalogPriceCurrency: String(item.catalogPriceCurrency || 'HUF'),
+        catalogVatRate: Number(item.catalogVatRate || 0),
+        catalogTechnicalPrice: Number(item.catalogTechnicalPrice || 0),
+        catalogCategory: String(item.catalogCategory || ''),
+        catalogCategoryId: item.catalogCategoryId ? String(item.catalogCategoryId) : null,
+        priceListId: item.priceListId ? String(item.priceListId) : null,
+        svgLayer: String(item.svgLayer || ''),
+        hasLayer: Boolean(item.hasLayer),
+        hasTechnicalPrice: Boolean(item.hasTechnicalPrice),
+        isFullMouth: Boolean(item.isFullMouth),
+        isArch: Boolean(item.isArch),
+        isQuadrant: Boolean(item.isQuadrant),
+        maxTeethPerArch: item.maxTeethPerArch != null ? Number(item.maxTeethPerArch) : null,
+        allowedTeeth: Array.isArray(item.allowedTeeth) ? (item.allowedTeeth as number[]).map(Number) : [],
+        milkToothOnly: Boolean(item.milkToothOnly),
+        isActive: item.isActive === undefined ? true : Boolean(item.isActive),
+      },
+    });
+  }
+
+  return { status: 'ok' };
+});
+
+// PriceLists
+server.get('/pricelists', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'pricelist.view');
+  if (!user) return;
+  return prisma.priceList.findMany({ orderBy: { priceListId: 'asc' } });
+});
+
+server.post('/pricelists', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'pricelist.create');
+  if (!user) return;
+
+  const body = request.body as JsonRecord;
+  let priceListId = body.priceListId ? String(body.priceListId) : '';
+  if (!priceListId || !priceListId.startsWith('plist')) {
+    const last = await prisma.priceList.findMany({ where: { priceListId: { startsWith: 'plist' } }, orderBy: { priceListId: 'desc' }, take: 1 });
+    const lastNum = last.length > 0 ? parseInt(last[0].priceListId.replace('plist', ''), 10) || 0 : 0;
+    priceListId = `plist${String(lastNum + 1).padStart(3, '0')}`;
+  }
+  const item = await prisma.priceList.upsert({
+    where: { priceListId },
+    update: {
+      priceListNameHu: String(body.priceListNameHu || ''),
+      priceListNameEn: String(body.priceListNameEn || ''),
+      priceListNameDe: String(body.priceListNameDe || ''),
+      isActive: body.isActive === undefined ? true : Boolean(body.isActive),
+      isDeleted: Boolean(body.isDeleted),
+      isDefault: Boolean(body.isDefault),
+      isUserLocked: Boolean(body.isUserLocked),
+      listOfUsers: toInputJson(body.listOfUsers || []),
+    },
+    create: {
+      priceListId,
+      priceListNameHu: String(body.priceListNameHu || ''),
+      priceListNameEn: String(body.priceListNameEn || ''),
+      priceListNameDe: String(body.priceListNameDe || ''),
+      isActive: body.isActive === undefined ? true : Boolean(body.isActive),
+      isDeleted: Boolean(body.isDeleted),
+      isDefault: Boolean(body.isDefault),
+      isUserLocked: Boolean(body.isUserLocked),
+      listOfUsers: toInputJson(body.listOfUsers || []),
+    },
+  });
+  return reply.code(201).send(item);
+});
+
+server.patch('/pricelists/:id', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'pricelist.update');
+  if (!user) return;
+
+  const { id } = request.params as { id: string };
+  const body = request.body as JsonRecord;
+  try {
+    return await prisma.priceList.update({
+      where: { priceListId: id },
+      data: {
+        priceListNameHu: body.priceListNameHu === undefined ? undefined : String(body.priceListNameHu),
+        priceListNameEn: body.priceListNameEn === undefined ? undefined : String(body.priceListNameEn),
+        priceListNameDe: body.priceListNameDe === undefined ? undefined : String(body.priceListNameDe),
+        isActive: body.isActive === undefined ? undefined : Boolean(body.isActive),
+        isDeleted: body.isDeleted === undefined ? undefined : Boolean(body.isDeleted),
+        isDefault: body.isDefault === undefined ? undefined : Boolean(body.isDefault),
+        isUserLocked: body.isUserLocked === undefined ? undefined : Boolean(body.isUserLocked),
+        listOfUsers: body.listOfUsers === undefined ? undefined : toInputJson(body.listOfUsers),
+      },
+    });
+  } catch {
+    return reply.code(404).send({ message: 'Price list not found' });
+  }
+});
+
+server.delete('/pricelists/:id', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'pricelist.delete');
+  if (!user) return;
+
+  const { id } = request.params as { id: string };
+  try {
+    return await prisma.priceList.update({
+      where: { priceListId: id },
+      data: { isDeleted: true },
+    });
+  } catch {
+    return reply.code(404).send({ message: 'Price list not found' });
+  }
+});
+
+server.get('/pricelists/:id/categories', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'pricelist.view');
+  if (!user) return;
+
+  const { id } = request.params as { id: string };
+  return prisma.priceListCategory.findMany({
+    where: { priceListId: id },
+    orderBy: { catalogCategoryPrefix: 'asc' },
+  });
+});
+
+server.get('/pricelists/:id/items', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'catalog.view');
+  if (!user) return;
+
+  const { id } = request.params as { id: string };
+  const items = await prisma.priceListCatalogItem.findMany({
+    where: { priceListId: id },
+    orderBy: { catalogCode: 'asc' },
+  });
+  return items.map((i) => mapCatalogItem(i as unknown as Record<string, unknown>));
+});
+
+// PriceList Categories
+server.post('/pricelist-categories', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'pricelist.category.create');
+  if (!user) return;
+
+  const body = request.body as JsonRecord;
+  let catalogCategoryId = body.catalogCategoryId ? String(body.catalogCategoryId) : '';
+  if (!catalogCategoryId || !catalogCategoryId.startsWith('pcat')) {
+    const last = await prisma.priceListCategory.findMany({ where: { catalogCategoryId: { startsWith: 'pcat' } }, orderBy: { catalogCategoryId: 'desc' }, take: 1 });
+    const lastNum = last.length > 0 ? parseInt(last[0].catalogCategoryId.replace('pcat', ''), 10) || 0 : 0;
+    catalogCategoryId = `pcat${String(lastNum + 1).padStart(4, '0')}`;
+  }
+  const item = await prisma.priceListCategory.upsert({
+    where: { catalogCategoryId },
+    update: {
+      priceListId: String(body.priceListId || ''),
+      catalogCategoryPrefix: String(body.catalogCategoryPrefix || ''),
+      catalogCategoryHu: String(body.catalogCategoryHu || ''),
+      catalogCategoryEn: String(body.catalogCategoryEn || ''),
+      catalogCategoryDe: String(body.catalogCategoryDe || ''),
+      isActive: body.isActive === undefined ? true : Boolean(body.isActive),
+      isDeleted: Boolean(body.isDeleted),
+    },
+    create: {
+      catalogCategoryId,
+      priceListId: String(body.priceListId || ''),
+      catalogCategoryPrefix: String(body.catalogCategoryPrefix || ''),
+      catalogCategoryHu: String(body.catalogCategoryHu || ''),
+      catalogCategoryEn: String(body.catalogCategoryEn || ''),
+      catalogCategoryDe: String(body.catalogCategoryDe || ''),
+      isActive: body.isActive === undefined ? true : Boolean(body.isActive),
+      isDeleted: Boolean(body.isDeleted),
+    },
+  });
+  return reply.code(201).send(item);
+});
+
+server.patch('/pricelist-categories/:id', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'pricelist.update');
+  if (!user) return;
+
+  const { id } = request.params as { id: string };
+  const body = request.body as JsonRecord;
+  try {
+    return await prisma.priceListCategory.update({
+      where: { catalogCategoryId: id },
+      data: {
+        priceListId: body.priceListId === undefined ? undefined : String(body.priceListId),
+        catalogCategoryPrefix: body.catalogCategoryPrefix === undefined ? undefined : String(body.catalogCategoryPrefix),
+        catalogCategoryHu: body.catalogCategoryHu === undefined ? undefined : String(body.catalogCategoryHu),
+        catalogCategoryEn: body.catalogCategoryEn === undefined ? undefined : String(body.catalogCategoryEn),
+        catalogCategoryDe: body.catalogCategoryDe === undefined ? undefined : String(body.catalogCategoryDe),
+        isActive: body.isActive === undefined ? undefined : Boolean(body.isActive),
+        isDeleted: body.isDeleted === undefined ? undefined : Boolean(body.isDeleted),
+      },
+    });
+  } catch {
+    return reply.code(404).send({ message: 'Category not found' });
+  }
+});
+
+server.delete('/pricelist-categories/:id', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'pricelist.category.delete');
+  if (!user) return;
+
+  const { id } = request.params as { id: string };
+  try {
+    return await prisma.priceListCategory.update({
+      where: { catalogCategoryId: id },
+      data: { isDeleted: true },
+    });
+  } catch {
+    return reply.code(404).send({ message: 'Category not found' });
+  }
 });
 
 // Quotes
@@ -1446,27 +1760,31 @@ server.delete('/odontogram/timeline/:patientId/:snapshotId', async (request, rep
 
 // Data export/import
 server.get('/data/export', async () => {
-  const [patients, catalog, quotes, settings, dentalStatusSnapshots, invoices, neakChecks] =
+  const [patients, catalog, quotes, settings, dentalStatusSnapshots, invoices, neakChecks, pricelists, pricelistCategories] =
     await Promise.all([
       prisma.patient.findMany(),
-      prisma.catalogItem.findMany(),
+      prisma.priceListCatalogItem.findMany(),
       prisma.quote.findMany(),
       prisma.appSettings.findUnique({ where: { id: 'default' } }),
       prisma.dentalStatusSnapshot.findMany(),
       prisma.invoice.findMany(),
       prisma.neakCheck.findMany(),
+      prisma.priceList.findMany(),
+      prisma.priceListCategory.findMany(),
     ]);
 
   const exportData: ExportData = {
     version: DATA_VERSION,
     exportedAt: new Date().toISOString(),
     patients,
-    catalog,
+    catalog: catalog.map((i) => mapCatalogItem(i as unknown as Record<string, unknown>)),
     quotes: quotes.map((q) => q.data),
     settings: parseJsonObject(settings?.data, defaultSettings),
     dentalStatusSnapshots,
     invoices: invoices.map((i) => i.data),
     neakChecks: neakChecks.map((n) => n.data),
+    pricelists,
+    pricelistCategories,
   };
 
   return exportData;
@@ -1488,7 +1806,9 @@ server.post('/data/import', async (request, reply) => {
     await tx.invoice.deleteMany({});
     await tx.dentalStatusSnapshot.deleteMany({});
     await tx.quote.deleteMany({});
-    await tx.catalogItem.deleteMany({});
+    await tx.priceListCatalogItem.deleteMany({});
+    await tx.priceListCategory.deleteMany({});
+    await tx.priceList.deleteMany({});
     await tx.patient.deleteMany({});
 
     for (const rawPatient of body.patients as JsonRecord[]) {
@@ -1519,12 +1839,51 @@ server.post('/data/import', async (request, reply) => {
       });
     }
 
+    // Import pricelists if present
+    if (Array.isArray((body as JsonRecord).pricelists)) {
+      await tx.priceListCategory.deleteMany({});
+      await tx.priceList.deleteMany({});
+      for (const rawPl of (body as JsonRecord).pricelists as JsonRecord[]) {
+        await tx.priceList.create({
+          data: {
+            priceListId: String(rawPl.priceListId || randomUUID()),
+            priceListNameHu: String(rawPl.priceListNameHu || ''),
+            priceListNameEn: String(rawPl.priceListNameEn || ''),
+            priceListNameDe: String(rawPl.priceListNameDe || ''),
+            isActive: rawPl.isActive === undefined ? true : Boolean(rawPl.isActive),
+            isDeleted: Boolean(rawPl.isDeleted),
+            isDefault: Boolean(rawPl.isDefault),
+            isUserLocked: Boolean(rawPl.isUserLocked),
+            listOfUsers: toInputJson(rawPl.listOfUsers || []),
+          },
+        });
+      }
+    }
+
+    // Import pricelist categories if present
+    if (Array.isArray((body as JsonRecord).pricelistCategories)) {
+      for (const rawCat of (body as JsonRecord).pricelistCategories as JsonRecord[]) {
+        await tx.priceListCategory.create({
+          data: {
+            catalogCategoryId: String(rawCat.catalogCategoryId || randomUUID()),
+            priceListId: String(rawCat.priceListId || ''),
+            catalogCategoryPrefix: String(rawCat.catalogCategoryPrefix || ''),
+            catalogCategoryHu: String(rawCat.catalogCategoryHu || ''),
+            catalogCategoryEn: String(rawCat.catalogCategoryEn || ''),
+            catalogCategoryDe: String(rawCat.catalogCategoryDe || ''),
+            isActive: rawCat.isActive === undefined ? true : Boolean(rawCat.isActive),
+            isDeleted: Boolean(rawCat.isDeleted),
+          },
+        });
+      }
+    }
+
     for (const rawCatalog of body.catalog as JsonRecord[]) {
-      await tx.catalogItem.create({
+      await tx.priceListCatalogItem.create({
         data: {
           catalogItemId: String(rawCatalog.catalogItemId || randomUUID()),
           catalogCode: String(rawCatalog.catalogCode || ''),
-          catalogName: String(rawCatalog.catalogName || ''),
+          catalogNameHu: String(rawCatalog.catalogNameHu || rawCatalog.catalogName || ''),
           catalogNameEn: String(rawCatalog.catalogNameEn || ''),
           catalogNameDe: String(rawCatalog.catalogNameDe || ''),
           catalogUnit: String(rawCatalog.catalogUnit || 'alkalom'),
@@ -1532,7 +1891,9 @@ server.post('/data/import', async (request, reply) => {
           catalogPriceCurrency: String(rawCatalog.catalogPriceCurrency || 'HUF'),
           catalogVatRate: Number(rawCatalog.catalogVatRate || 0),
           catalogTechnicalPrice: Number(rawCatalog.catalogTechnicalPrice || 0),
-          catalogCategory: String(rawCatalog.catalogCategory || 'Diagnosztika'),
+          catalogCategory: String(rawCatalog.catalogCategory || ''),
+          catalogCategoryId: rawCatalog.catalogCategoryId ? String(rawCatalog.catalogCategoryId) : null,
+          priceListId: rawCatalog.priceListId ? String(rawCatalog.priceListId) : null,
           svgLayer: String(rawCatalog.svgLayer || ''),
           hasLayer: Boolean(rawCatalog.hasLayer),
           hasTechnicalPrice: Boolean(rawCatalog.hasTechnicalPrice),
@@ -1733,13 +2094,14 @@ const validateAndNormalizePayload = (input: JsonRecord) => {
   if (!buyer.name) errors.push('Vevő neve kötelező');
   if (items.length === 0) errors.push('Legalább egy tétel kötelező');
 
+  const isVegszamla = Boolean((invoice as JsonRecord).vegszamla);
   const normalizedItems = items.map((item, index) => {
     const qty = Number(item.qty);
     const unitPriceNet = Number(item.unitPriceNet ?? item.unitPrice ?? 0);
     const vatRate = Number(item.vatRate ?? 27);
 
     if (!Number.isFinite(qty) || qty <= 0) errors.push(`Tétel ${index + 1}: qty > 0 kötelező`);
-    if (!Number.isFinite(unitPriceNet) || unitPriceNet < 0)
+    if (!Number.isFinite(unitPriceNet) || (!isVegszamla && unitPriceNet < 0))
       errors.push(`Tétel ${index + 1}: unitPriceNet >= 0 kötelező`);
     if (!Number.isFinite(vatRate) || vatRate < 0)
       errors.push(`Tétel ${index + 1}: vatRate >= 0 kötelező`);
@@ -1785,6 +2147,11 @@ const validateAndNormalizePayload = (input: JsonRecord) => {
         comment: String(invoice.comment || ''),
         language: String(invoice.language || 'hu'),
         eInvoice: Boolean(invoice.eInvoice),
+        elolegszamla: Boolean(invoice.elolegszamla),
+        vegszamla: Boolean(invoice.vegszamla),
+        rendelesSzam: String(invoice.rendelesSzam || ''),
+        dijbekeroSzamlaszam: String(invoice.dijbekeroSzamlaszam || ''),
+        elolegSzamlaszam: String(invoice.elolegSzamlaszam || ''),
       },
       items: normalizedItems,
       totals,
@@ -1845,10 +2212,11 @@ const buildInvoiceXml = (params: {
     <megjegyzes>${escapeXml(invoice.comment)}</megjegyzes>
     <arfolyamBank></arfolyamBank>
     <arfolyam>0</arfolyam>
-    <rendelesSzam></rendelesSzam>
-    <dijbekeroSzamlaszam></dijbekeroSzamlaszam>
-    <elolegszamla>false</elolegszamla>
-    <vegszamla>false</vegszamla>
+    <rendelesSzam>${escapeXml(invoice.rendelesSzam || '')}</rendelesSzam>
+    <dijbekeroSzamlaszam>${escapeXml(invoice.dijbekeroSzamlaszam || '')}</dijbekeroSzamlaszam>
+    <elolegszamla>${invoice.elolegszamla ? 'true' : 'false'}</elolegszamla>
+    <vegszamla>${invoice.vegszamla ? 'true' : 'false'}</vegszamla>
+    <elolegSzamlaszam>${escapeXml(invoice.elolegSzamlaszam || '')}</elolegSzamlaszam>
     <helyesbitoszamla>false</helyesbitoszamla>
     <helyesbitettSzamlaszam></helyesbitettSzamlaszam>
     <dijbekero>false</dijbekero>

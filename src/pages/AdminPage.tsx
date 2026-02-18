@@ -39,6 +39,14 @@ function getPermissionLabels(t: TranslationKeys): Record<string, string> {
     'invoices.view': t.admin.permInvoicesView,
     'invoices.issue': t.admin.permInvoicesIssue,
     'invoices.storno': t.admin.permInvoicesStorno,
+    'pricelist.view': t.admin.permPricelistView,
+    'pricelist.create': t.admin.permPricelistCreate,
+    'pricelist.update': t.admin.permPricelistUpdate,
+    'pricelist.delete': t.admin.permPricelistDelete,
+    'pricelist.category.create': t.admin.permPricelistCategoryCreate,
+    'pricelist.category.delete': t.admin.permPricelistCategoryDelete,
+    'pricelist.restore': t.admin.permPricelistRestore,
+    'pricelist.category.restore': t.admin.permPricelistCategoryRestore,
     'catalog.view': t.admin.permCatalogView,
     'catalog.create': t.admin.permCatalogCreate,
     'catalog.update': t.admin.permCatalogUpdate,
@@ -52,6 +60,20 @@ function getPermissionLabels(t: TranslationKeys): Record<string, string> {
     'admin.users.manage': t.admin.permAdminUsersManage,
     'admin.permissions.manage': t.admin.permAdminPermissionsManage,
   };
+}
+
+type PermissionGroup = { label: string; keys: string[] };
+
+function getPermissionGroups(t: TranslationKeys): PermissionGroup[] {
+  return [
+    { label: t.admin.permGroupQuotes, keys: ['quotes.view', 'quotes.create', 'quotes.delete'] },
+    { label: t.admin.permGroupInvoices, keys: ['invoices.view', 'invoices.issue', 'invoices.storno'] },
+    { label: t.admin.permGroupPriceLists, keys: ['pricelist.view', 'pricelist.create', 'pricelist.update', 'pricelist.delete', 'pricelist.category.create', 'pricelist.category.delete', 'pricelist.restore', 'pricelist.category.restore'] },
+    { label: t.admin.permGroupCatalog, keys: ['catalog.view', 'catalog.create', 'catalog.update', 'catalog.delete'] },
+    { label: t.admin.permGroupPatients, keys: ['patients.create', 'patients.update', 'patients.delete'] },
+    { label: t.admin.permGroupOther, keys: ['lab.view', 'settings.view', 'data.view'] },
+    { label: t.admin.permGroupAdmin, keys: ['admin.users.manage', 'admin.permissions.manage'] },
+  ];
 }
 
 function getRoleLabel(role: string, t: TranslationKeys): string {
@@ -88,6 +110,107 @@ const parseResponse = async <T,>(response: Response): Promise<T> => {
   const data = JSON.parse(text) as T;
   return data;
 };
+
+function PermissionGroupedList({
+  permissions,
+  groups,
+  labels,
+  disabled,
+  onToggle,
+}: {
+  permissions: PermissionItem[];
+  groups: PermissionGroup[];
+  labels: Record<string, string>;
+  disabled: boolean;
+  onToggle: (key: string, value: boolean) => void;
+}) {
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(groups.map((g) => g.label)));
+
+  const toggleGroup = (label: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  const permMap = useMemo(() => {
+    const map: Record<string, PermissionItem> = {};
+    for (const p of permissions) map[p.key] = p;
+    return map;
+  }, [permissions]);
+
+  const isGroupAllChecked = (keys: string[]) =>
+    keys.every((k) => permMap[k]?.isAllowed);
+
+  const toggleGroupAll = (keys: string[], value: boolean) => {
+    for (const k of keys) {
+      if (permMap[k] && permMap[k].isAllowed !== value) {
+        onToggle(k, value);
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      {groups.map((group) => {
+        const groupKeys = group.keys.filter((k) => permMap[k]);
+        if (groupKeys.length === 0) return null;
+        const isExpanded = expandedGroups.has(group.label);
+        const allChecked = isGroupAllChecked(groupKeys);
+
+        return (
+          <div key={group.label} className="border border-slate-100 rounded-lg">
+            <div
+              className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-slate-50"
+              onClick={() => toggleGroup(group.label)}
+            >
+              <div className="flex items-center gap-2">
+                <svg
+                  className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="font-medium text-slate-800 text-sm">{group.label}</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={allChecked}
+                disabled={disabled}
+                onChange={(e) => { e.stopPropagation(); toggleGroupAll(groupKeys, e.target.checked); }}
+                onClick={(e) => e.stopPropagation()}
+                className="h-4 w-4"
+              />
+            </div>
+            {isExpanded && (
+              <div className="px-3 pb-2">
+                {groupKeys.map((key) => {
+                  const perm = permMap[key];
+                  return (
+                    <label key={key} className="flex items-center justify-between py-1.5 pl-6 border-t border-slate-50">
+                      <span className="text-slate-700 text-sm">{labels[key] || key}</span>
+                      <input
+                        type="checkbox"
+                        checked={perm.isAllowed}
+                        disabled={disabled}
+                        onChange={(e) => onToggle(key, e.target.checked)}
+                        className="h-4 w-4"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function AdminPage() {
   const { user, hasPermission, refreshMe } = useAuth();
@@ -477,18 +600,13 @@ export function AdminPage() {
                   <p className="text-sm text-slate-600">
                     {selectedUser.fullName} ({getRoleLabel(selectedUser.role, t)})
                   </p>
-                  {selectedUser.permissions.map((entry) => (
-                    <label key={entry.key} className="flex items-center justify-between py-2 border-b border-slate-100">
-                      <span className="text-slate-800">{getPermissionLabels(t)[entry.key] || entry.key}</span>
-                      <input
-                        type="checkbox"
-                        checked={entry.isAllowed}
-                        disabled={!canManagePermissions || saving}
-                        onChange={(event) => togglePermission(entry.key, event.target.checked)}
-                        className="h-4 w-4"
-                      />
-                    </label>
-                  ))}
+                  <PermissionGroupedList
+                    permissions={selectedUser.permissions}
+                    groups={getPermissionGroups(t)}
+                    labels={getPermissionLabels(t)}
+                    disabled={!canManagePermissions || saving}
+                    onToggle={togglePermission}
+                  />
                 </>
               )}
             </div>

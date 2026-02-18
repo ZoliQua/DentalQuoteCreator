@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { useApp } from '../context/AppContext';
-import { useCatalog } from '../hooks';
+import { useCatalog, usePriceLists } from '../hooks';
 import { defaultCatalog } from '../data/defaultCatalog';
 import { defaultSettings } from '../data/defaultSettings';
+import { defaultPriceLists, defaultPriceListCategories, defaultCatalogItems } from '../data/defaultPriceLists';
 import type { ExportData } from '../repositories/StorageRepository';
 import type { CatalogItem, Patient, Quote, QuoteItem, QuoteStatus } from '../types';
 import { getAuthHeaders } from '../utils/auth';
@@ -82,6 +83,7 @@ const createDefaultToothState = (): OdontogramToothState => ({
   bridgeUnit: 'none',
   mobility: 'none',
   crownMaterial: 'natural',
+  parapulpalPin: false,
 });
 
 const addUnique = (items: string[], value: string) => {
@@ -207,8 +209,10 @@ export function DataManagementPage() {
     exportData,
     importData,
     refreshData,
+    resetPriceLists,
   } = useApp();
   const { exportCatalog, importCatalog, exportCatalogCSV, importCatalogCSV } = useCatalog();
+  const { pricelists: activePriceLists } = usePriceLists();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const catalogJsonInputRef = useRef<HTMLInputElement>(null);
   const catalogCsvInputRef = useRef<HTMLInputElement>(null);
@@ -223,6 +227,8 @@ export function DataManagementPage() {
   const [pendingImportData, setPendingImportData] = useState<string | null>(null);
   const [pendingCatalogImport, setPendingCatalogImport] = useState<{ format: 'json' | 'csv'; data: string } | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
+  const [selectedPriceListId, setSelectedPriceListId] = useState<string>('');
+  const [resetPriceListConfirm, setResetPriceListConfirm] = useState(false);
   const [pendingPatientImport, setPendingPatientImport] = useState<{ data: string; format: 'json' | 'csv'; mode: 'all' | 'single' } | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -502,11 +508,24 @@ export function DataManagementPage() {
 
   const handleCatalogExportJson = () => {
     const data = exportCatalog();
-    downloadFile(
-      data,
-      `dental_catalog_${new Date().toISOString().split('T')[0]}.json`,
-      'application/json'
-    );
+    // Filter by selected price list if one is chosen
+    if (selectedPriceListId) {
+      try {
+        const items = JSON.parse(data) as CatalogItem[];
+        const filtered = items.filter((item) =>
+          (item as unknown as Record<string, unknown>).priceListId === selectedPriceListId
+        );
+        downloadFile(
+          JSON.stringify(filtered, null, 2),
+          `dental_catalog_${selectedPriceListId}_${new Date().toISOString().split('T')[0]}.json`,
+          'application/json'
+        );
+      } catch {
+        downloadFile(data, `dental_catalog_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+      }
+    } else {
+      downloadFile(data, `dental_catalog_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+    }
     setMessage({ type: 'success', text: t.dataManagement.catalogOnly.exportSuccess });
     setTimeout(() => setMessage(null), 3000);
   };
@@ -520,6 +539,14 @@ export function DataManagementPage() {
     );
     setMessage({ type: 'success', text: t.dataManagement.catalogOnly.exportSuccess });
     setTimeout(() => setMessage(null), 3000);
+  };
+
+  const handleResetPriceLists = () => {
+    resetPriceLists(defaultPriceLists, defaultPriceListCategories, defaultCatalogItems);
+    refreshData();
+    setResetPriceListConfirm(false);
+    setMessage({ type: 'success', text: t.dataManagement.catalogOnly.resetSuccess });
+    setTimeout(() => setMessage(null), 5000);
   };
 
   const handleImportClick = () => {
@@ -857,6 +884,18 @@ export function DataManagementPage() {
                   <p className="text-xs text-gray-500">{t.dataManagement.catalogOnly.exportDescription}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <select
+                    className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+                    value={selectedPriceListId}
+                    onChange={(e) => setSelectedPriceListId(e.target.value)}
+                  >
+                    <option value="">{t.common.all}</option>
+                    {activePriceLists.map((pl) => (
+                      <option key={pl.priceListId} value={pl.priceListId}>
+                        {pl.priceListNameHu}
+                      </option>
+                    ))}
+                  </select>
                   <Button size="sm" onClick={handleCatalogExportJson}>
                     JSON
                   </Button>
@@ -889,6 +928,18 @@ export function DataManagementPage() {
                     CSV
                   </Button>
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-red-200 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-red-700">{t.dataManagement.catalogOnly.resetTitle}</p>
+                  <p className="text-xs text-red-600">{t.dataManagement.catalogOnly.resetDescription}</p>
+                </div>
+                <Button size="sm" variant="danger" onClick={() => setResetPriceListConfirm(true)}>
+                  {t.dataManagement.catalogOnly.resetButton}
+                </Button>
               </div>
             </div>
           </div>
@@ -1158,6 +1209,18 @@ export function DataManagementPage() {
         title={t.common.confirm}
         message={t.dataManagement.patientData.importAllWarning}
         confirmText={t.dataManagement.patientData.importAllTitle}
+        cancelText={t.common.cancel}
+        variant="danger"
+      />
+
+      {/* Reset Price Lists Confirmation */}
+      <ConfirmModal
+        isOpen={resetPriceListConfirm}
+        onClose={() => setResetPriceListConfirm(false)}
+        onConfirm={handleResetPriceLists}
+        title={t.common.confirm}
+        message={t.dataManagement.catalogOnly.resetConfirm}
+        confirmText={t.dataManagement.catalogOnly.resetButton}
         cancelText={t.common.cancel}
         variant="danger"
       />

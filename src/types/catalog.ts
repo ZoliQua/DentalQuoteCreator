@@ -1,23 +1,23 @@
 export type CatalogCategory =
   | 'Diagnosztika'
   | 'Parodontológia'
-  | 'Konzerváló'
+  | 'Konzerváló Fogászat'
   | 'Endodoncia'
   | 'Szájsebészet'
   | 'Implantáció'
   | 'Protetika'
-  | 'Gyerefogászat'
+  | 'Gyerekfogászat'
   | 'Fogszabályozás';
 
 export const CATALOG_CATEGORIES: CatalogCategory[] = [
   'Diagnosztika',
   'Parodontológia',
-  'Konzerváló',
+  'Konzerváló Fogászat',
   'Endodoncia',
   'Szájsebészet',
   'Implantáció',
   'Protetika',
-  'Gyerefogászat',
+  'Gyerekfogászat',
   'Fogszabályozás',
 ];
 
@@ -29,12 +29,15 @@ export interface CatalogItem {
   catalogItemId: string;
   catalogCode: string;
   catalogName: string;
+  catalogNameHu?: string;
   catalogUnit: CatalogUnit;
   catalogPrice: number;
   catalogPriceCurrency: 'HUF' | 'EUR';
   catalogVatRate: number;
   catalogTechnicalPrice: number;
-  catalogCategory: CatalogCategory;
+  catalogCategory: CatalogCategory | string;
+  catalogCategoryId?: string;
+  priceListId?: string;
   svgLayer: string;
   hasLayer: boolean;
   hasTechnicalPrice: boolean;
@@ -50,3 +53,27 @@ export interface CatalogItem {
 }
 
 export type CatalogItemFormData = Omit<CatalogItem, 'catalogItemId'>;
+
+// PriceList types
+export interface PriceList {
+  priceListId: string;
+  priceListNameHu: string;
+  priceListNameEn: string;
+  priceListNameDe: string;
+  isActive: boolean;
+  isDeleted: boolean;
+  isDefault: boolean;
+  isUserLocked: boolean;
+  listOfUsers: string[];
+}
+
+export interface PriceListCategory {
+  catalogCategoryId: string;
+  priceListId: string;
+  catalogCategoryPrefix: string;
+  catalogCategoryHu: string;
+  catalogCategoryEn: string;
+  catalogCategoryDe: string;
+  isActive: boolean;
+  isDeleted: boolean;
+}

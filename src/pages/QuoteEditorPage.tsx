@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
-import { usePatients, useQuotes, useCatalog } from '../hooks';
+import { usePatients, useQuotes, useCatalog, useCatalogCodeFormatter, usePriceListCategories } from '../hooks';
 import { QuoteItem, CatalogItem, CatalogCategory, DiscountType } from '../types';
 import {
   Button,
@@ -40,7 +40,7 @@ import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { previewInvoice, createInvoice } from '../modules/invoicing/api';
 import { saveInvoice, getInvoicesByQuote } from '../modules/invoicing/storage';
-import type { InvoiceRecord } from '../types/invoice';
+import type { InvoiceRecord, InvoiceType } from '../types/invoice';
 import { getCatalogDisplayName } from '../utils/catalogLocale';
 
 // Per-line discount preset type
@@ -71,6 +71,8 @@ export function QuoteEditorPage() {
     reopenTreatment,
   } = useQuotes();
   const { activeItems, itemsByCategory } = useCatalog();
+  const { formatCode } = useCatalogCodeFormatter();
+  const { getCategoryName } = usePriceListCategories();
   const { hasPermission } = useAuth();
   const { restoreQuote } = useApp();
 
@@ -111,6 +113,8 @@ export function QuoteEditorPage() {
   const [quoteInvoices, setQuoteInvoices] = useState<InvoiceRecord[]>([]);
   const [invoiceDraggedIndex, setInvoiceDraggedIndex] = useState<number | null>(null);
   const [invoiceDragOverIndex, setInvoiceDragOverIndex] = useState<number | null>(null);
+  const [invoiceType, setInvoiceType] = useState<InvoiceType>('normal');
+  const [advanceAmount, setAdvanceAmount] = useState<number>(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const patient = patientId ? getPatient(patientId) : undefined;
@@ -191,13 +195,17 @@ export function QuoteEditorPage() {
   }, [quoteInvoices]);
   const remainingAmount = Math.max(0, totals.total - invoicedAmount);
 
-  const canInvoice = quote?.quoteStatus === 'started' && remainingAmount > 0;
+  const hasActiveAdvanceInvoice = useMemo(() => {
+    return quoteInvoices.some((inv) => inv.status !== 'storno' && inv.invoiceType === 'advance');
+  }, [quoteInvoices]);
+
+  const canInvoice = quote?.quoteStatus === 'started' && (remainingAmount > 0 || hasActiveAdvanceInvoice);
 
   const invoiceDisabledReason = (() => {
     if (!quote) return '';
     if (quote.quoteStatus === 'completed') return t.invoices.quoteSettled;
     if (quote.quoteStatus !== 'started') return t.invoices.quoteNotAccepted;
-    if (remainingAmount <= 0) return t.invoices.quoteFullyInvoiced;
+    if (remainingAmount <= 0 && !hasActiveAdvanceInvoice) return t.invoices.quoteFullyInvoiced;
     return '';
   })();
 
@@ -209,16 +217,24 @@ export function QuoteEditorPage() {
     }
 
     if (itemSearchQuery.trim()) {
-      const query = itemSearchQuery.toLowerCase();
+      const query = itemSearchQuery.toLowerCase().replace(/-/g, '');
       items = items.filter(
         (item) =>
           item.catalogName.toLowerCase().includes(query) ||
-          item.catalogCode.toLowerCase().includes(query)
+          item.catalogCode.toLowerCase().replace(/-/g, '').includes(query) ||
+          formatCode(item).toLowerCase().replace(/-/g, '').includes(query)
       );
     }
 
+    // Sort by category name, then catalogCode
+    items = [...items].sort((a, b) => {
+      const catCmp = a.catalogCategory.localeCompare(b.catalogCategory);
+      if (catCmp !== 0) return catCmp;
+      return a.catalogCode.localeCompare(b.catalogCode);
+    });
+
     return items;
-  }, [activeItems, selectedCategory, itemSearchQuery]);
+  }, [activeItems, selectedCategory, itemSearchQuery, formatCode]);
 
   if (!patient || !quote) {
     return (
@@ -349,6 +365,34 @@ export function QuoteEditorPage() {
   const categories = Object.keys(itemsByCategory) as CatalogCategory[];
 
   const buildInvoicePayload = () => {
+    const vatRate = settings.invoice?.defaultVatRate ?? 0;
+    let payloadItems = [...invoiceItems];
+
+    if (invoiceType === 'advance') {
+      // For advance invoices, send only the advance item
+      const unitPriceNet = vatRate > 0 ? Number((advanceAmount / (1 + vatRate / 100)).toFixed(2)) : advanceAmount;
+      payloadItems = [{
+        name: t.invoices.advanceItemName,
+        unit: 'db',
+        qty: 1,
+        unitPriceNet,
+        vatRate,
+      }];
+    } else if (invoiceType === 'final' && hasActiveAdvanceInvoice) {
+      // For final invoices, add a negative deduction for previous advances
+      const advanceTotal = quoteInvoices
+        .filter((inv) => inv.status !== 'storno' && inv.invoiceType === 'advance')
+        .reduce((sum, inv) => sum + (inv.totalGross || 0), 0);
+      const deductionNet = vatRate > 0 ? Number((advanceTotal / (1 + vatRate / 100)).toFixed(2)) : advanceTotal;
+      payloadItems.push({
+        name: t.invoices.advanceItemName,
+        unit: 'db',
+        qty: 1,
+        unitPriceNet: -deductionNet,
+        vatRate,
+      });
+    }
+
     return {
       seller: {
         name: settings.clinic.name,
@@ -369,8 +413,14 @@ export function QuoteEditorPage() {
         currency: quote.currency,
         comment: invoiceComment,
         eInvoice: settings.invoice?.invoiceType === 'electronic',
+        elolegszamla: invoiceType === 'advance',
+        vegszamla: invoiceType === 'final',
+        rendelesSzam: invoiceType === 'final' ? '' : quote.quoteNumber,
+        elolegSzamlaszam: invoiceType === 'final'
+          ? (quoteInvoices.find((inv) => inv.status !== 'storno' && inv.invoiceType === 'advance')?.szamlazzInvoiceNumber || '')
+          : '',
       },
-      items: invoiceItems,
+      items: payloadItems,
     };
   };
 
@@ -410,6 +460,13 @@ export function QuoteEditorPage() {
         ? `${defaultComment} - ${quote.quoteNumber} - ${quote.quoteName}`
         : `${quote.quoteNumber} - ${quote.quoteName}`
     );
+    // Determine default invoice type
+    if (hasActiveAdvanceInvoice) {
+      setInvoiceType('final');
+    } else {
+      setInvoiceType('normal');
+    }
+    setAdvanceAmount(0);
     setIssueDateText(formatBirthDateForDisplay(today));
     setFulfillmentDateText(formatBirthDateForDisplay(today));
     setDueDateText(formatBirthDateForDisplay(dueDate));
@@ -474,6 +531,7 @@ export function QuoteEditorPage() {
           address: invoiceForm.buyerAddress,
           email: invoiceForm.buyerEmail,
         },
+        invoiceType,
         items: payload.items.map((item) => {
           const net = Number((item.qty * item.unitPriceNet).toFixed(2));
           const vat = Number((net * (item.vatRate / 100)).toFixed(2));
@@ -501,6 +559,7 @@ export function QuoteEditorPage() {
         invoiceNumber: invoiceNumber || invoiceId.slice(0, 8),
         invoiceAmount: totalGross,
         invoiceCurrency: quote.currency,
+        invoiceType,
       });
       setInvoiceModalOpen(false);
       // Auto-open PDF in new tab
@@ -517,7 +576,7 @@ export function QuoteEditorPage() {
       const newInvoicedAmount = updatedInvoices
         .filter((inv) => inv.status !== 'storno')
         .reduce((sum, inv) => sum + (inv.totalGross || 0), 0);
-      if (newInvoicedAmount >= totals.total && quote.quoteStatus === 'started') {
+      if (newInvoicedAmount >= totals.total && quote.quoteStatus === 'started' && invoiceType !== 'advance') {
         completeTreatment(quote.quoteId);
       }
     } catch (error) {
@@ -734,7 +793,12 @@ export function QuoteEditorPage() {
                 />
               ) : (
                 <div className="space-y-3">
-                  {quote.items.map((item, index) => (
+                  {quote.items.map((item, index) => {
+                    // Determine if item has been invoiced (non-storno invoice exists)
+                    const matchingInvoice = ['started', 'completed'].includes(quote.quoteStatus)
+                      ? quoteInvoices.find((inv) => inv.status !== 'storno' && inv.items.some((ii) => ii.name === item.quoteName))
+                      : undefined;
+                    return (
                     <QuoteItemRow
                       key={item.lineId}
                       item={item}
@@ -749,8 +813,10 @@ export function QuoteEditorPage() {
                       onDragStart={() => handleDragStart(index)}
                       onDragOver={(e) => handleDragOver(e, index)}
                       onDragEnd={handleDragEnd}
+                      invoicedInvoiceNumber={matchingInvoice?.szamlazzInvoiceNumber || (matchingInvoice ? matchingInvoice.id.slice(0, 8) : undefined)}
                     />
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -965,7 +1031,9 @@ export function QuoteEditorPage() {
                 </div>
               ) : quote.quoteStatus === 'completed' ? (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">{t.quotes.acceptanceCompleted}</span>
+                  <span className="text-sm text-gray-600">
+                    {remainingAmount <= 0 ? t.invoices.completedAndFullyInvoiced : t.quotes.acceptanceCompleted}
+                  </span>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -1014,7 +1082,8 @@ export function QuoteEditorPage() {
                 </div>
               )}
 
-              {/* Global Discount */}
+              {/* Global Discount - hidden in non-draft states when value is 0 */}
+              {!(quote.globalDiscountValue === 0 && ['closed', 'started', 'completed'].includes(quote.quoteStatus)) && (
               <div className="pt-3 border-t">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   {t.quotes.globalDiscount}
@@ -1051,6 +1120,7 @@ export function QuoteEditorPage() {
                   />
                 </div>
               </div>
+              )}
 
               {totals.globalDiscount > 0 && (
                 <div className="flex justify-between text-sm">
@@ -1063,9 +1133,23 @@ export function QuoteEditorPage() {
               <div className="flex justify-between items-center">
                 <span className="text-lg font-semibold">{t.quotes.total}</span>
                 <span className="text-2xl font-bold text-dental-600">
-                  {formatCurrency(totals.total)}
+                  {formatCurrency(Math.max(0, totals.total - invoicedAmount))}
                 </span>
               </div>
+              {invoicedAmount > 0 && (
+                <div className="mt-2 space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">{t.invoices.invoicedAmount}</span>
+                    <span className="font-medium">{formatCurrency(invoicedAmount)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">{t.invoices.remainingAmount}</span>
+                    <span className={`font-medium ${remainingAmount <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                      {formatCurrency(remainingAmount)}
+                    </span>
+                  </div>
+                </div>
+              )}
             </CardFooter>
           </Card>
 
@@ -1117,6 +1201,8 @@ export function QuoteEditorPage() {
         size="xl"
       >
         <div className="space-y-4">
+          {/* Buyer section */}
+          <h4 className="text-sm font-semibold text-gray-900 border-b pb-1">{t.invoices.buyerSection}</h4>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Input
               label={t.invoices.buyerName}
@@ -1128,6 +1214,8 @@ export function QuoteEditorPage() {
               value={invoiceForm.buyerEmail}
               onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerEmail: e.target.value }))}
             />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
             <Input
               label={t.invoices.buyerZip}
               value={invoiceForm.buyerZip}
@@ -1143,16 +1231,11 @@ export function QuoteEditorPage() {
               value={invoiceForm.buyerAddress}
               onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerAddress: e.target.value }))}
             />
-            <Select
-              label={t.invoices.paymentMethod}
-              value={invoiceForm.paymentMethod}
-              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
-              options={[
-                { value: 'atutalas', label: t.invoices.paymentTransfer },
-                { value: 'keszpenz', label: t.invoices.paymentCash },
-                { value: 'bankkartya', label: t.invoices.paymentCard },
-              ]}
-            />
+          </div>
+
+          {/* Invoice data section */}
+          <h4 className="text-sm font-semibold text-gray-900 border-b pb-1">{t.invoices.invoiceDataSection}</h4>
+          <div className="grid grid-cols-3 gap-3">
             <div className="w-full">
               <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.issueDate}</label>
               <div className="relative">
@@ -1246,6 +1329,18 @@ export function QuoteEditorPage() {
                 </svg>
               </div>
             </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Select
+              label={t.invoices.paymentMethod}
+              value={invoiceForm.paymentMethod}
+              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+              options={[
+                { value: 'atutalas', label: t.invoices.paymentTransfer },
+                { value: 'keszpenz', label: t.invoices.paymentCash },
+                { value: 'bankkartya', label: t.invoices.paymentCard },
+              ]}
+            />
             <Input
               label={t.invoices.comment}
               value={invoiceComment}
@@ -1253,7 +1348,28 @@ export function QuoteEditorPage() {
             />
           </div>
 
-          {/* Editable invoice items */}
+          {/* Invoice type selector */}
+          <div>
+            <Select
+              label={t.invoices.invoiceType}
+              value={invoiceType}
+              onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
+              options={[
+                { value: 'normal', label: t.invoices.invoiceTypeNormal, disabled: hasActiveAdvanceInvoice },
+                { value: 'advance', label: t.invoices.invoiceTypeAdvance, disabled: (() => {
+                  const itemsGross = invoiceItems.reduce((sum, it) => {
+                    const net = it.qty * it.unitPriceNet;
+                    return sum + net + (net * it.vatRate / 100);
+                  }, 0);
+                  return itemsGross >= remainingAmount;
+                })() },
+                { value: 'final', label: t.invoices.invoiceTypeFinal },
+              ]}
+              className="w-64"
+            />
+          </div>
+
+          {/* Invoice items (read-only qty/price) */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold text-gray-700">{t.invoices.items}</h3>
@@ -1293,30 +1409,12 @@ export function QuoteEditorPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
                         </svg>
                       </div>
+                      <span className="text-gray-500 w-6 text-center">{idx + 1}.</span>
                       <span className="flex-1 font-medium">{item.name}</span>
-                      <Input
-                        type="number"
-                        value={item.qty}
-                        onChange={(e) =>
-                          setInvoiceItems((prev) =>
-                            prev.map((it, i) => (i === idx ? { ...it, qty: Number(e.target.value) || 1 } : it))
-                          )
-                        }
-                        min={1}
-                        className="w-16"
-                      />
+                      <span className="text-gray-600 w-10 text-center">{item.qty}</span>
                       <span className="text-gray-500">{item.unit}</span>
-                      <Input
-                        type="number"
-                        value={item.unitPriceNet}
-                        onChange={(e) =>
-                          setInvoiceItems((prev) =>
-                            prev.map((it, i) => (i === idx ? { ...it, unitPriceNet: Number(e.target.value) || 0 } : it))
-                          )
-                        }
-                        className="w-24"
-                      />
-                      <span className="text-gray-500">{item.vatRate}%</span>
+                      <span className="text-gray-600 w-24 text-right">{formatCurrency(item.unitPriceNet)}</span>
+                      <span className="text-gray-500 w-12 text-center">{item.vatRate}%</span>
                       <span className="w-24 text-right font-semibold">{formatCurrency(gross)}</span>
                       <button
                         type="button"
@@ -1328,9 +1426,73 @@ export function QuoteEditorPage() {
                     </div>
                   );
                 })}
+
+                {/* Advance invoice: editable advance item */}
+                {invoiceType === 'advance' && (
+                  <div className="flex items-center gap-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm">
+                    <span className="text-gray-500 w-6 text-center">{invoiceItems.length + 1}.</span>
+                    <span className="flex-1 font-medium text-amber-800">{t.invoices.advanceItemName}</span>
+                    <Input
+                      type="number"
+                      value={advanceAmount}
+                      onChange={(e) => setAdvanceAmount(Number(e.target.value) || 0)}
+                      min={0}
+                      max={remainingAmount}
+                      className="w-28"
+                    />
+                    <span className="text-gray-500">{quote.currency}</span>
+                  </div>
+                )}
+
+                {/* Final invoice: negative advance deduction (non-removable) */}
+                {invoiceType === 'final' && hasActiveAdvanceInvoice && (() => {
+                  const advanceTotal = quoteInvoices
+                    .filter((inv) => inv.status !== 'storno' && inv.invoiceType === 'advance')
+                    .reduce((sum, inv) => sum + (inv.totalGross || 0), 0);
+                  return (
+                    <div className="flex items-center gap-2 rounded border border-blue-300 bg-blue-50 p-2 text-sm">
+                      <span className="text-gray-500 w-6 text-center">{invoiceItems.length + 1}.</span>
+                      <span className="flex-1 font-medium text-blue-800">{t.invoices.advanceItemName}</span>
+                      <span className="w-24 text-right font-semibold text-red-600">-{formatCurrency(advanceTotal)}</span>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
+
+          {/* Summary section */}
+          <h4 className="text-sm font-semibold text-gray-900 border-b pb-1">{t.invoices.summarySection}</h4>
+          {(() => {
+            const itemsGross = invoiceItems.reduce((sum, it) => {
+              const net = it.qty * it.unitPriceNet;
+              return sum + net + (net * it.vatRate / 100);
+            }, 0);
+            let currentTotal = Math.round((itemsGross + Number.EPSILON) * 100) / 100;
+            if (invoiceType === 'advance') {
+              currentTotal = advanceAmount;
+            } else if (invoiceType === 'final' && hasActiveAdvanceInvoice) {
+              const advTotal = quoteInvoices
+                .filter((inv) => inv.status !== 'storno' && inv.invoiceType === 'advance')
+                .reduce((sum, inv) => sum + (inv.totalGross || 0), 0);
+              currentTotal = Math.round((itemsGross - advTotal + Number.EPSILON) * 100) / 100;
+            }
+            const currentRemaining = Math.max(0, totals.total - invoicedAmount - currentTotal);
+            return (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="font-medium">{t.invoices.totalAmount}:</span>
+                  <span className="font-semibold">{formatCurrency(currentTotal, quote.currency)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">{t.invoices.quoteRemainingPart}:</span>
+                  <span className={`font-medium ${currentRemaining <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                    {currentRemaining <= 0 ? t.invoices.noneRemaining : formatCurrency(currentRemaining, quote.currency)}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
 
           {invoicePreviewTotals && (
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
@@ -1426,7 +1588,7 @@ export function QuoteEditorPage() {
               onChange={(e) => setSelectedCategory(e.target.value as CatalogCategory | 'all')}
               options={[
                 { value: 'all', label: t.common.all },
-                ...categories.map((cat) => ({ value: cat, label: cat })),
+                ...categories.map((cat) => ({ value: cat, label: getCategoryName(cat, appLanguage) })),
               ]}
               className="w-48"
             />
@@ -1450,7 +1612,7 @@ export function QuoteEditorPage() {
                   <div>
                     <p className="font-medium">{getCatalogDisplayName(item, appLanguage)}</p>
                     <p className="text-sm text-gray-500">
-                      {item.catalogCode} | {item.catalogCategory}
+                      {formatCode(item)} | {getCategoryName(item.catalogCategory, appLanguage)}
                     </p>
                   </div>
                   <div className="text-right">
@@ -1478,18 +1640,39 @@ export function QuoteEditorPage() {
                     <span className="text-gray-500">{formatDateTime(event.timestamp)}</span>
                     {event.type === 'invoice_created' ? (
                       <span className="font-medium">
-                        {t.quotes.eventInvoiceCreated}:{' '}
+                        {(() => {
+                          const evtAmount = formatCurrency(event.invoiceAmount || 0, event.invoiceCurrency as 'HUF' | 'EUR' | undefined);
+                          const evtNumber = event.invoiceNumber || '';
+                          // Calculate remaining after this event
+                          const evtIdx = quote.events.indexOf(event);
+                          const invoicedUpToEvent = quote.events
+                            .filter((e, i) => e.type === 'invoice_created' && i <= evtIdx)
+                            .reduce((sum, e) => sum + (e.invoiceAmount || 0), 0);
+                          const evtRemaining = Math.max(0, totals.total - invoicedUpToEvent);
+                          const evtRemainingStr = formatCurrency(evtRemaining, event.invoiceCurrency as 'HUF' | 'EUR' | undefined);
+                          const eType = event.invoiceType || 'normal';
+                          let msg = '';
+                          if (eType === 'advance') {
+                            msg = t.invoices.eventAdvanceCreated
+                              .replace('{number}', evtNumber).replace('{amount}', evtAmount).replace('{remaining}', evtRemainingStr);
+                          } else if (eType === 'final') {
+                            msg = t.invoices.eventFinalCreated
+                              .replace('{number}', evtNumber).replace('{amount}', evtAmount);
+                          } else if (evtRemaining <= 0) {
+                            msg = t.invoices.eventInvoiceFull
+                              .replace('{number}', evtNumber).replace('{amount}', evtAmount);
+                          } else {
+                            msg = t.invoices.eventInvoicePartial
+                              .replace('{number}', evtNumber).replace('{amount}', evtAmount).replace('{remaining}', evtRemainingStr);
+                          }
+                          return msg;
+                        })()}{' '}
                         <Link
                           to={`/invoices/${event.invoiceId}`}
                           className="text-dental-600 hover:text-dental-700 hover:underline"
                         >
                           {event.invoiceNumber}
                         </Link>
-                        {event.invoiceAmount != null && (
-                          <span className="ml-2 text-gray-600">
-                            — {formatCurrency(event.invoiceAmount, event.invoiceCurrency as 'HUF' | 'EUR' | undefined)}
-                          </span>
-                        )}
                       </span>
                     ) : (
                       <span className="font-medium">
@@ -1637,6 +1820,7 @@ interface QuoteItemRowProps {
   onDragStart: () => void;
   onDragOver: (e: React.DragEvent) => void;
   onDragEnd: () => void;
+  invoicedInvoiceNumber?: string;
 }
 
 function QuoteItemRow({
@@ -1652,6 +1836,7 @@ function QuoteItemRow({
   onDragStart,
   onDragOver,
   onDragEnd,
+  invoicedInvoiceNumber,
 }: QuoteItemRowProps) {
   const { t } = useSettings();
   const lineTotal = calculateLineTotal(item);
@@ -1664,8 +1849,9 @@ function QuoteItemRow({
 
   return (
     <div
-      className={`p-4 rounded-lg border bg-gray-50 transition-all ${
-        isDragging ? 'opacity-50 scale-95' : ''
+      className={`p-4 rounded-lg border transition-all ${
+        invoicedInvoiceNumber ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'
+      } ${isDragging ? 'opacity-50 scale-95' : ''
       } ${isDragOver ? 'border-dental-500 border-2' : ''} ${isEditable ? 'cursor-move' : ''}`}
       draggable={isEditable}
       onDragStart={onDragStart}
@@ -1859,7 +2045,16 @@ function QuoteItemRow({
         </div>
 
         <div className="text-right">
-          <p className="font-semibold text-lg">{formatCurrency(lineTotal)}</p>
+          <div className="flex items-center justify-end gap-1">
+            <p className="font-semibold text-lg">{formatCurrency(lineTotal)}</p>
+            {invoicedInvoiceNumber && (
+              <span title={t.invoices.invoicedItem.replace('{invoiceNumber}', invoicedInvoiceNumber)}>
+                <svg className="w-5 h-5 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+            )}
+          </div>
           {discountAmount > 0 && (
             <p className="text-sm text-red-600">-{formatCurrency(discountAmount)}</p>
           )}

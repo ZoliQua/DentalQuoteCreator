@@ -1,4 +1,5 @@
 export type InvoiceStatus = 'draft' | 'sent' | 'storno';
+export type InvoiceType = 'normal' | 'advance' | 'final';
 
 export interface InvoiceItemSnapshot {
   name: string;
@@ -34,6 +35,7 @@ export interface InvoiceRecord {
     address?: string;
     email?: string;
   };
+  invoiceType?: InvoiceType;
   items: InvoiceItemSnapshot[];
   xmlPreview?: string;
   rawResponse?: string;

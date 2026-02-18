@@ -1,4 +1,4 @@
-import { Patient, CatalogItem, Quote, Settings, DentalStatusSnapshot } from '../types';
+import { Patient, CatalogItem, Quote, Settings, DentalStatusSnapshot, PriceList, PriceListCategory } from '../types';
 
 export interface StorageRepository {
   // Patients
@@ -13,6 +13,17 @@ export interface StorageRepository {
   saveCatalogItem(item: CatalogItem): void;
   deleteCatalogItem(catalogItemId: string): void;
   resetCatalog(items: CatalogItem[]): void;
+
+  // PriceLists
+  getPriceLists(): PriceList[];
+  savePriceList(priceList: PriceList): void;
+  deletePriceList(priceListId: string): void;
+  resetPriceLists(pricelists: PriceList[], categories: PriceListCategory[], items: CatalogItem[]): void;
+
+  // PriceList Categories
+  getPriceListCategories(priceListId?: string): PriceListCategory[];
+  savePriceListCategory(category: PriceListCategory): void;
+  deletePriceListCategory(catalogCategoryId: string): void;
 
   // Quotes
   getQuotes(): Quote[];
@@ -44,4 +55,6 @@ export interface ExportData {
   quotes: Quote[];
   settings: Settings;
   dentalStatusSnapshots?: DentalStatusSnapshot[];
+  pricelists?: PriceList[];
+  pricelistCategories?: PriceListCategory[];
 }

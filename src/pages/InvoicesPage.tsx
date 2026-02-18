@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
-import { usePatients, useCatalog } from '../hooks';
+import { usePatients, useCatalog, useCatalogCodeFormatter } from '../hooks';
 import { Card, Button, Input, Select, Modal, Badge } from '../components/common';
 import { formatCurrency, formatDate, formatPatientName, formatBirthDateForDisplay, parseBirthDateFromDisplay, getDatePlaceholder } from '../utils';
 import { createInvoice, previewInvoice } from '../modules/invoicing/api';
@@ -15,6 +15,7 @@ export function InvoicesPage() {
   const { hasPermission } = useAuth();
   const { patients } = usePatients();
   const { activeItems } = useCatalog();
+  const { formatCode } = useCatalogCodeFormatter();
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => listInvoices());
   const [resendLoadingId, setResendLoadingId] = useState<string | null>(null);
   const [errorById, setErrorById] = useState<Record<string, string>>({});
@@ -740,7 +741,7 @@ export function InvoicesPage() {
                 <div>
                   <p className="text-sm font-medium">{item.catalogName}</p>
                   <p className="text-xs text-gray-500">
-                    {item.catalogCode} | {item.catalogUnit}
+                    {formatCode(item)} | {item.catalogUnit}
                   </p>
                 </div>
                 <p className="text-sm font-semibold">{formatCurrency(item.catalogPrice)}</p>

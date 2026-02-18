@@ -117,6 +117,11 @@ export function Layout({ children }: LayoutProps) {
           />
         </svg>
       ),
+      children: [
+        { to: '/catalog/lists', label: t.nav.catalogLists, permission: 'pricelist.view' },
+        { to: '/catalog/categories', label: t.nav.catalogCategories, permission: 'pricelist.view' },
+        { to: '/catalog/items', label: t.nav.catalogItems },
+      ],
     },
     {
       key: 'settings',

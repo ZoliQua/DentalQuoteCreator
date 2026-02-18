@@ -29,6 +29,11 @@ export type InvoiceRequestPayload = {
     currency: 'HUF' | 'EUR';
     comment?: string;
     eInvoice?: boolean;
+    elolegszamla?: boolean;
+    vegszamla?: boolean;
+    rendelesSzam?: string;
+    dijbekeroSzamlaszam?: string;
+    elolegSzamlaszam?: string;
   };
   items: InvoiceRequestItem[];
 };

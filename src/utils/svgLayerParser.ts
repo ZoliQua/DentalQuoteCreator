@@ -161,6 +161,7 @@ function getDefaultToothState(): OdontogramToothState {
     bridgeUnit: 'none',
     mobility: 'none',
     crownMaterial: 'natural',
+    parapulpalPin: false,
   };
 }
 

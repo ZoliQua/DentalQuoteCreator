@@ -3,7 +3,9 @@ import { clearAuthSession, getAuthToken } from './auth';
 export function requestJsonSync<T>(method: string, url: string, body?: unknown): T {
   const xhr = new XMLHttpRequest();
   xhr.open(method, url, false);
-  xhr.setRequestHeader('Content-Type', 'application/json');
+  if (body !== undefined) {
+    xhr.setRequestHeader('Content-Type', 'application/json');
+  }
   const token = getAuthToken();
   if (token) {
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);

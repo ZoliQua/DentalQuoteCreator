@@ -1,10 +1,8 @@
 import { useMemo, useCallback } from 'react';
-import { nanoid } from 'nanoid';
 import { useApp } from '../context/AppContext';
 import {
   CatalogItem,
   CatalogItemFormData,
-  CatalogCategory,
   CATALOG_CATEGORIES,
   CATALOG_UNITS,
 } from '../types';
@@ -25,20 +23,18 @@ export function useCatalog() {
   const inactiveItems = useMemo(() => catalog.filter((c) => !c.isActive), [catalog]);
 
   const itemsByCategory = useMemo(() => {
-    const grouped: Record<CatalogCategory, CatalogItem[]> = {
-      Diagnosztika: [],
-      Parodontológia: [],
-      Konzerváló: [],
-      Endodoncia: [],
-      Szájsebészet: [],
-      Implantáció: [],
-      Protetika: [],
-      Gyerefogászat: [],
-      Fogszabályozás: [],
-    };
+    const grouped: Record<string, CatalogItem[]> = {};
+    // Initialize with known categories
+    for (const cat of CATALOG_CATEGORIES) {
+      grouped[cat] = [];
+    }
 
     activeItems.forEach((item) => {
-      grouped[item.catalogCategory].push(item);
+      const cat = item.catalogCategory;
+      if (!grouped[cat]) {
+        grouped[cat] = [];
+      }
+      grouped[cat].push(item);
     });
 
     return grouped;
@@ -50,7 +46,8 @@ export function useCatalog() {
       const item: CatalogItem = {
         ...data,
         catalogTechnicalPrice: technicalPrice,
-        catalogItemId: nanoid(),
+        catalogItemId: '',
+        catalogNameHu: data.catalogName,
         hasTechnicalPrice: technicalPrice > 0,
       };
       addCatalogItem(item);
@@ -67,6 +64,8 @@ export function useCatalog() {
       const updated: CatalogItem = {
         ...existing,
         ...data,
+        // Keep catalogNameHu in sync with catalogName for backend compatibility
+        catalogNameHu: data.catalogName ?? existing.catalogName,
         hasTechnicalPrice:
           (data.catalogTechnicalPrice ?? existing.catalogTechnicalPrice) > 0,
       };
@@ -90,7 +89,7 @@ export function useCatalog() {
   );
 
   const searchCatalog = useCallback(
-    (query: string, category?: CatalogCategory, activeOnly = true): CatalogItem[] => {
+    (query: string, category?: string, activeOnly = true): CatalogItem[] => {
       const searchLower = query.toLowerCase().trim();
       let source = activeOnly ? activeItems : catalog;
 
@@ -102,10 +101,12 @@ export function useCatalog() {
         return source;
       }
 
+      const searchNormalized = searchLower.replace(/-/g, '');
       return source.filter(
         (c) =>
           c.catalogName.toLowerCase().includes(searchLower) ||
-          c.catalogCode.toLowerCase().includes(searchLower)
+          c.catalogCode.toLowerCase().replace(/-/g, '').includes(searchNormalized) ||
+          (c.catalogCategory && c.catalogCategory.toLowerCase().includes(searchLower))
       );
     },
     [catalog, activeItems]
@@ -120,11 +121,11 @@ export function useCatalog() {
 
     for (const item of items) {
       const code = item.catalogCode?.toString().trim();
-      const name = item.catalogName?.toString().trim();
+      const name = (item.catalogName || item.catalogNameHu)?.toString().trim();
       const unit = item.catalogUnit?.toString().trim();
-      const category = item.catalogCategory as CatalogCategory | undefined;
+      const category = item.catalogCategory?.toString().trim();
 
-      if (!code || !name || !unit || !category || !CATALOG_CATEGORIES.includes(category)) {
+      if (!code || !name || !unit || !category) {
         return null;
       }
 
@@ -165,9 +166,10 @@ export function useCatalog() {
       })();
 
       normalized.push({
-        catalogItemId: item.catalogItemId?.toString() || nanoid(),
+        catalogItemId: item.catalogItemId?.toString() || '',
         catalogCode: code.toUpperCase(),
         catalogName: name,
+        catalogNameHu: name,
         catalogUnit: normalizedUnit,
         catalogPrice: Number.isFinite(priceValue) ? priceValue : 0,
         catalogPriceCurrency: item.catalogPriceCurrency === 'EUR' ? 'EUR' : 'HUF',
