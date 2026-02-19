@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { useApp } from '../context/AppContext';
@@ -1358,7 +1359,14 @@ function DatabaseReport() {
               .sort((a, b) => a.tableName.localeCompare(b.tableName))
               .map((table) => (
               <tr key={table.tableName} className="border-t border-gray-100">
-                <td className="px-3 py-2 font-medium text-gray-800">{table.tableName}</td>
+                <td className="px-3 py-2 font-medium">
+                  <Link
+                    to={`/data/browser?table=${encodeURIComponent(table.tableName)}`}
+                    className="text-dental-600 hover:text-dental-800 hover:underline"
+                  >
+                    {table.tableName}
+                  </Link>
+                </td>
                 <td className="px-3 py-2 text-right text-gray-700">{formatNumber(table.rowCount)}</td>
                 <td className="px-3 py-2 text-right text-gray-700">{formatBytes(table.dataBytes)}</td>
                 <td className="px-3 py-2 text-right text-gray-700">{formatBytes(table.indexBytes)}</td>

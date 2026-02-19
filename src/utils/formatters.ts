@@ -140,8 +140,7 @@ export function formatPatientName(lastName: string, firstName: string, title?: s
 }
 
 export function formatQuoteId(quoteId: string): string {
-  // Take the last 8 characters for display
-  return `AJ-${quoteId.slice(-8).toUpperCase()}`;
+  return quoteId;
 }
 
 export function getCurrentDateString(): string {

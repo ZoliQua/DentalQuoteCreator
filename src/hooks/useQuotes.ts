@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { useSettings } from '../context/SettingsContext';
 import { Quote, QuoteItem, QuoteStatus, QuoteEvent, CatalogItem } from '../types';
 import { getCurrentDateString, addDays, calculateQuoteTotals } from '../utils';
+import { getAuthHeaders } from '../utils/auth';
 
 // Helper to generate quote number in PREFIX-NNNN format
 function generateQuoteNumber(prefix: string, counter: number): string {
@@ -67,9 +68,9 @@ export function useQuotes() {
     return doctor?.name || '';
   }, [settings.doctors]);
 
-  // Create a new quote
+  // Create a new quote (async - fetches ID from backend)
   const createQuote = useCallback(
-    (patientId: string, patientName?: string, quoteType?: 'itemized' | 'visual'): Quote => {
+    async (patientId: string, patientName?: string, quoteType?: 'itemized' | 'visual'): Promise<Quote> => {
       const now = getCurrentDateString();
       const defaultDoctorId = settings.doctors.length > 0 ? settings.doctors[0].id : '';
       const defaultQuoteName = patientName ? `${patientName} árajánlata` : 'Új árajánlat';
@@ -88,8 +89,23 @@ export function useQuotes() {
         },
       });
 
+      // Fetch next quote ID from backend
+      let quoteId: string;
+      try {
+        const res = await fetch(`/backend/quotes/next-id/${encodeURIComponent(patientId)}`, { headers: getAuthHeaders() });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { message?: string }).message || 'Failed to get quote ID');
+        }
+        const data = await res.json() as { id: string };
+        quoteId = data.id;
+      } catch (err) {
+        if (err instanceof Error && err.message === 'QUOTE_LIMIT_REACHED') throw err;
+        quoteId = nanoid(); // fallback
+      }
+
       const quote: Quote = {
-        quoteId: nanoid(),
+        quoteId,
         quoteNumber,
         patientId,
         doctorId: defaultDoctorId,
@@ -386,7 +402,7 @@ export function useQuotes() {
   }, [getQuote]);
 
   const duplicateQuote = useCallback(
-    (quoteId: string): Quote | undefined => {
+    async (quoteId: string): Promise<Quote | undefined> => {
       const existing = getQuote(quoteId);
       if (!existing) return undefined;
 
@@ -406,9 +422,24 @@ export function useQuotes() {
         },
       });
 
+      // Fetch next quote ID from backend
+      let newQuoteId: string;
+      try {
+        const res = await fetch(`/backend/quotes/next-id/${encodeURIComponent(existing.patientId)}`, { headers: getAuthHeaders() });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { message?: string }).message || 'Failed to get quote ID');
+        }
+        const data = await res.json() as { id: string };
+        newQuoteId = data.id;
+      } catch (err) {
+        if (err instanceof Error && err.message === 'QUOTE_LIMIT_REACHED') throw err;
+        newQuoteId = nanoid(); // fallback
+      }
+
       const duplicate: Quote = {
         ...existing,
-        quoteId: nanoid(),
+        quoteId: newQuoteId,
         quoteNumber,
         quoteName: `${existing.quoteName} (másolat)`,
         createdAt: now,

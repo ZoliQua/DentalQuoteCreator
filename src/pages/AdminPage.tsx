@@ -57,6 +57,7 @@ function getPermissionLabels(t: TranslationKeys): Record<string, string> {
     'lab.view': t.admin.permLabView,
     'settings.view': t.admin.permSettingsView,
     'data.view': t.admin.permDataView,
+    'data.browse': t.admin.permDataBrowse,
     'admin.users.manage': t.admin.permAdminUsersManage,
     'admin.permissions.manage': t.admin.permAdminPermissionsManage,
   };
@@ -71,7 +72,7 @@ function getPermissionGroups(t: TranslationKeys): PermissionGroup[] {
     { label: t.admin.permGroupPriceLists, keys: ['pricelist.view', 'pricelist.create', 'pricelist.update', 'pricelist.delete', 'pricelist.category.create', 'pricelist.category.delete', 'pricelist.restore', 'pricelist.category.restore'] },
     { label: t.admin.permGroupCatalog, keys: ['catalog.view', 'catalog.create', 'catalog.update', 'catalog.delete'] },
     { label: t.admin.permGroupPatients, keys: ['patients.create', 'patients.update', 'patients.delete'] },
-    { label: t.admin.permGroupOther, keys: ['lab.view', 'settings.view', 'data.view'] },
+    { label: t.admin.permGroupOther, keys: ['lab.view', 'settings.view', 'data.view', 'data.browse'] },
     { label: t.admin.permGroupAdmin, keys: ['admin.users.manage', 'admin.permissions.manage'] },
   ];
 }

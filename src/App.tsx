@@ -17,6 +17,7 @@ import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
 import { LoginPage } from './pages/LoginPage';
 import { AdminPage } from './pages/AdminPage';
 import { VisualQuoteEditorPage } from './pages/VisualQuoteEditorPage';
+import { DatabaseBrowserPage } from './pages/DatabaseBrowserPage';
 
 function App() {
   const { isAuthenticated, hasPermission } = useAuth();
@@ -51,6 +52,7 @@ function App() {
         <Route path="/invoices" element={<InvoicesPage />} />
         <Route path="/invoices/:invoiceId" element={<InvoiceDetailPage />} />
         <Route path="/data" element={<DataManagementPage />} />
+        <Route path="/data/browser" element={<DatabaseBrowserPage />} />
         <Route path="/odontogram-lab" element={<OdontogramLabPage />} />
         <Route
           path="/admin"

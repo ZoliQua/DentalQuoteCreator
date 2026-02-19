@@ -53,6 +53,7 @@ import {
 import { mergeQuoteItems, mergeQuoteItemsBySession } from '../utils/mergedQuoteItems';
 import type { MergedQuoteItem } from '../utils/mergedQuoteItems';
 import { getCatalogDisplayName } from '../utils/catalogLocale';
+import { getAuthHeaders } from '../utils/auth';
 
 type SidebarCardsProps = {
   quote: Quote;
@@ -1051,7 +1052,19 @@ export function VisualQuoteEditorPage() {
       }, { net: 0, vat: 0, gross: 0 });
       const totalGross = Math.round((calculatedTotals.gross + Number.EPSILON) * 100) / 100;
       const isActuallySent = response.mode === 'live' && response.success;
-      const invoiceId = nanoid();
+      // Fetch next invoice ID from backend
+      let invoiceId: string;
+      try {
+        const idRes = await fetch(`/backend/invoices/next-id/${encodeURIComponent(patient.patientId)}`, { headers: getAuthHeaders() });
+        if (idRes.ok) {
+          const idData = await idRes.json() as { id: string };
+          invoiceId = idData.id;
+        } else {
+          invoiceId = nanoid();
+        }
+      } catch {
+        invoiceId = nanoid();
+      }
       const invoiceNumber = response.invoiceNumber || undefined;
       saveInvoice({
         id: invoiceId,

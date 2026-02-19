@@ -137,6 +137,11 @@ model Quote {
   isDeleted          Boolean  @default(false)
   data               Json
   createdByUserId    String?
+  quoteName          String?
+  quoteNumber        String?
+  validUntil         String?
+  currency           String?
+  doctorId           String?
 
   patient Patient @relation(fields: [patientId], references: [patientId])
 
@@ -228,16 +233,30 @@ model AppSettings {
 }
 
 model Invoice {
-  id              String   @id
-  patientId       String
-  quoteId         String
-  status          String
-  createdAt       DateTime
-  data            Json
-  createdByUserId String?
+  id                     String   @id
+  patientId              String
+  quoteId                String
+  status                 String
+  createdAt              DateTime
+  data                   Json
+  createdByUserId        String?
+  paymentMethod          String?
+  fulfillmentDate        String?
+  szamlazzInvoiceNumber  String?
+  quoteNumber            String?
+  invoiceType            String?
 
   @@index([patientId])
   @@index([quoteId])
+}
+
+model Doctor {
+  doctorId        String   @id
+  doctorName      String
+  doctorNum       String   @default("")
+  doctorEESZTId   String   @default("")
+  createdAt       DateTime @default(now())
+  createdByUserId String?
 }
 
 model NeakCheck {

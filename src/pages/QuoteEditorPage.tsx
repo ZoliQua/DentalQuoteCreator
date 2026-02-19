@@ -42,6 +42,7 @@ import { previewInvoice, createInvoice } from '../modules/invoicing/api';
 import { saveInvoice, getInvoicesByQuote } from '../modules/invoicing/storage';
 import type { InvoiceRecord, InvoiceType } from '../types/invoice';
 import { getCatalogDisplayName } from '../utils/catalogLocale';
+import { getAuthHeaders } from '../utils/auth';
 
 // Per-line discount preset type
 type LineDiscountPreset = 'none' | '10' | '20' | '30' | '40' | '50' | 'custom';
@@ -123,8 +124,9 @@ export function QuoteEditorPage() {
   useEffect(() => {
     if (patientId && !quoteId && patient) {
       const patientName = formatPatientName(patient.lastName, patient.firstName, patient.title);
-      const newQuote = createQuote(patientId, patientName);
-      navigate(`/patients/${patientId}/quotes/${newQuote.quoteId}`, { replace: true });
+      createQuote(patientId, patientName).then((newQuote) => {
+        navigate(`/patients/${patientId}/quotes/${newQuote.quoteId}`, { replace: true });
+      });
     }
   }, [patientId, quoteId, patient, createQuote, navigate]);
 
@@ -507,7 +509,19 @@ export function QuoteEditorPage() {
       }, { net: 0, vat: 0, gross: 0 });
       const totalGross = Math.round((calculatedTotals.gross + Number.EPSILON) * 100) / 100;
       const isActuallySent = response.mode === 'live' && response.success;
-      const invoiceId = nanoid();
+      // Fetch next invoice ID from backend
+      let invoiceId: string;
+      try {
+        const idRes = await fetch(`/backend/invoices/next-id/${encodeURIComponent(patient.patientId)}`, { headers: getAuthHeaders() });
+        if (idRes.ok) {
+          const idData = await idRes.json() as { id: string };
+          invoiceId = idData.id;
+        } else {
+          invoiceId = nanoid();
+        }
+      } catch {
+        invoiceId = nanoid();
+      }
       const invoiceNumber = response.invoiceNumber || undefined;
       saveInvoice({
         id: invoiceId,

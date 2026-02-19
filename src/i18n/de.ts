@@ -245,6 +245,7 @@ export const de: TranslationKeys = {
     newQuoteVisualDesc: 'Zahndiagramm-basierter Editor',
     newQuoteAutomatic: 'Automatisches Angebot',
     newQuoteAutomaticDesc: 'Automatische Positionserzeugung aus dem Odontogramm-Status',
+    maxQuotesReached: 'Der Patient hat die maximale Anzahl von 999 Kostenvoranschlägen erreicht. Wenden Sie sich an den Administrator!',
   },
 
   // Visual Editor
@@ -571,6 +572,7 @@ export const de: TranslationKeys = {
     eventFinalCreated: 'Schlussrechnung erstellt ({number}) für {amount}. Der gesamte Betrag wurde in Rechnung gestellt.',
     invoicedItem: 'Abgerechnete Position mit Rechnung {invoiceNumber}',
     completedAndFullyInvoiced: 'Das Angebot wurde abgeschlossen und vollständig abgerechnet.',
+    maxInvoicesReached: 'Der Patient hat die maximale Anzahl von 999 Rechnungen erreicht. Wenden Sie sich an den Administrator!',
   },
   pdf: {
     quote: 'ANGEBOT',
@@ -773,6 +775,23 @@ export const de: TranslationKeys = {
     userDeleteFailed: 'Benutzerlöschung fehlgeschlagen',
     passwordConfirm: 'Passwort bestätigen',
     passwordMismatch: 'Passwörter stimmen nicht überein',
+    permDataBrowse: 'Datenbank durchsuchen',
+  },
+
+  // Database Browser
+  dbBrowser: {
+    title: 'Datenbank-Browser',
+    subtitle: 'Tabellen durchsuchen, Zeilen bearbeiten und löschen',
+    selectTable: 'Tabelle auswählen',
+    selectTablePlaceholder: 'Tabelle wählen...',
+    totalRows: 'Gesamte Zeilen',
+    editRow: 'Zeile bearbeiten',
+    saveConfirm: 'Möchten Sie die Änderungen wirklich speichern?',
+    deleteConfirm: 'Möchten Sie diese Zeile wirklich löschen? Dies kann nicht rückgängig gemacht werden!',
+    saveSuccess: 'Zeile erfolgreich aktualisiert!',
+    deleteSuccess: 'Zeile erfolgreich gelöscht!',
+    noRows: 'Keine Zeilen zum Anzeigen.',
+    jsonInvalid: 'Ungültiges JSON-Format',
   },
 
   validation: {

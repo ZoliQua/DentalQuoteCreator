@@ -9,6 +9,7 @@ import { formatCurrency, formatDate, formatPatientName, formatBirthDateForDispla
 import { createInvoice, previewInvoice } from '../modules/invoicing/api';
 import { listInvoices, saveInvoice } from '../modules/invoicing/storage';
 import type { InvoiceRecord } from '../types/invoice';
+import { getAuthHeaders } from '../utils/auth';
 
 export function InvoicesPage() {
   const { t, settings } = useSettings();
@@ -262,9 +263,23 @@ export function InvoicesPage() {
       }, { net: 0, vat: 0, gross: 0 });
       const totalGross = Math.round((calculatedTotals.gross + Number.EPSILON) * 100) / 100;
       const isActuallySent = response.mode === 'live' && response.success;
+      // Fetch next invoice ID from backend
+      let invoiceId: string;
+      const adHocPatientId = newInvoiceForm.patientId || 'ad-hoc';
+      try {
+        const idRes = await fetch(`/backend/invoices/next-id/${encodeURIComponent(adHocPatientId)}`, { headers: getAuthHeaders() });
+        if (idRes.ok) {
+          const idData = await idRes.json() as { id: string };
+          invoiceId = idData.id;
+        } else {
+          invoiceId = nanoid();
+        }
+      } catch {
+        invoiceId = nanoid();
+      }
       saveInvoice({
-        id: nanoid(),
-        patientId: newInvoiceForm.patientId || 'ad-hoc',
+        id: invoiceId,
+        patientId: adHocPatientId,
         quoteId: '',
         patientName: newInvoiceForm.buyerName,
         szamlazzInvoiceNumber: response.invoiceNumber || undefined,

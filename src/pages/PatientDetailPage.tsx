@@ -221,14 +221,14 @@ export function PatientDetailPage() {
     setQuoteTypeModalOpen(true);
   };
 
-  const handleCreateItemizedQuote = () => {
-    const quote = createQuote(patient.patientId, undefined, 'itemized');
+  const handleCreateItemizedQuote = async () => {
+    const quote = await createQuote(patient.patientId, undefined, 'itemized');
     setQuoteTypeModalOpen(false);
     navigate(`/patients/${patient.patientId}/quotes/${quote.quoteId}`);
   };
 
-  const handleCreateVisualQuote = () => {
-    const quote = createQuote(patient.patientId, undefined, 'visual');
+  const handleCreateVisualQuote = async () => {
+    const quote = await createQuote(patient.patientId, undefined, 'visual');
     setQuoteTypeModalOpen(false);
     navigate(`/patients/${patient.patientId}/visual-quotes/${quote.quoteId}`);
   };
@@ -255,9 +255,9 @@ export function PatientDetailPage() {
     setEditPatientModalOpen(false);
   };
 
-  const handleDuplicateQuote = (quoteId: string) => {
+  const handleDuplicateQuote = async (quoteId: string) => {
     const original = quotes.find((q) => q.quoteId === quoteId);
-    const dup = duplicateQuote(quoteId);
+    const dup = await duplicateQuote(quoteId);
     if (dup) {
       navigate(
         original?.quoteType === 'visual'

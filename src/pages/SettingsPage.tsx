@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useQuotes } from '../hooks';
 import { Settings, Doctor, DateFormat } from '../types';
 import { Button, Card, CardContent, CardHeader, Input, TextArea, Select, ConfirmModal } from '../components/common';
 import { formatDateTimeWithPattern } from '../utils';
+import { getAuthHeaders } from '../utils/auth';
+
+type DoctorRow = { doctorId: string; doctorName: string; doctorNum: string; doctorEESZTId: string };
 
 const DATE_FORMAT_OPTIONS: DateFormat[] = [
   'YYYY-MM-DD HH:MM:SS',
@@ -29,15 +32,34 @@ export function SettingsPage() {
   const [formData, setFormData] = useState<Settings>(settings);
   const [saved, setSaved] = useState(false);
   const [resetCounterConfirm, setResetCounterConfirm] = useState(false);
+  const [doctorRows, setDoctorRows] = useState<DoctorRow[]>([]);
 
   const quoteStats = getQuoteStatistics();
   const today = new Date();
+
+  const loadDoctors = useCallback(async () => {
+    try {
+      const res = await fetch('/backend/doctors', { headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json() as DoctorRow[];
+        setDoctorRows(data);
+        // Also sync settings.doctors for backward compat
+        const mapped: Doctor[] = data.map((d) => ({ id: d.doctorId, name: d.doctorName, stampNumber: d.doctorNum }));
+        setFormData((prev) => ({ ...prev, doctors: mapped }));
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    loadDoctors();
+  }, [loadDoctors]);
 
   useEffect(() => {
     setFormData(settings);
   }, [settings]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    await handleSaveDoctors();
     updateSettings({ ...formData, language: appLanguage });
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -89,32 +111,55 @@ export function SettingsPage() {
   };
 
   const handleDoctorChange = (doctorId: string, field: 'name' | 'stampNumber', value: string) => {
+    // Update local state for optimistic UI
+    setDoctorRows((prev) => prev.map((d) =>
+      d.doctorId === doctorId
+        ? { ...d, ...(field === 'name' ? { doctorName: value } : { doctorNum: value }) }
+        : d
+    ));
     setFormData({
       ...formData,
       doctors: formData.doctors.map((doc) =>
         doc.id === doctorId ? { ...doc, [field]: value } : doc
       ),
     });
+    // Debounced save on blur is handled by handleSave
   };
 
-  const handleAddDoctor = () => {
-    const newDoctor: Doctor = {
-      id: `doc-${Date.now()}`,
-      name: '',
-      stampNumber: '',
-    };
-    setFormData({
-      ...formData,
-      doctors: [...formData.doctors, newDoctor],
-    });
+  const handleAddDoctor = async () => {
+    try {
+      const res = await fetch('/backend/doctors', {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doctorName: '', doctorNum: '' }),
+      });
+      if (res.ok) {
+        await loadDoctors();
+      }
+    } catch { /* ignore */ }
   };
 
-  const handleRemoveDoctor = (doctorId: string) => {
-    if (formData.doctors.length <= 1) return;
-    setFormData({
-      ...formData,
-      doctors: formData.doctors.filter((doc) => doc.id !== doctorId),
-    });
+  const handleRemoveDoctor = async (doctorId: string) => {
+    if (doctorRows.length <= 1) return;
+    try {
+      await fetch(`/backend/doctors/${encodeURIComponent(doctorId)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      await loadDoctors();
+    } catch { /* ignore */ }
+  };
+
+  const handleSaveDoctors = async () => {
+    for (const doc of doctorRows) {
+      try {
+        await fetch(`/backend/doctors/${encodeURIComponent(doc.doctorId)}`, {
+          method: 'PUT',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ doctorName: doc.doctorName, doctorNum: doc.doctorNum }),
+        });
+      } catch { /* ignore */ }
+    }
   };
 
   return (
@@ -193,32 +238,32 @@ export function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {formData.doctors.map((doctor, index) => (
-            <div key={doctor.id} className="flex items-end gap-3">
+          {doctorRows.map((doctor, index) => (
+            <div key={doctor.doctorId} className="flex items-end gap-3">
               <div className="flex-1">
                 <Input
                   label={`${t.settings.doctorName} ${index + 1}`}
-                  value={doctor.name}
-                  onChange={(e) => handleDoctorChange(doctor.id, 'name', e.target.value)}
+                  value={doctor.doctorName}
+                  onChange={(e) => handleDoctorChange(doctor.doctorId, 'name', e.target.value)}
                   placeholder={t.settings.doctorNamePlaceholder}
                 />
               </div>
               <div className="w-32">
                 <Input
                   label={t.settings.doctorStampNumber}
-                  value={doctor.stampNumber || ''}
+                  value={doctor.doctorNum || ''}
                   onChange={(e) => {
                     const value = e.target.value.replace(/\D/g, '').slice(0, 6);
-                    handleDoctorChange(doctor.id, 'stampNumber', value);
+                    handleDoctorChange(doctor.doctorId, 'stampNumber', value);
                   }}
                   placeholder="123456"
                   maxLength={6}
                 />
               </div>
-              {formData.doctors.length > 1 && (
+              {doctorRows.length > 1 && (
                 <button
                   type="button"
-                  onClick={() => handleRemoveDoctor(doctor.id)}
+                  onClick={() => handleRemoveDoctor(doctor.doctorId)}
                   className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg mb-1"
                   title={t.settings.removeDoctor}
                 >

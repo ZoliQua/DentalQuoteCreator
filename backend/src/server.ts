@@ -9,6 +9,29 @@ type JsonRecord = Record<string, unknown>;
 type PermissionMap = Record<PermissionKey, boolean>;
 
 const scrypt = promisify(scryptCallback);
+const createShortId = (): string => randomBytes(4).toString('hex');
+const createSessionId = (): string => 'AS' + randomBytes(4).toString('hex');
+const createAuditId = (): string => 'PA' + randomBytes(4).toString('hex');
+const createActivityId = (): string => 'UA' + randomBytes(4).toString('hex');
+const createPermOverrideId = (): string => 'UP' + randomBytes(4).toString('hex');
+const createNeakCheckId = (): string => 'NC' + randomBytes(5).toString('hex');
+
+const MAX_ID_RETRIES = 5;
+async function createWithUniqueId<T>(
+  idFn: () => string,
+  createFn: (id: string) => Promise<T>,
+): Promise<T> {
+  for (let attempt = 0; attempt < MAX_ID_RETRIES; attempt++) {
+    try {
+      return await createFn(idFn());
+    } catch (err) {
+      const isUniqueViolation =
+        err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+      if (!isUniqueViolation || attempt === MAX_ID_RETRIES - 1) throw err;
+    }
+  }
+  throw new Error('Unreachable');
+}
 
 const ALL_PERMISSION_KEYS = [
   'quotes.view',
@@ -35,6 +58,7 @@ const ALL_PERMISSION_KEYS = [
   'lab.view',
   'settings.view',
   'data.view',
+  'data.browse',
   'admin.users.manage',
   'admin.permissions.manage',
 ] as const;
@@ -153,7 +177,7 @@ const createToken = (): string => randomBytes(32).toString('hex');
 const ROLE_PERMISSION_PRESETS: Record<UserRole, readonly PermissionKey[]> = {
   admin: [...ALL_PERMISSION_KEYS],
   beta_tester: [...ALL_PERMISSION_KEYS],
-  receptionist: ALL_PERMISSION_KEYS.filter(k => !['admin.users.manage', 'admin.permissions.manage', 'lab.view'].includes(k)),
+  receptionist: ALL_PERMISSION_KEYS.filter(k => !['admin.users.manage', 'admin.permissions.manage', 'lab.view', 'data.browse'].includes(k)),
   doctor: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'pricelist.view', 'catalog.view'],
   assistant: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'patients.delete', 'pricelist.view', 'catalog.view'],
   user: [],
@@ -274,18 +298,20 @@ const logActivity = async (
   opts?: { page?: string; entityType?: string; entityId?: string; details?: Record<string, unknown>; ipAddress?: string }
 ) => {
   try {
-    await prisma.userActivityLog.create({
-      data: {
-        id: randomUUID(),
-        userId,
-        action,
-        page: opts?.page || null,
-        entityType: opts?.entityType || null,
-        entityId: opts?.entityId || null,
-        details: opts?.details ? toInputJson(opts.details) : undefined,
-        ipAddress: opts?.ipAddress || null,
-      },
-    });
+    await createWithUniqueId(createActivityId, (id) =>
+      prisma.userActivityLog.create({
+        data: {
+          id,
+          userId,
+          action,
+          page: opts?.page || null,
+          entityType: opts?.entityType || null,
+          entityId: opts?.entityId || null,
+          details: opts?.details ? toInputJson(opts.details) : undefined,
+          ipAddress: opts?.ipAddress || null,
+        },
+      }),
+    );
   } catch {
     // Best-effort logging; do not break the main flow
   }
@@ -333,26 +359,136 @@ server.get('/db-health', async () => {
   return { status: 'ok' };
 });
 
+// -- Sequential ID generators for Quote / Invoice ----------------
+
+async function nextQuoteId(patientId: string): Promise<string> {
+  const last = await prisma.quote.findFirst({
+    where: { patientId },
+    orderBy: { quoteId: 'desc' },
+    select: { quoteId: true },
+  });
+  const lastNum = last ? parseInt(last.quoteId.slice(-3), 10) : 0;
+  const next = (Number.isNaN(lastNum) ? 0 : lastNum) + 1;
+  if (next > 999) throw new Error('QUOTE_LIMIT_REACHED');
+  return `${patientId}q${String(next).padStart(3, '0')}`;
+}
+
+async function nextInvoiceId(patientId: string): Promise<string> {
+  const last = await prisma.invoice.findFirst({
+    where: { patientId },
+    orderBy: { id: 'desc' },
+    select: { id: true },
+  });
+  const lastNum = last ? parseInt(last.id.slice(-3), 10) : 0;
+  const next = (Number.isNaN(lastNum) ? 0 : lastNum) + 1;
+  if (next > 999) throw new Error('INVOICE_LIMIT_REACHED');
+  return `${patientId}i${String(next).padStart(3, '0')}`;
+}
+
+async function nextDoctorId(): Promise<string> {
+  const last = await prisma.doctor.findFirst({
+    orderBy: { doctorId: 'desc' },
+    select: { doctorId: true },
+  });
+  const lastNum = last ? parseInt(last.doctorId.slice(3), 10) : 0;
+  const next = (Number.isNaN(lastNum) ? 0 : lastNum) + 1;
+  return `DOC${String(next).padStart(4, '0')}`;
+}
+
+const BROWSABLE_TABLES = [
+  'Patient',
+  'Quote',
+  'DentalStatusSnapshot',
+  'PriceListCatalogItem',
+  'PriceList',
+  'PriceListCategory',
+  'AppSettings',
+  'Invoice',
+  'NeakCheck',
+  'OdontogramCurrent',
+  'OdontogramDaily',
+  'OdontogramTimeline',
+  'User',
+  'AuthSession',
+  'UserPermissionOverride',
+  'PermissionAuditLog',
+  'UserActivityLog',
+  'Doctor',
+] as const;
+
+const TABLE_PK_MAP: Record<string, string[]> = {
+  Patient: ['patientId'],
+  Quote: ['quoteId'],
+  DentalStatusSnapshot: ['snapshotId'],
+  PriceListCatalogItem: ['catalogItemId'],
+  PriceList: ['priceListId'],
+  PriceListCategory: ['catalogCategoryId'],
+  AppSettings: ['id'],
+  Invoice: ['id'],
+  NeakCheck: ['id'],
+  OdontogramCurrent: ['patientId'],
+  OdontogramDaily: ['patientId', 'dateKey'],
+  OdontogramTimeline: ['snapshotId'],
+  User: ['id'],
+  AuthSession: ['id'],
+  UserPermissionOverride: ['id'],
+  PermissionAuditLog: ['id'],
+  UserActivityLog: ['id'],
+  Doctor: ['doctorId'],
+};
+
+const serializeRow = (row: Record<string, unknown>): Record<string, unknown> => {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (typeof value === 'bigint') {
+      result[key] = Number(value);
+    } else if (value instanceof Date) {
+      result[key] = value.toISOString();
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+};
+
+const decodePkId = (encoded: string, pkColumns: string[]): string[] => {
+  if (pkColumns.length === 1) return [encoded];
+  return encoded.split('--');
+};
+
+const prepareValue = (value: unknown, dataType: string): unknown => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && value.trim() === '') {
+    if (dataType.includes('int') || dataType.includes('float') || dataType.includes('numeric') || dataType.includes('double') || dataType.includes('decimal')) return null;
+    if (dataType === 'boolean') return null;
+    if (dataType === 'jsonb' || dataType === 'json') return null;
+    return null;
+  }
+  if (dataType === 'jsonb' || dataType === 'json') {
+    if (typeof value === 'string') return JSON.parse(value);
+    return value;
+  }
+  if (dataType === 'boolean') {
+    if (typeof value === 'boolean') return value;
+    if (value === 'true' || value === '1') return true;
+    if (value === 'false' || value === '0') return false;
+    return Boolean(value);
+  }
+  if (dataType === 'integer' || dataType === 'bigint' || dataType === 'smallint') {
+    return parseInt(String(value), 10);
+  }
+  if (dataType === 'double precision' || dataType === 'real' || dataType === 'numeric') {
+    return parseFloat(String(value));
+  }
+  if (dataType.startsWith('ARRAY') || dataType === 'text[]' || dataType.endsWith('[]')) {
+    if (typeof value === 'string') return JSON.parse(value);
+    return value;
+  }
+  return value;
+};
+
 server.get('/db/stats', async () => {
-  const tableNames = [
-    'Patient',
-    'Quote',
-    'DentalStatusSnapshot',
-    'CatalogItem',
-    'PriceList',
-    'PriceListCategory',
-    'AppSettings',
-    'Invoice',
-    'NeakCheck',
-    'OdontogramCurrent',
-    'OdontogramDaily',
-    'OdontogramTimeline',
-    'User',
-    'AuthSession',
-    'UserPermissionOverride',
-    'PermissionAuditLog',
-    'UserActivityLog',
-  ] as const;
+  const tableNames = BROWSABLE_TABLES;
 
   const dbMeta = await prisma.$queryRaw<Array<{ database_name: string; database_size: bigint | number }>>`
     SELECT current_database() AS database_name, pg_database_size(current_database()) AS database_size
@@ -395,6 +531,166 @@ server.get('/db/stats', async () => {
   };
 });
 
+// ── Database Browser endpoints ──────────────────────────────────────────────
+
+server.get('/db/browse/:table', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'data.browse');
+  if (!currentUser) return;
+
+  const { table } = request.params as { table: string };
+  if (!BROWSABLE_TABLES.includes(table as (typeof BROWSABLE_TABLES)[number])) {
+    return reply.code(400).send({ message: 'Invalid table name' });
+  }
+
+  const query = request.query as { page?: string; limit?: string; sortColumn?: string; sortDir?: string };
+  const page = Math.max(1, parseInt(query.page || '1', 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(query.limit || '25', 10) || 25));
+  const offset = (page - 1) * limit;
+
+  const pkColumns = TABLE_PK_MAP[table] || ['id'];
+
+  const countResult = await prisma.$queryRawUnsafe<Array<{ cnt: bigint | number }>>(
+    `SELECT COUNT(*)::bigint AS cnt FROM "${table}"`
+  );
+  const totalRows = Number(countResult[0]?.cnt || 0);
+
+  // Validate sort column against actual table columns to prevent SQL injection
+  const columnsForValidation = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
+    `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
+    table
+  );
+  const validColumns = new Set(columnsForValidation.map(c => c.column_name));
+  const sortColumn = query.sortColumn && validColumns.has(query.sortColumn) ? query.sortColumn : null;
+  const sortDir = query.sortDir === 'desc' ? 'DESC' : 'ASC';
+  const orderClause = sortColumn ? `"${sortColumn}" ${sortDir}` : '1';
+
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT * FROM "${table}" ORDER BY ${orderClause} LIMIT $1 OFFSET $2`,
+    limit,
+    offset
+  );
+
+  const columns = await prisma.$queryRawUnsafe<
+    Array<{ column_name: string; data_type: string; is_nullable: string; column_default: string | null }>
+  >(
+    `SELECT column_name, data_type, is_nullable, column_default
+     FROM information_schema.columns
+     WHERE table_name = $1
+     ORDER BY ordinal_position`,
+    table
+  );
+
+  return {
+    table,
+    pkColumns,
+    totalRows,
+    page,
+    limit,
+    totalPages: Math.ceil(totalRows / limit),
+    columns: columns.map(c => ({
+      name: c.column_name,
+      type: c.data_type,
+      nullable: c.is_nullable === 'YES',
+      default: c.column_default,
+    })),
+    rows: rows.map(serializeRow),
+  };
+});
+
+server.put('/db/browse/:table/:id', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'data.browse');
+  if (!currentUser) return;
+
+  const { table, id } = request.params as { table: string; id: string };
+  if (!BROWSABLE_TABLES.includes(table as (typeof BROWSABLE_TABLES)[number])) {
+    return reply.code(400).send({ message: 'Invalid table name' });
+  }
+
+  const pkColumns = TABLE_PK_MAP[table] || ['id'];
+  const pkValues = decodePkId(id, pkColumns);
+  if (pkValues.length !== pkColumns.length) {
+    return reply.code(400).send({ message: 'Invalid primary key' });
+  }
+
+  const body = request.body as Record<string, unknown>;
+  if (!body || typeof body !== 'object') {
+    return reply.code(400).send({ message: 'Body must be a JSON object' });
+  }
+
+  // Get column info for validation and type coercion
+  const columns = await prisma.$queryRawUnsafe<
+    Array<{ column_name: string; data_type: string }>
+  >(
+    `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1`,
+    table
+  );
+  const columnMap = new Map(columns.map(c => [c.column_name, c.data_type]));
+
+  // Filter out PK columns and non-existent columns
+  const updateEntries = Object.entries(body).filter(
+    ([col]) => !pkColumns.includes(col) && columnMap.has(col)
+  );
+
+  if (updateEntries.length === 0) {
+    return reply.code(400).send({ message: 'No valid columns to update' });
+  }
+
+  const setClauses: string[] = [];
+  const params: unknown[] = [];
+  let paramIdx = 1;
+
+  for (const [col, rawValue] of updateEntries) {
+    const dataType = columnMap.get(col)!;
+    setClauses.push(`"${col}" = $${paramIdx}`);
+    try {
+      params.push(prepareValue(rawValue, dataType));
+    } catch {
+      return reply.code(400).send({ message: `Invalid value for column "${col}"` });
+    }
+    paramIdx++;
+  }
+
+  const whereClauses: string[] = [];
+  for (let i = 0; i < pkColumns.length; i++) {
+    whereClauses.push(`"${pkColumns[i]}" = $${paramIdx}`);
+    params.push(pkValues[i]);
+    paramIdx++;
+  }
+
+  const sql = `UPDATE "${table}" SET ${setClauses.join(', ')} WHERE ${whereClauses.join(' AND ')}`;
+  await prisma.$executeRawUnsafe(sql, ...params);
+
+  return { success: true };
+});
+
+server.delete('/db/browse/:table/:id', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'data.browse');
+  if (!currentUser) return;
+
+  const { table, id } = request.params as { table: string; id: string };
+  if (!BROWSABLE_TABLES.includes(table as (typeof BROWSABLE_TABLES)[number])) {
+    return reply.code(400).send({ message: 'Invalid table name' });
+  }
+
+  const pkColumns = TABLE_PK_MAP[table] || ['id'];
+  const pkValues = decodePkId(id, pkColumns);
+  if (pkValues.length !== pkColumns.length) {
+    return reply.code(400).send({ message: 'Invalid primary key' });
+  }
+
+  const whereClauses: string[] = [];
+  const params: unknown[] = [];
+  for (let i = 0; i < pkColumns.length; i++) {
+    whereClauses.push(`"${pkColumns[i]}" = $${i + 1}`);
+    params.push(pkValues[i]);
+  }
+
+  const sql = `DELETE FROM "${table}" WHERE ${whereClauses.join(' AND ')}`;
+  await prisma.$executeRawUnsafe(sql, ...params);
+
+  return { success: true };
+});
+
 server.post('/auth/login', async (request, reply) => {
   const body = request.body as { email?: string; password?: string };
   const email = String(body?.email || '').trim().toLowerCase();
@@ -419,18 +715,20 @@ server.post('/auth/login', async (request, reply) => {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
 
-  const session = await prisma.authSession.create({
-    data: {
-      id: randomUUID(),
-      userId: user.id,
-      tokenHash,
-      createdAt: now,
-      expiresAt,
-      lastSeenAt: now,
-      userAgent: request.headers['user-agent'] ? String(request.headers['user-agent']) : null,
-      ipAddress: request.ip || null,
-    },
-  });
+  const session = await createWithUniqueId(createSessionId, (id) =>
+    prisma.authSession.create({
+      data: {
+        id,
+        userId: user.id,
+        tokenHash,
+        createdAt: now,
+        expiresAt,
+        lastSeenAt: now,
+        userAgent: request.headers['user-agent'] ? String(request.headers['user-agent']) : null,
+        ipAddress: request.ip || null,
+      },
+    }),
+  );
 
   const overrides = await prisma.userPermissionOverride.findMany({ where: { userId: user.id } });
   const permissions = buildPermissionMap(user.role, overrides);
@@ -545,16 +843,18 @@ server.post('/admin/users', async (request, reply) => {
     });
   }
 
-  const user = await prisma.user.create({
-    data: {
-      id: randomUUID(),
-      email,
-      fullName,
-      passwordHash: await hashPassword(password),
-      role,
-      isActive: body.isActive === undefined ? true : Boolean(body.isActive),
-    },
-  });
+  const user = await createWithUniqueId(createShortId, async (id) =>
+    prisma.user.create({
+      data: {
+        id,
+        email,
+        fullName,
+        passwordHash: await hashPassword(password),
+        role,
+        isActive: body.isActive === undefined ? true : Boolean(body.isActive),
+      },
+    }),
+  );
 
   const permissions = getDefaultPermissions(user.role);
   return reply.code(201).send({
@@ -671,29 +971,33 @@ server.put('/admin/permissions/:userId', async (request, reply) => {
   await prisma.$transaction(async (tx) => {
     await tx.userPermissionOverride.deleteMany({ where: { userId } });
     for (const entry of normalized) {
-      await tx.userPermissionOverride.create({
-        data: {
-          id: randomUUID(),
-          userId,
-          key: entry.key,
-          isAllowed: entry.isAllowed,
-        },
-      });
+      await createWithUniqueId(createPermOverrideId, (id) =>
+        tx.userPermissionOverride.create({
+          data: {
+            id,
+            userId,
+            key: entry.key,
+            isAllowed: entry.isAllowed,
+          },
+        }),
+      );
     }
 
     // Audit log: record each permission that changed
     for (const key of ALL_PERMISSION_KEYS) {
       if (oldPermissionMap[key] !== newPermissionMap[key]) {
-        await tx.permissionAuditLog.create({
-          data: {
-            id: randomUUID(),
-            targetUserId: userId,
-            changedByUserId: currentUser.id,
-            key,
-            oldValue: oldPermissionMap[key],
-            newValue: newPermissionMap[key],
-          },
-        });
+        await createWithUniqueId(createAuditId, (id) =>
+          tx.permissionAuditLog.create({
+            data: {
+              id,
+              targetUserId: userId,
+              changedByUserId: currentUser.id,
+              key,
+              oldValue: oldPermissionMap[key],
+              newValue: newPermissionMap[key],
+            },
+          }),
+        );
       }
     }
   });
@@ -753,7 +1057,7 @@ server.get('/admin/activity-log/:userId', async (request, reply) => {
 
 // Bootstrap endpoint for frontend startup
 server.get('/bootstrap', async () => {
-  const [patients, catalog, quotes, settingsRow, dentalStatusSnapshots, invoices, neakChecks, pricelists, pricelistCategories] =
+  const [patients, catalog, quotes, settingsRow, dentalStatusSnapshots, invoices, neakChecks, pricelists, pricelistCategories, doctors] =
     await Promise.all([
       prisma.patient.findMany({ orderBy: { createdAt: 'desc' } }),
       prisma.priceListCatalogItem.findMany({ orderBy: { catalogCode: 'asc' } }),
@@ -764,6 +1068,7 @@ server.get('/bootstrap', async () => {
       prisma.neakCheck.findMany({ orderBy: { checkedAt: 'desc' } }),
       prisma.priceList.findMany({ orderBy: { priceListId: 'asc' } }),
       prisma.priceListCategory.findMany({ orderBy: { catalogCategoryPrefix: 'asc' } }),
+      prisma.doctor.findMany({ orderBy: { doctorId: 'asc' } }),
     ]);
 
   return {
@@ -776,6 +1081,7 @@ server.get('/bootstrap', async () => {
     neakChecks: neakChecks.map((entry) => entry.data),
     pricelists,
     pricelistCategories,
+    doctors,
   };
 });
 
@@ -1382,7 +1688,23 @@ server.post('/quotes', async (request, reply) => {
   if (!user) return;
 
   const body = request.body as JsonRecord;
-  const quoteId = String(body.quoteId || randomUUID());
+  const patientId = String(body.patientId || '');
+
+  // Accept client-provided quoteId (pre-fetched via next-id) or generate one
+  let quoteId: string;
+  if (body.quoteId && typeof body.quoteId === 'string') {
+    quoteId = body.quoteId;
+  } else {
+    try {
+      quoteId = await nextQuoteId(patientId);
+    } catch (err) {
+      if (err instanceof Error && err.message === 'QUOTE_LIMIT_REACHED') {
+        return reply.code(400).send({ message: 'QUOTE_LIMIT_REACHED' });
+      }
+      throw err;
+    }
+  }
+
   const createdAt = body.createdAt ? toDate(String(body.createdAt)) : new Date();
   const lastStatusChangeAt = body.lastStatusChangeAt
     ? toDate(String(body.lastStatusChangeAt))
@@ -1391,28 +1713,38 @@ server.post('/quotes', async (request, reply) => {
   const row = await prisma.quote.upsert({
     where: { quoteId },
     update: {
-      patientId: String(body.patientId || ''),
+      patientId,
       quoteStatus: String(body.quoteStatus || 'draft'),
       lastStatusChangeAt,
       isDeleted: Boolean(body.isDeleted),
       data: toInputJson({ ...body, quoteId }),
+      quoteName: body.quoteName ? String(body.quoteName) : null,
+      quoteNumber: body.quoteNumber ? String(body.quoteNumber) : null,
+      validUntil: body.validUntil ? String(body.validUntil) : null,
+      currency: body.currency ? String(body.currency) : null,
+      doctorId: body.doctorId ? String(body.doctorId) : null,
     },
     create: {
       quoteId,
-      patientId: String(body.patientId || ''),
+      patientId,
       quoteStatus: String(body.quoteStatus || 'draft'),
       createdAt,
       lastStatusChangeAt,
       isDeleted: Boolean(body.isDeleted),
       data: toInputJson({ ...body, quoteId }),
       createdByUserId: user.id,
+      quoteName: body.quoteName ? String(body.quoteName) : null,
+      quoteNumber: body.quoteNumber ? String(body.quoteNumber) : null,
+      validUntil: body.validUntil ? String(body.validUntil) : null,
+      currency: body.currency ? String(body.currency) : null,
+      doctorId: body.doctorId ? String(body.doctorId) : null,
     },
   });
 
   await logActivity(user.id, 'quote.create', {
     entityType: 'Quote',
     entityId: quoteId,
-    details: { patientId: String(body.patientId || '') },
+    details: { patientId },
   });
 
   return reply.code(201).send(row.data);
@@ -1433,6 +1765,11 @@ server.patch('/quotes/:quoteId', async (request, reply) => {
             : toDate(String(body.lastStatusChangeAt)),
         isDeleted: body.isDeleted === undefined ? undefined : Boolean(body.isDeleted),
         data: toInputJson(body),
+        quoteName: body.quoteName === undefined ? undefined : (body.quoteName ? String(body.quoteName) : null),
+        quoteNumber: body.quoteNumber === undefined ? undefined : (body.quoteNumber ? String(body.quoteNumber) : null),
+        validUntil: body.validUntil === undefined ? undefined : (body.validUntil ? String(body.validUntil) : null),
+        currency: body.currency === undefined ? undefined : (body.currency ? String(body.currency) : null),
+        doctorId: body.doctorId === undefined ? undefined : (body.doctorId ? String(body.doctorId) : null),
       },
     });
     return row.data;
@@ -1573,6 +1910,11 @@ server.put('/invoices/:invoiceId', async (request, reply) => {
       status: String(body.status || 'draft'),
       createdAt,
       data: toInputJson({ ...body, id: invoiceId }),
+      paymentMethod: body.paymentMethod ? String(body.paymentMethod) : undefined,
+      fulfillmentDate: body.fulfillmentDate ? String(body.fulfillmentDate) : undefined,
+      szamlazzInvoiceNumber: body.szamlazzInvoiceNumber ? String(body.szamlazzInvoiceNumber) : undefined,
+      quoteNumber: body.quoteNumber ? String(body.quoteNumber) : undefined,
+      invoiceType: body.invoiceType ? String(body.invoiceType) : undefined,
     },
     create: {
       id: invoiceId,
@@ -1582,6 +1924,11 @@ server.put('/invoices/:invoiceId', async (request, reply) => {
       createdAt,
       data: toInputJson({ ...body, id: invoiceId }),
       createdByUserId: user.id,
+      paymentMethod: body.paymentMethod ? String(body.paymentMethod) : null,
+      fulfillmentDate: body.fulfillmentDate ? String(body.fulfillmentDate) : null,
+      szamlazzInvoiceNumber: body.szamlazzInvoiceNumber ? String(body.szamlazzInvoiceNumber) : null,
+      quoteNumber: body.quoteNumber ? String(body.quoteNumber) : null,
+      invoiceType: body.invoiceType ? String(body.invoiceType) : null,
     },
   });
 
@@ -1590,12 +1937,87 @@ server.put('/invoices/:invoiceId', async (request, reply) => {
     entityId: invoiceId,
   });
 
-  return { status: 'ok' };
+  return { status: 'ok', id: invoiceId };
 });
 
 server.delete('/invoices', async () => {
   await prisma.invoice.deleteMany({});
   return { status: 'ok' };
+});
+
+// Next-ID endpoints for frontend
+server.get('/quotes/next-id/:patientId', async (request, reply) => {
+  const { patientId } = request.params as { patientId: string };
+  try {
+    const id = await nextQuoteId(patientId);
+    return { id };
+  } catch (err) {
+    if (err instanceof Error && err.message === 'QUOTE_LIMIT_REACHED') {
+      return reply.code(400).send({ message: 'QUOTE_LIMIT_REACHED' });
+    }
+    throw err;
+  }
+});
+
+server.get('/invoices/next-id/:patientId', async (request, reply) => {
+  const { patientId } = request.params as { patientId: string };
+  try {
+    const id = await nextInvoiceId(patientId);
+    return { id };
+  } catch (err) {
+    if (err instanceof Error && err.message === 'INVOICE_LIMIT_REACHED') {
+      return reply.code(400).send({ message: 'INVOICE_LIMIT_REACHED' });
+    }
+    throw err;
+  }
+});
+
+// Doctor CRUD
+server.get('/doctors', async () => {
+  return prisma.doctor.findMany({ orderBy: { doctorId: 'asc' } });
+});
+
+server.post('/doctors', async (request, reply) => {
+  const body = request.body as JsonRecord;
+  const doctorId = await nextDoctorId();
+  const doctor = await prisma.doctor.create({
+    data: {
+      doctorId,
+      doctorName: String(body.doctorName || ''),
+      doctorNum: String(body.doctorNum || ''),
+      doctorEESZTId: String(body.doctorEESZTId || ''),
+      createdByUserId: request.currentUser?.id || null,
+    },
+  });
+  return reply.code(201).send(doctor);
+});
+
+server.put('/doctors/:doctorId', async (request, reply) => {
+  const { doctorId } = request.params as { doctorId: string };
+  const body = request.body as JsonRecord;
+  try {
+    const doctor = await prisma.doctor.update({
+      where: { doctorId },
+      data: {
+        doctorName: body.doctorName === undefined ? undefined : String(body.doctorName),
+        doctorNum: body.doctorNum === undefined ? undefined : String(body.doctorNum),
+        doctorEESZTId: body.doctorEESZTId === undefined ? undefined : String(body.doctorEESZTId),
+      },
+    });
+    return doctor;
+  } catch {
+    return reply.code(404).send({ message: 'Doctor not found' });
+  }
+});
+
+server.delete('/doctors/:doctorId', async (request, reply) => {
+  const { doctorId } = request.params as { doctorId: string };
+  try {
+    await prisma.doctor.delete({ where: { doctorId } });
+    return { status: 'ok' };
+  } catch {
+    return reply.code(404).send({ message: 'Doctor not found' });
+  }
 });
 
 // NEAK check history
@@ -1760,7 +2182,7 @@ server.delete('/odontogram/timeline/:patientId/:snapshotId', async (request, rep
 
 // Data export/import
 server.get('/data/export', async () => {
-  const [patients, catalog, quotes, settings, dentalStatusSnapshots, invoices, neakChecks, pricelists, pricelistCategories] =
+  const [patients, catalog, quotes, settings, dentalStatusSnapshots, invoices, neakChecks, pricelists, pricelistCategories, doctors] =
     await Promise.all([
       prisma.patient.findMany(),
       prisma.priceListCatalogItem.findMany(),
@@ -1771,9 +2193,10 @@ server.get('/data/export', async () => {
       prisma.neakCheck.findMany(),
       prisma.priceList.findMany(),
       prisma.priceListCategory.findMany(),
+      prisma.doctor.findMany({ orderBy: { doctorId: 'asc' } }),
     ]);
 
-  const exportData: ExportData = {
+  const exportData: ExportData & { doctors?: unknown[] } = {
     version: DATA_VERSION,
     exportedAt: new Date().toISOString(),
     patients,
@@ -1785,6 +2208,7 @@ server.get('/data/export', async () => {
     neakChecks: neakChecks.map((n) => n.data),
     pricelists,
     pricelistCategories,
+    doctors,
   };
 
   return exportData;
@@ -1810,6 +2234,7 @@ server.post('/data/import', async (request, reply) => {
     await tx.priceListCategory.deleteMany({});
     await tx.priceList.deleteMany({});
     await tx.patient.deleteMany({});
+    await tx.doctor.deleteMany({});
 
     for (const rawPatient of body.patients as JsonRecord[]) {
       await tx.patient.create({
@@ -1921,6 +2346,11 @@ server.post('/data/import', async (request, reply) => {
           isDeleted: Boolean(rawQuote.isDeleted),
           data: toInputJson(rawQuote),
           createdByUserId: importUserId,
+          quoteName: rawQuote.quoteName ? String(rawQuote.quoteName) : null,
+          quoteNumber: rawQuote.quoteNumber ? String(rawQuote.quoteNumber) : null,
+          validUntil: rawQuote.validUntil ? String(rawQuote.validUntil) : null,
+          currency: rawQuote.currency ? String(rawQuote.currency) : null,
+          doctorId: rawQuote.doctorId ? String(rawQuote.doctorId) : null,
         },
       });
     }
@@ -1947,19 +2377,41 @@ server.post('/data/import', async (request, reply) => {
           createdAt: rawInvoice.createdAt ? toDate(String(rawInvoice.createdAt)) : new Date(),
           data: toInputJson(rawInvoice),
           createdByUserId: importUserId,
+          paymentMethod: rawInvoice.paymentMethod ? String(rawInvoice.paymentMethod) : null,
+          fulfillmentDate: rawInvoice.fulfillmentDate ? String(rawInvoice.fulfillmentDate) : null,
+          szamlazzInvoiceNumber: rawInvoice.szamlazzInvoiceNumber ? String(rawInvoice.szamlazzInvoiceNumber) : null,
+          quoteNumber: rawInvoice.quoteNumber ? String(rawInvoice.quoteNumber) : null,
+          invoiceType: rawInvoice.invoiceType ? String(rawInvoice.invoiceType) : null,
         },
       });
     }
 
     for (const rawNeak of (body.neakChecks || []) as JsonRecord[]) {
-      await tx.neakCheck.create({
-        data: {
-          id: String(rawNeak.id || randomUUID()),
-          patientId: String(rawNeak.patientId || ''),
-          checkedAt: rawNeak.checkedAt ? toDate(String(rawNeak.checkedAt)) : new Date(),
-          data: toInputJson(rawNeak),
-        },
-      });
+      await createWithUniqueId(createNeakCheckId, (id) =>
+        tx.neakCheck.create({
+          data: {
+            id: String(rawNeak.id || id),
+            patientId: String(rawNeak.patientId || ''),
+            checkedAt: rawNeak.checkedAt ? toDate(String(rawNeak.checkedAt)) : new Date(),
+            data: toInputJson(rawNeak),
+          },
+        }),
+      );
+    }
+
+    // Import doctors if present
+    if (Array.isArray((body as JsonRecord).doctors)) {
+      for (const rawDoc of (body as JsonRecord).doctors as JsonRecord[]) {
+        await tx.doctor.create({
+          data: {
+            doctorId: String(rawDoc.doctorId || randomUUID()),
+            doctorName: String(rawDoc.doctorName || ''),
+            doctorNum: String(rawDoc.doctorNum || ''),
+            doctorEESZTId: String(rawDoc.doctorEESZTId || ''),
+            createdByUserId: importUserId,
+          },
+        });
+      }
     }
 
     await tx.appSettings.upsert({
@@ -2557,16 +3009,18 @@ const ensureBootstrapAdmin = async () => {
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0) return;
 
-  await prisma.user.create({
-    data: {
-      id: randomUUID(),
-      email: ADMIN_EMAIL,
-      fullName: ADMIN_FULL_NAME,
-      passwordHash: await hashPassword(ADMIN_PASSWORD),
-      role: 'admin',
-      isActive: true,
-    },
-  });
+  await createWithUniqueId(createShortId, async (id) =>
+    prisma.user.create({
+      data: {
+        id,
+        email: ADMIN_EMAIL,
+        fullName: ADMIN_FULL_NAME,
+        passwordHash: await hashPassword(ADMIN_PASSWORD),
+        role: 'admin',
+        isActive: true,
+      },
+    }),
+  );
   server.log.info(`Bootstrap admin created: ${ADMIN_EMAIL}`);
 };
 

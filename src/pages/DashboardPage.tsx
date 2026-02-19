@@ -274,7 +274,7 @@ export function DashboardPage() {
                             to={`/patients/${quote.patientId}/quotes/${quote.quoteId}`}
                             className="text-dental-600 hover:text-dental-700 font-medium"
                           >
-                            AJ-{quote.quoteId.slice(-8).toUpperCase()}
+                            {quote.quoteId}
                           </Link>
                         </td>
                         <td className="py-3">

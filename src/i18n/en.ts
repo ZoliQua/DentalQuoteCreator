@@ -257,6 +257,7 @@ export const en: TranslationKeys = {
     newQuoteVisualDesc: 'Dental diagram-based editor',
     newQuoteAutomatic: 'Automatic quote',
     newQuoteAutomaticDesc: 'Automatic item generation from odontogram status',
+    maxQuotesReached: 'Patient has reached the maximum of 999 quotes. Contact the administrator for help!',
   },
 
   // Visual Editor
@@ -595,6 +596,7 @@ export const en: TranslationKeys = {
     eventFinalCreated: 'Final invoice issued ({number}) for {amount}. The full amount has been invoiced.',
     invoicedItem: 'Invoiced item with invoice {invoiceNumber}',
     completedAndFullyInvoiced: 'The quote has been completed and fully invoiced.',
+    maxInvoicesReached: 'Patient has reached the maximum of 999 invoices. Contact the administrator for help!',
   },
 
   // PDF
@@ -802,6 +804,23 @@ export const en: TranslationKeys = {
     deleteUserConfirm: 'Are you sure you want to delete this user?',
     userDeleted: 'User deleted.',
     userDeleteFailed: 'User deletion failed',
+    permDataBrowse: 'Database browsing',
+  },
+
+  // Database Browser
+  dbBrowser: {
+    title: 'Database Browser',
+    subtitle: 'Browse tables, edit and delete rows',
+    selectTable: 'Select Table',
+    selectTablePlaceholder: 'Choose a table...',
+    totalRows: 'Total rows',
+    editRow: 'Edit Row',
+    saveConfirm: 'Are you sure you want to save the changes?',
+    deleteConfirm: 'Are you sure you want to delete this row? This action cannot be undone!',
+    saveSuccess: 'Row updated successfully!',
+    deleteSuccess: 'Row deleted successfully!',
+    noRows: 'No rows to display.',
+    jsonInvalid: 'Invalid JSON format',
   },
 
   // Validation

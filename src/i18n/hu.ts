@@ -256,6 +256,7 @@ export const hu = {
     newQuoteVisualDesc: 'Fogdiagramon alapuló szerkesztő',
     newQuoteAutomatic: 'Automatikus árajánlat',
     newQuoteAutomaticDesc: 'Odontogram státusz alapú automatikus tétel generálás',
+    maxQuotesReached: 'Páciens elérte a 999 maximális árajánlat számát. Keresd az adminisztrátort segítségért!',
   },
 
   // Visual Editor
@@ -593,6 +594,7 @@ export const hu = {
     eventFinalCreated: 'Végszámla kiállításra ({number}) került {amount}el. A teljes összeg számlázásra került.',
     invoicedItem: 'Számlázott tétel a {invoiceNumber} számlával',
     completedAndFullyInvoiced: 'Az árajánlat befejezésre és teljesen számlázásra került.',
+    maxInvoicesReached: 'Páciens elérte a 999 maximális számla számát. Keresd az adminisztrátort segítségért!',
   },
 
   // PDF
@@ -802,6 +804,23 @@ export const hu = {
     userDeleteFailed: 'Felhasználó törlés sikertelen',
     passwordConfirm: 'Jelszó megerősítése',
     passwordMismatch: 'A jelszavak nem egyeznek',
+    permDataBrowse: 'Adatbázis böngészés',
+  },
+
+  // Database Browser
+  dbBrowser: {
+    title: 'Adatbázis böngésző',
+    subtitle: 'Táblák megtekintése, sorok szerkesztése és törlése',
+    selectTable: 'Tábla kiválasztása',
+    selectTablePlaceholder: 'Válasszon táblát...',
+    totalRows: 'Összes sor',
+    editRow: 'Sor szerkesztése',
+    saveConfirm: 'Biztosan menteni szeretné a módosításokat?',
+    deleteConfirm: 'Biztosan törölni szeretné ezt a sort? Ez a művelet nem vonható vissza!',
+    saveSuccess: 'Sor sikeresen frissítve!',
+    deleteSuccess: 'Sor sikeresen törölve!',
+    noRows: 'Nincs megjeleníthető sor.',
+    jsonInvalid: 'Érvénytelen JSON formátum',
   },
 
   // Validation

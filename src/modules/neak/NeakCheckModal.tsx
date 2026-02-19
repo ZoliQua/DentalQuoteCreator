@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { nanoid } from 'nanoid';
+
+const createNeakCheckId = (): string => 'NC' + nanoid(10);
 import { Modal, Button } from '../../components/common';
 import { useSettings } from '../../context/SettingsContext';
 import { checkJogviszony } from './api';
@@ -57,7 +59,7 @@ export function NeakCheckModal({ isOpen, onClose, patientId, taj, patientName }:
       const checkResult = await checkJogviszony(tajDigits, date);
       setResult(checkResult);
       saveCheck({
-        id: nanoid(),
+        id: createNeakCheckId(),
         patientId,
         taj: tajDigits,
         checkedAt: new Date().toISOString(),
