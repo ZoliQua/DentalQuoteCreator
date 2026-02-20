@@ -97,7 +97,7 @@ const defaultSettings: JsonRecord = {
     email: 'info@mackodental.hu',
     website: 'www.mackodental.hu',
   },
-  doctors: [{ id: 'doc-1', name: 'Dr. Dul Zoltán', stampNumber: '' }],
+  doctors: [{ id: 'DOC0001', name: 'Dr. Dul Zoltán', stampNumber: '' }],
   pdf: {
     hu: {
       footerText: 'Az árajánlat tájékoztató jellegű és a fent jelölt ideig érvényes.',
@@ -387,6 +387,7 @@ async function nextInvoiceId(patientId: string): Promise<string> {
 
 async function nextDoctorId(): Promise<string> {
   const last = await prisma.doctor.findFirst({
+    where: { doctorId: { startsWith: 'DOC' } },
     orderBy: { doctorId: 'desc' },
     select: { doctorId: true },
   });
@@ -1818,8 +1819,11 @@ server.patch('/quotes/:quoteId/restore', async (request, reply) => {
 
 // Settings
 server.get('/settings', async () => {
-  const settings = await prisma.appSettings.findUnique({ where: { id: 'default' } });
-  const result = parseJsonObject(settings?.data, defaultSettings);
+  const [settingsRow, doctors] = await Promise.all([
+    prisma.appSettings.findUnique({ where: { id: 'default' } }),
+    prisma.doctor.findMany({ orderBy: { doctorId: 'asc' } }),
+  ]);
+  const result = parseJsonObject(settingsRow?.data, defaultSettings);
   // Migrate old flat pdf format { footerText, warrantyText } to per-language { hu: {...}, en: {...}, de: {...} }
   const pdf = result.pdf as Record<string, unknown> | undefined;
   if (pdf && (typeof pdf.footerText === 'string' || typeof pdf.warrantyText === 'string')) {
@@ -1834,6 +1838,10 @@ server.get('/settings', async () => {
   const quote = result.quote as Record<string, unknown> | undefined;
   if (quote && !quote.quoteLang) {
     quote.quoteLang = 'hu';
+  }
+  // Override doctors from Doctor table
+  if (doctors.length > 0) {
+    result.doctors = doctors.map((d) => ({ id: d.doctorId, name: d.doctorName, stampNumber: d.doctorNum }));
   }
   return result;
 });
@@ -2525,10 +2533,10 @@ const toDateOnly = (value: string) => {
 
 const normalizePaymentMethod = (value: string) => {
   const normalized = String(value || '').toLowerCase();
-  if (normalized === 'atutalas') return 'Atutalas';
-  if (normalized === 'keszpenz') return 'Keszpenz';
-  if (normalized === 'bankkartya') return 'Bankkartya';
-  return value || 'Atutalas';
+  if (normalized === 'atutalas' || normalized === 'átutalás') return 'Átutalás';
+  if (normalized === 'keszpenz' || normalized === 'készpénz') return 'Készpénz';
+  if (normalized === 'bankkartya' || normalized === 'bankkártya') return 'Bankkártya';
+  return value || 'Bankkártya';
 };
 
 const validateAndNormalizePayload = (input: JsonRecord) => {
@@ -2550,16 +2558,18 @@ const validateAndNormalizePayload = (input: JsonRecord) => {
   const normalizedItems = items.map((item, index) => {
     const qty = Number(item.qty);
     const unitPriceNet = Number(item.unitPriceNet ?? item.unitPrice ?? 0);
-    const vatRate = Number(item.vatRate ?? 27);
+    const isTAM = item.vatRate === 'TAM';
+    const vatRateNum = isTAM ? 0 : Number(item.vatRate ?? 27);
+    const vatRateLabel: number | string = isTAM ? 'TAM' : vatRateNum;
 
     if (!Number.isFinite(qty) || qty <= 0) errors.push(`Tétel ${index + 1}: qty > 0 kötelező`);
     if (!Number.isFinite(unitPriceNet) || (!isVegszamla && unitPriceNet < 0))
       errors.push(`Tétel ${index + 1}: unitPriceNet >= 0 kötelező`);
-    if (!Number.isFinite(vatRate) || vatRate < 0)
+    if (!isTAM && (!Number.isFinite(vatRateNum) || vatRateNum < 0))
       errors.push(`Tétel ${index + 1}: vatRate >= 0 kötelező`);
 
     const net = round(qty * unitPriceNet);
-    const vat = round((net * vatRate) / 100);
+    const vat = round((net * vatRateNum) / 100);
     const gross = round(net + vat);
 
     return {
@@ -2567,7 +2577,7 @@ const validateAndNormalizePayload = (input: JsonRecord) => {
       unit: item.unit || 'db',
       qty,
       unitPriceNet,
-      vatRate,
+      vatRate: vatRateLabel,
       net,
       vat,
       gross,
@@ -2591,7 +2601,7 @@ const validateAndNormalizePayload = (input: JsonRecord) => {
       seller,
       buyer,
       invoice: {
-        paymentMethod: normalizePaymentMethod(String(invoice.paymentMethod || 'atutalas')),
+        paymentMethod: normalizePaymentMethod(String(invoice.paymentMethod || 'bankkártya')),
         fulfillmentDate: toDateOnly(String(invoice.fulfillmentDate || '')),
         dueDate: toDateOnly(String(invoice.dueDate || '')),
         issueDate: toDateOnly(String(invoice.issueDate || '')),
@@ -2620,7 +2630,7 @@ const buildInvoiceXml = (params: {
     unit: unknown;
     qty: number;
     unitPriceNet: number;
-    vatRate: number;
+    vatRate: number | string;
     net: number;
     vat: number;
     gross: number;

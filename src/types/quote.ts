@@ -13,13 +13,15 @@ export type Jaw = 'upper' | 'lower' | 'both';
 export interface QuoteEvent {
   id: string;
   timestamp: string;
-  type: 'created' | 'closed' | 'reopened' | 'accepted' | 'acceptance_revoked' | 'rejected' | 'rejection_revoked' | 'completed' | 'completion_revoked' | 'deleted' | 'invoice_created';
+  type: 'created' | 'closed' | 'reopened' | 'accepted' | 'acceptance_revoked' | 'rejected' | 'rejection_revoked' | 'completed' | 'completion_revoked' | 'deleted' | 'invoice_created' | 'invoice_storno';
   doctorName: string;
   invoiceId?: string;
   invoiceNumber?: string;
   invoiceAmount?: number;
   invoiceCurrency?: string;
   invoiceType?: import('./invoice').InvoiceType;
+  stornoInvoiceNumber?: string;
+  originalInvoiceNumber?: string;
 }
 
 export interface QuoteItem {

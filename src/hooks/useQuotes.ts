@@ -243,7 +243,7 @@ export function useQuotes() {
       };
       const updated: Quote = {
         ...existing,
-        events: [...existing.events, fullEvent],
+        events: [...(existing.events || []), fullEvent],
       };
       updateQuote(updated);
       return updated;
@@ -264,7 +264,7 @@ export function useQuotes() {
         ...existing,
         quoteStatus: newStatus,
         lastStatusChangeAt: now,
-        events: [...existing.events, createEvent(eventType, doctorName)],
+        events: [...(existing.events || []), createEvent(eventType, doctorName)],
       };
       updateQuote(updated);
       return updated;

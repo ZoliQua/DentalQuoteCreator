@@ -3,7 +3,7 @@ export type InvoiceRequestItem = {
   unit: string;
   qty: number;
   unitPriceNet: number;
-  vatRate: number;
+  vatRate: number | string;
   comment?: string;
 };
 

@@ -5,13 +5,15 @@ import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, Button, Badge, ConfirmModal } from '../components/common';
 import { getInvoice, saveInvoice } from '../modules/invoicing/storage';
 import { stornoInvoice } from '../modules/invoicing/api';
-import { formatCurrency, formatDate, formatDateTime } from '../utils';
+import { formatCurrency, formatDate } from '../utils';
+import { useQuotes } from '../hooks';
 import type { InvoiceRecord } from '../types/invoice';
 
 export function InvoiceDetailPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
   const { t } = useSettings();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
+  const { addEventToQuote, getQuote, reopenTreatment } = useQuotes();
   const [invoice, setInvoice] = useState<InvoiceRecord | undefined>(() =>
     invoiceId ? getInvoice(invoiceId) : undefined
   );
@@ -80,6 +82,23 @@ export function InvoiceDetailPage() {
       saveInvoice(updated);
       setInvoice(updated);
       setStornoConfirmOpen(false);
+      // Add storno event to quote event log
+      if (invoice.quoteId) {
+        addEventToQuote(invoice.quoteId, {
+          type: 'invoice_storno',
+          doctorName: user?.fullName || '',
+          invoiceId: invoice.id,
+          invoiceAmount: invoice.totalGross || 0,
+          invoiceCurrency: invoice.currency,
+          stornoInvoiceNumber: response.invoiceNumber || undefined,
+          originalInvoiceNumber: invoice.szamlazzInvoiceNumber || undefined,
+        });
+        // Revert completed quote back to started
+        const q = getQuote(invoice.quoteId);
+        if (q?.quoteStatus === 'completed') {
+          reopenTreatment(invoice.quoteId);
+        }
+      }
     } catch (error) {
       setStornoError(error instanceof Error ? error.message : t.invoices.errorGeneric);
     } finally {
@@ -89,6 +108,14 @@ export function InvoiceDetailPage() {
 
   const netTotal = invoice.items.reduce((sum, item) => sum + item.net, 0);
   const vatTotal = invoice.items.reduce((sum, item) => sum + item.vat, 0);
+
+  // Determine if this invoice is TAM/0% (no VAT breakdown needed)
+  const firstVatRate = invoice.items[0]?.vatRate;
+  const isNoVat = firstVatRate === 'TAM' || firstVatRate === 0 || firstVatRate === '0';
+  const vatLabel = firstVatRate === 'TAM' ? 'TAM' : typeof firstVatRate === 'number' ? `${firstVatRate}%` : `${firstVatRate}`;
+
+  const hasQuote = invoice.quoteId && invoice.quoteId !== '';
+  const quoteLink = hasQuote ? `/patients/${invoice.patientId}/quotes/${invoice.quoteId}` : null;
 
   return (
     <div className="space-y-6">
@@ -146,7 +173,7 @@ export function InvoiceDetailPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Invoice data */}
+        {/* Invoice items */}
         <div className="lg:col-span-2 space-y-4">
           <Card>
             <CardHeader>
@@ -159,19 +186,27 @@ export function InvoiceDetailPage() {
                     key={`${item.name}-${idx}`}
                     className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm"
                   >
+                    <span className="w-6 text-gray-400 font-medium shrink-0">{idx + 1}.</span>
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{item.name}</p>
                       <p className="text-gray-500">
-                        {item.qty} {item.unit} &middot; {t.invoices.itemNetPrice}:{' '}
-                        {formatCurrency(item.unitPriceNet, invoice.currency)} &middot; {t.invoices.itemVat}:{' '}
-                        {item.vatRate}%
+                        {item.qty} {item.unit}
+                        {!isNoVat && (
+                          <>
+                            {' '}&middot; {t.invoices.itemNetPrice}:{' '}
+                            {formatCurrency(item.unitPriceNet, invoice.currency)} &middot; {t.invoices.itemVat}:{' '}
+                            {typeof item.vatRate === 'number' ? `${item.vatRate}%` : item.vatRate}
+                          </>
+                        )}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold">{formatCurrency(item.gross, invoice.currency)}</p>
-                      <p className="text-xs text-gray-500">
-                        {t.invoices.netTotal}: {formatCurrency(item.net, invoice.currency)}
-                      </p>
+                      {!isNoVat && (
+                        <p className="text-xs text-gray-500">
+                          {t.invoices.netTotal}: {formatCurrency(item.net, invoice.currency)}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -179,16 +214,20 @@ export function InvoiceDetailPage() {
 
               {/* Totals */}
               <div className="mt-4 border-t pt-4 space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t.invoices.netTotal}</span>
-                  <span>{formatCurrency(netTotal, invoice.currency)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t.invoices.vatTotal}</span>
-                  <span>{formatCurrency(vatTotal, invoice.currency)}</span>
-                </div>
-                <div className="flex justify-between text-base font-bold border-t pt-2">
-                  <span>{t.invoices.grossTotal}</span>
+                {!isNoVat && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">{t.invoices.netTotal}</span>
+                      <span>{formatCurrency(netTotal, invoice.currency)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">{t.invoices.vatTotal}</span>
+                      <span>{formatCurrency(vatTotal, invoice.currency)}</span>
+                    </div>
+                  </>
+                )}
+                <div className={`flex justify-between text-base font-bold ${!isNoVat ? 'border-t pt-2' : ''}`}>
+                  <span>{isNoVat ? t.invoices.totalAmount : t.invoices.grossTotal}</span>
                   <span>{formatCurrency(invoice.totalGross, invoice.currency)}</span>
                 </div>
               </div>
@@ -198,11 +237,57 @@ export function InvoiceDetailPage() {
 
         {/* Sidebar */}
         <div className="space-y-4">
+          {/* Billing details (Számlázási adatok) — top */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-semibold">{t.invoices.billingDetails}</h3>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div>
+                <span className="text-gray-500 text-xs">{t.invoices.billingName}</span>
+                <p className="font-medium">
+                  {invoice.patientId && invoice.patientId !== 'ad-hoc' ? (
+                    <Link to={`/patients/${invoice.patientId}`} className="text-dental-600 hover:text-dental-700 hover:underline">
+                      {invoice.buyer.name}
+                    </Link>
+                  ) : (
+                    invoice.buyer.name
+                  )}
+                </p>
+              </div>
+              {(invoice.buyer.zip || invoice.buyer.city || invoice.buyer.address) && (
+                <div>
+                  <span className="text-gray-500 text-xs">{t.invoices.billingAddress}</span>
+                  <p className="text-gray-700">
+                    {[invoice.buyer.zip, invoice.buyer.city, invoice.buyer.address].filter(Boolean).join(', ')}
+                  </p>
+                </div>
+              )}
+              {invoice.buyer.email && (
+                <div>
+                  <span className="text-gray-500 text-xs">{t.invoices.buyerEmail}</span>
+                  <p className="text-gray-700">{invoice.buyer.email}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Invoice data (Számla adatai) — below */}
           <Card>
             <CardHeader>
               <h3 className="font-semibold">{t.invoices.invoiceData}</h3>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">{t.invoices.relatedQuote}</span>
+                {quoteLink ? (
+                  <Link to={quoteLink} className="font-medium text-dental-600 hover:text-dental-700 hover:underline">
+                    {invoice.quoteNumber || invoice.quoteId.slice(0, 8)}
+                  </Link>
+                ) : (
+                  <span className="text-gray-400">{t.invoices.noQuote}</span>
+                )}
+              </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">{t.invoices.invoiceNumber}</span>
                 <span className="font-medium">{invoice.szamlazzInvoiceNumber || '-'}</span>
@@ -214,8 +299,8 @@ export function InvoiceDetailPage() {
                 </Badge>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">{t.invoices.createdAt}</span>
-                <span>{formatDateTime(invoice.createdAt)}</span>
+                <span className="text-gray-500">{t.invoices.issueDate}</span>
+                <span>{formatDate(invoice.createdAt)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">{t.invoices.fulfillmentDate}</span>
@@ -230,28 +315,13 @@ export function InvoiceDetailPage() {
                 <span>{paymentLabel(invoice.paymentMethod)}</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-gray-500">{t.invoices.vatContent}</span>
+                <span>{vatLabel}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-gray-500">{t.invoices.currency}</span>
                 <span>{invoice.currency}</span>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <h3 className="font-semibold">{t.invoices.buyer}</h3>
-            </CardHeader>
-            <CardContent className="space-y-1 text-sm">
-              <p className="font-medium">{invoice.buyer.name}</p>
-              {invoice.buyer.zip && invoice.buyer.city && (
-                <p className="text-gray-500">
-                  {invoice.buyer.zip} {invoice.buyer.city}
-                </p>
-              )}
-              {invoice.buyer.address && <p className="text-gray-500">{invoice.buyer.address}</p>}
-              {invoice.buyer.email && <p className="text-gray-500">{invoice.buyer.email}</p>}
-              <p className="text-gray-500 text-xs mt-2">
-                {t.invoices.patientName}: {invoice.patientName}
-              </p>
             </CardContent>
           </Card>
         </div>

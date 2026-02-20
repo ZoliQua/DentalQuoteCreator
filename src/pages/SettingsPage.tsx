@@ -505,10 +505,24 @@ export function SettingsPage() {
             helperText={t.settings.invoiceCommentHelp}
           />
           <Select
+            label={t.settings.defaultPaymentMethod}
+            value={formData.invoice.defaultPaymentMethod || 'bankkártya'}
+            onChange={(e) => handleInvoiceChange('defaultPaymentMethod', e.target.value)}
+            options={[
+              { value: 'átutalás', label: t.invoices.paymentTransfer },
+              { value: 'készpénz', label: t.invoices.paymentCash },
+              { value: 'bankkártya', label: t.invoices.paymentCard },
+            ]}
+          />
+          <Select
             label={t.settings.defaultVatRate}
             value={String(formData.invoice.defaultVatRate)}
-            onChange={(e) => handleInvoiceChange('defaultVatRate', Number(e.target.value))}
+            onChange={(e) => {
+              const v = e.target.value;
+              handleInvoiceChange('defaultVatRate', v === 'TAM' ? 'TAM' : Number(v));
+            }}
             options={[
+              { value: 'TAM', label: 'TAM (tárgyi adómentes)' },
               { value: '0', label: '0%' },
               { value: '27', label: '27%' },
             ]}

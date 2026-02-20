@@ -1,25 +1,43 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
-import { usePatients, useCatalog, useCatalogCodeFormatter } from '../hooks';
-import { Card, Button, Input, Select, Modal, Badge } from '../components/common';
-import { formatCurrency, formatDate, formatPatientName, formatBirthDateForDisplay, parseBirthDateFromDisplay, getDatePlaceholder } from '../utils';
-import { createInvoice, previewInvoice } from '../modules/invoicing/api';
+import { usePatients, useCatalog, useCatalogCodeFormatter, useQuotes } from '../hooks';
+import { Card, Button, Input, Select, Modal, Badge, ConfirmModal } from '../components/common';
+import { formatCurrency, formatDate, formatPatientName, formatBirthDateForDisplay, parseBirthDateFromDisplay, getDatePlaceholder, naturalCompare } from '../utils';
+import { createInvoice, previewInvoice, stornoInvoice } from '../modules/invoicing/api';
 import { listInvoices, saveInvoice } from '../modules/invoicing/storage';
 import type { InvoiceRecord } from '../types/invoice';
 import { getAuthHeaders } from '../utils/auth';
 
+type SortKey = 'invoiceNumber' | 'patientName' | 'invoiceType' | 'issueDate' | 'dueDate' | 'paymentMethod' | 'amount' | 'status';
+type SortDir = 'asc' | 'desc';
+
+/** A display row — either a real invoice or a virtual storno row derived from a stornoed invoice */
+interface DisplayRow {
+  key: string;
+  isStornoRow: boolean;
+  invoice: InvoiceRecord;
+  /** For storno rows, display the storno invoice number */
+  displayNumber?: string;
+}
+
 export function InvoicesPage() {
   const { t, settings } = useSettings();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const { patients } = usePatients();
   const { activeItems } = useCatalog();
   const { formatCode } = useCatalogCodeFormatter();
+  const { addEventToQuote, getQuote, reopenTreatment } = useQuotes();
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => listInvoices());
   const [resendLoadingId, setResendLoadingId] = useState<string | null>(null);
   const [errorById, setErrorById] = useState<Record<string, string>>({});
+  const [sortKey, setSortKey] = useState<SortKey>('invoiceNumber');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [stornoConfirmInvoice, setStornoConfirmInvoice] = useState<InvoiceRecord | null>(null);
+  const [stornoLoading, setStornoLoading] = useState(false);
+  const [stornoError, setStornoError] = useState<string | null>(null);
 
   // New invoice modal state
   const [newInvoiceOpen, setNewInvoiceOpen] = useState(false);
@@ -30,14 +48,14 @@ export function InvoicesPage() {
     buyerCity: '',
     buyerAddress: '',
     buyerEmail: '',
-    paymentMethod: 'atutalas',
+    paymentMethod: 'bankkártya',
     fulfillmentDate: '',
     dueDate: '',
     issueDate: '',
     comment: '',
   });
   const [newInvoiceItems, setNewInvoiceItems] = useState<
-    { name: string; unit: string; qty: number; unitPriceNet: number; vatRate: number }[]
+    { name: string; unit: string; qty: number; unitPriceNet: number; vatRate: number | string }[]
   >([]);
   const [newInvoiceSubmitting, setNewInvoiceSubmitting] = useState(false);
   const [newInvoiceError, setNewInvoiceError] = useState<string | null>(null);
@@ -55,15 +73,136 @@ export function InvoicesPage() {
   const [showCatalogPicker, setShowCatalogPicker] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState('');
 
-  const sortedInvoices = useMemo(
-    () =>
-      [...invoices].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      ),
-    [invoices]
+  const refreshInvoices = () => setInvoices(listInvoices());
+
+  /** Build display rows: one row per invoice + one extra row per storno */
+  const displayRows = useMemo((): DisplayRow[] => {
+    const rows: DisplayRow[] = [];
+    for (const inv of invoices) {
+      rows.push({ key: inv.id, isStornoRow: false, invoice: inv });
+      if (inv.status === 'storno' && inv.stornoInvoiceNumber) {
+        rows.push({
+          key: `${inv.id}-storno`,
+          isStornoRow: true,
+          invoice: inv,
+          displayNumber: inv.stornoInvoiceNumber,
+        });
+      }
+    }
+    return rows;
+  }, [invoices]);
+
+  const invoiceTypeLabel = useCallback((row: DisplayRow): string => {
+    if (row.isStornoRow) return t.invoices.invoiceTypeStorno;
+    const it = row.invoice.invoiceType;
+    if (it === 'advance') return t.invoices.invoiceTypeAdvance;
+    if (it === 'final') return t.invoices.invoiceTypeFinal;
+    return t.invoices.invoiceTypeNormal;
+  }, [t]);
+
+  const getRowSortValue = useCallback((row: DisplayRow, key: SortKey): string | number => {
+    const inv = row.invoice;
+    switch (key) {
+      case 'invoiceNumber': return (row.isStornoRow ? row.displayNumber : inv.szamlazzInvoiceNumber) || '';
+      case 'patientName': return inv.patientName.toLowerCase();
+      case 'invoiceType': return invoiceTypeLabel(row);
+      case 'issueDate': return new Date(inv.createdAt).getTime();
+      case 'dueDate': return new Date(inv.dueDate).getTime();
+      case 'paymentMethod': return inv.paymentMethod;
+      case 'amount': return row.isStornoRow ? -inv.totalGross : inv.totalGross;
+      case 'status': {
+        if (row.isStornoRow) return t.invoices.statusSent;
+        if (inv.status === 'draft') return t.invoices.statusDraft;
+        if (inv.status === 'sent') return t.invoices.statusSent;
+        return t.invoices.statusStorno;
+      }
+      default: return '';
+    }
+  }, [invoiceTypeLabel, t]);
+
+  const sortedRows = useMemo(() => {
+    const rows = [...displayRows];
+    rows.sort((a, b) => {
+      const va = getRowSortValue(a, sortKey);
+      const vb = getRowSortValue(b, sortKey);
+      let cmp = 0;
+      if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+      else cmp = naturalCompare(String(va), String(vb));
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return rows;
+  }, [displayRows, sortKey, sortDir, getRowSortValue]);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+
+  const SortHeader = ({ col, children, className }: { col: SortKey; children: React.ReactNode; className?: string }) => (
+    <th
+      className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 ${className || 'text-left'}`}
+      onClick={() => handleSort(col)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {children}
+        {sortKey === col ? (
+          <svg className="w-3 h-3" viewBox="0 0 12 12" fill="currentColor">
+            {sortDir === 'asc' ? <path d="M6 2l4 5H2z" /> : <path d="M6 10l4-5H2z" />}
+          </svg>
+        ) : (
+          <svg className="w-3 h-3 opacity-30" viewBox="0 0 12 12" fill="currentColor">
+            <path d="M6 2l3 4H3zM6 10l3-4H3z" />
+          </svg>
+        )}
+      </span>
+    </th>
   );
 
-  const refreshInvoices = () => setInvoices(listInvoices());
+  const handleInlineStorno = async () => {
+    const invoice = stornoConfirmInvoice;
+    if (!invoice?.szamlazzInvoiceNumber) return;
+    setStornoLoading(true);
+    setStornoError(null);
+    try {
+      const response = await stornoInvoice(invoice.szamlazzInvoiceNumber);
+      if (response.mode === 'live' && !response.success) {
+        throw new Error(response.message || t.invoices.errorGeneric);
+      }
+      const updated: InvoiceRecord = {
+        ...invoice,
+        status: 'storno',
+        stornoInvoiceNumber: response.invoiceNumber || undefined,
+        stornoPdfBase64: response.pdfBase64 || undefined,
+      };
+      saveInvoice(updated);
+      setStornoConfirmInvoice(null);
+      // Add storno event to quote event log
+      if (invoice.quoteId) {
+        addEventToQuote(invoice.quoteId, {
+          type: 'invoice_storno',
+          doctorName: user?.fullName || '',
+          invoiceId: invoice.id,
+          invoiceAmount: invoice.totalGross || 0,
+          invoiceCurrency: invoice.currency,
+          stornoInvoiceNumber: response.invoiceNumber || undefined,
+          originalInvoiceNumber: invoice.szamlazzInvoiceNumber || undefined,
+        });
+        const q = getQuote(invoice.quoteId);
+        if (q?.quoteStatus === 'completed') {
+          reopenTreatment(invoice.quoteId);
+        }
+      }
+      refreshInvoices();
+    } catch (error) {
+      setStornoError(error instanceof Error ? error.message : t.invoices.errorGeneric);
+    } finally {
+      setStornoLoading(false);
+    }
+  };
 
   const handleResend = async (invoice: InvoiceRecord) => {
     setResendLoadingId(invoice.id);
@@ -157,7 +296,7 @@ export function InvoicesPage() {
       buyerCity: '',
       buyerAddress: '',
       buyerEmail: '',
-      paymentMethod: 'atutalas',
+      paymentMethod: settings.invoice?.defaultPaymentMethod || 'bankkártya',
       fulfillmentDate: today,
       dueDate,
       issueDate: today,
@@ -192,8 +331,9 @@ export function InvoicesPage() {
 
   const addCatalogItem = (item: { catalogName: string; catalogUnit: string; catalogPrice: number; catalogVatRate?: number }) => {
     const grossUnit = item.catalogPrice;
-    const vatRate = settings.invoice?.defaultVatRate ?? (item.catalogVatRate ?? 0);
-    const unitPriceNet = vatRate > 0 ? Number((grossUnit / (1 + vatRate / 100)).toFixed(2)) : grossUnit;
+    const vatRate = settings.invoice?.defaultVatRate ?? 'TAM';
+    const numericVat = typeof vatRate === 'number' ? vatRate : 0;
+    const unitPriceNet = numericVat > 0 ? Number((grossUnit / (1 + numericVat / 100)).toFixed(2)) : grossUnit;
     setNewInvoiceItems((prev) => [
       ...prev,
       { name: item.catalogName, unit: item.catalogUnit, qty: 1, unitPriceNet, vatRate },
@@ -258,7 +398,7 @@ export function InvoicesPage() {
       }
       const calculatedTotals = payload.items.reduce((acc, item) => {
         const net = item.qty * item.unitPriceNet;
-        const vat = (net * item.vatRate) / 100;
+        const vat = (net * (typeof item.vatRate === 'number' ? item.vatRate : 0)) / 100;
         return { net: acc.net + net, vat: acc.vat + vat, gross: acc.gross + net + vat };
       }, { net: 0, vat: 0, gross: 0 });
       const totalGross = Math.round((calculatedTotals.gross + Number.EPSILON) * 100) / 100;
@@ -299,7 +439,8 @@ export function InvoicesPage() {
         },
         items: payload.items.map((item) => {
           const net = Number((item.qty * item.unitPriceNet).toFixed(2));
-          const vat = Number(((net * item.vatRate) / 100).toFixed(2));
+          const numVat = typeof item.vatRate === 'number' ? item.vatRate : 0;
+          const vat = Number(((net * numVat) / 100).toFixed(2));
           const gross = Number((net + vat).toFixed(2));
           return { name: item.name, unit: item.unit, qty: item.qty, unitPriceNet: item.unitPriceNet, vatRate: item.vatRate, net, vat, gross };
         }),
@@ -343,113 +484,214 @@ export function InvoicesPage() {
         {hasPermission('invoices.issue') && (<Button onClick={handleOpenNewInvoice}>{t.invoices.newInvoice}</Button>)}
       </div>
 
+      {stornoError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {stornoError}
+        </div>
+      )}
+
       <Card>
         <div className="overflow-x-auto">
-          {sortedInvoices.length === 0 ? (
+          {sortedRows.length === 0 ? (
             <div className="p-8 text-center text-sm text-gray-500">{t.invoices.noInvoices}</div>
           ) : (
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t.invoices.invoiceNumber}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t.invoices.patientName}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t.invoices.issueDate}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t.invoices.dueDate}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t.invoices.paymentMethod}
-                  </th>
+                  <SortHeader col="invoiceNumber">{t.invoices.invoiceNumber}</SortHeader>
+                  <SortHeader col="patientName">{t.invoices.patientName}</SortHeader>
+                  <SortHeader col="invoiceType">{t.invoices.invoiceType}</SortHeader>
+                  <SortHeader col="issueDate">{t.invoices.issueDate}</SortHeader>
+                  <SortHeader col="dueDate">{t.invoices.dueDate}</SortHeader>
+                  <SortHeader col="paymentMethod">{t.invoices.paymentMethod}</SortHeader>
+                  <SortHeader col="amount" className="text-right">{t.invoices.amount}</SortHeader>
+                  <SortHeader col="status" className="text-center">{t.invoices.status}</SortHeader>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t.invoices.amount}
+                    {t.common.actions}
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t.invoices.status}
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {sortedInvoices.map((invoice) => (
-                  <tr key={invoice.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                      {invoice.szamlazzInvoiceNumber ? (
-                        <Link to={`/invoices/${invoice.id}`} className="text-dental-600 hover:text-dental-700 hover:underline">
-                          {invoice.szamlazzInvoiceNumber}
-                        </Link>
-                      ) : '-'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      {invoice.patientId && invoice.patientId !== 'ad-hoc' ? (
-                        <Link to={`/patients/${invoice.patientId}`} className="text-dental-600 hover:text-dental-700 hover:underline">
-                          {invoice.patientName}
-                        </Link>
-                      ) : invoice.patientName}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {formatDate(invoice.createdAt)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {formatDate(invoice.dueDate)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {paymentLabel(invoice.paymentMethod)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right font-semibold">
-                      {formatCurrency(invoice.totalGross, invoice.currency)}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Badge variant={statusVariant(invoice.status)}>
-                        {statusLabel(invoice.status)}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {invoice.status === 'draft' && (
-                          <button
-                            type="button"
-                            onClick={() => handleResend(invoice)}
-                            disabled={resendLoadingId === invoice.id}
-                            className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                {sortedRows.map((row) => {
+                  const inv = row.invoice;
+                  const isStornoed = !row.isStornoRow && inv.status === 'storno';
+
+                  // Storno virtual row
+                  if (row.isStornoRow) {
+                    return (
+                      <tr key={row.key} className="bg-red-50/60 hover:bg-red-50">
+                        <td className="px-4 py-3 text-sm font-medium text-red-700">
+                          <Link to={`/invoices/${inv.id}`} className="text-red-600 hover:text-red-700 hover:underline">
+                            {row.displayNumber}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {inv.patientId && inv.patientId !== 'ad-hoc' ? (
+                            <Link to={`/patients/${inv.patientId}`} className="text-dental-600 hover:text-dental-700 hover:underline">
+                              {inv.patientName}
+                            </Link>
+                          ) : inv.patientName}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-red-600 font-medium">
+                          {t.invoices.invoiceTypeStorno}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {formatDate(inv.createdAt)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {formatDate(inv.dueDate)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {paymentLabel(inv.paymentMethod)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right font-semibold text-red-600">
+                          -{formatCurrency(inv.totalGross, inv.currency)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Badge variant="success">{t.invoices.statusSent}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {inv.stornoPdfBase64 && (
+                              <button
+                                type="button"
+                                title={t.invoices.pdf}
+                                onClick={() => {
+                                  const bytes = atob(inv.stornoPdfBase64!);
+                                  const arr = new Uint8Array(bytes.length);
+                                  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+                                  const blob = new Blob([arr], { type: 'application/pdf' });
+                                  window.open(URL.createObjectURL(blob), '_blank');
+                                }}
+                                className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              </button>
+                            )}
+                            <Link
+                              to={`/invoices/${inv.id}`}
+                              title={t.invoices.open}
+                              className="rounded p-1.5 text-dental-600 hover:bg-dental-50 hover:text-dental-700"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  // Normal invoice row
+                  return (
+                    <tr key={row.key} className={isStornoed ? 'bg-red-50/40 hover:bg-red-50/60' : 'hover:bg-gray-50'}>
+                      <td className={`px-4 py-3 text-sm font-medium ${isStornoed ? 'text-red-700' : 'text-gray-900'}`}>
+                        {inv.szamlazzInvoiceNumber ? (
+                          <Link to={`/invoices/${inv.id}`} className={isStornoed ? 'text-red-600 hover:text-red-700 hover:underline' : 'text-dental-600 hover:text-dental-700 hover:underline'}>
+                            {inv.szamlazzInvoiceNumber}
+                          </Link>
+                        ) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        {inv.patientId && inv.patientId !== 'ad-hoc' ? (
+                          <Link to={`/patients/${inv.patientId}`} className="text-dental-600 hover:text-dental-700 hover:underline">
+                            {inv.patientName}
+                          </Link>
+                        ) : inv.patientName}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {invoiceTypeLabel(row)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {formatDate(inv.createdAt)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {formatDate(inv.dueDate)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {paymentLabel(inv.paymentMethod)}
+                      </td>
+                      <td className={`px-4 py-3 text-sm text-right font-semibold ${isStornoed ? 'text-red-600 line-through' : ''}`}>
+                        {formatCurrency(inv.totalGross, inv.currency)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Badge variant={statusVariant(inv.status)}>
+                          {statusLabel(inv.status)}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {inv.status === 'draft' && (
+                            <button
+                              type="button"
+                              onClick={() => handleResend(inv)}
+                              disabled={resendLoadingId === inv.id}
+                              className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                            >
+                              {resendLoadingId === inv.id ? t.invoices.resending : t.invoices.resend}
+                            </button>
+                          )}
+                          {inv.pdfBase64 && (
+                            <button
+                              type="button"
+                              title={t.invoices.pdf}
+                              onClick={() => openPdf(inv)}
+                              className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </button>
+                          )}
+                          <Link
+                            to={`/invoices/${inv.id}`}
+                            title={t.invoices.open}
+                            className="rounded p-1.5 text-dental-600 hover:bg-dental-50 hover:text-dental-700"
                           >
-                            {resendLoadingId === invoice.id
-                              ? t.invoices.resending
-                              : t.invoices.resend}
-                          </button>
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </Link>
+                          {hasPermission('invoices.storno') && inv.status === 'sent' && inv.szamlazzInvoiceNumber && (
+                            <button
+                              type="button"
+                              title={t.invoices.storno}
+                              onClick={() => setStornoConfirmInvoice(inv)}
+                              className="rounded p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                        {errorById[inv.id] && (
+                          <p className="mt-1 text-xs text-red-600">{errorById[inv.id]}</p>
                         )}
-                        {invoice.pdfBase64 && (
-                          <button
-                            type="button"
-                            onClick={() => openPdf(invoice)}
-                            className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                          >
-                            {t.invoices.pdf}
-                          </button>
-                        )}
-                        <Link
-                          to={`/invoices/${invoice.id}`}
-                          className="rounded bg-dental-600 px-2 py-1 text-xs text-white hover:bg-dental-700"
-                        >
-                          {t.invoices.open}
-                        </Link>
-                      </div>
-                      {errorById[invoice.id] && (
-                        <p className="mt-1 text-xs text-red-600">{errorById[invoice.id]}</p>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
         </div>
       </Card>
+
+      {/* Storno Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!stornoConfirmInvoice}
+        onClose={() => setStornoConfirmInvoice(null)}
+        onConfirm={handleInlineStorno}
+        title={t.invoices.storno}
+        message={`${t.invoices.stornoConfirm}\n\n${t.invoices.stornoConfirmDetail}`}
+        confirmText={stornoLoading ? t.invoices.stornoInProgress : t.invoices.storno}
+        cancelText={t.common.cancel}
+        variant="danger"
+      />
 
       {/* New Invoice Modal */}
       <Modal
@@ -516,9 +758,9 @@ export function InvoicesPage() {
                 setNewInvoiceForm((prev) => ({ ...prev, paymentMethod: e.target.value }))
               }
               options={[
-                { value: 'atutalas', label: t.invoices.paymentTransfer },
-                { value: 'keszpenz', label: t.invoices.paymentCash },
-                { value: 'bankkartya', label: t.invoices.paymentCard },
+                { value: 'átutalás', label: t.invoices.paymentTransfer },
+                { value: 'készpénz', label: t.invoices.paymentCash },
+                { value: 'bankkártya', label: t.invoices.paymentCard },
               ]}
             />
             <div className="w-full">
@@ -640,7 +882,8 @@ export function InvoicesPage() {
               <div className="space-y-2">
                 {newInvoiceItems.map((item, idx) => {
                   const net = Number((item.qty * item.unitPriceNet).toFixed(2));
-                  const vat = Number(((net * item.vatRate) / 100).toFixed(2));
+                  const numVat = typeof item.vatRate === 'number' ? item.vatRate : 0;
+                  const vat = Number(((net * numVat) / 100).toFixed(2));
                   const gross = Number((net + vat).toFixed(2));
                   return (
                     <div
@@ -664,7 +907,7 @@ export function InvoicesPage() {
                         }
                         className="w-24"
                       />
-                      <span className="text-gray-500">{item.vatRate}%</span>
+                      <span className="text-gray-500">{typeof item.vatRate === 'number' ? `${item.vatRate}%` : item.vatRate}</span>
                       <span className="w-24 text-right font-semibold">
                         {formatCurrency(gross)}
                       </span>

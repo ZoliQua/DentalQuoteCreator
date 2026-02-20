@@ -9,7 +9,7 @@ export const defaultSettings: Settings = {
     website: 'www.mackodental.hu',
   },
   doctors: [
-    { id: 'doc-1', name: 'Dr. Dul Zoltán', stampNumber: '' },
+    { id: 'DOC0001', name: 'Dr. Dul Zoltán', stampNumber: '' },
   ],
   pdf: {
     hu: {
@@ -145,7 +145,8 @@ Bitte lesen Sie sorgfältig und kontaktieren Sie uns bei Fragen, dann bestätige
   invoice: {
     invoiceType: 'paper',
     defaultComment: '',
-    defaultVatRate: 0,
+    defaultVatRate: 'TAM',
+    defaultPaymentMethod: 'bankkártya',
   },
   patient: {
     defaultCountry: 'Magyarország',

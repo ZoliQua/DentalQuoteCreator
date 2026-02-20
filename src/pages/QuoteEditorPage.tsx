@@ -31,6 +31,7 @@ import {
   formatBirthDateForDisplay,
   parseBirthDateFromDisplay,
   getDatePlaceholder,
+  naturalCompare,
 } from '../utils';
 import { generateQuotePdf } from '../components/pdf/QuotePdfGenerator';
 import { OdontogramHost } from '../modules/odontogram/OdontogramHost';
@@ -43,6 +44,7 @@ import { saveInvoice, getInvoicesByQuote } from '../modules/invoicing/storage';
 import type { InvoiceRecord, InvoiceType } from '../types/invoice';
 import { getCatalogDisplayName } from '../utils/catalogLocale';
 import { getAuthHeaders } from '../utils/auth';
+import { mergeQuoteItems } from '../utils/mergedQuoteItems';
 
 // Per-line discount preset type
 type LineDiscountPreset = 'none' | '10' | '20' | '30' | '40' | '50' | 'custom';
@@ -97,14 +99,15 @@ export function QuoteEditorPage() {
     buyerCity: '',
     buyerAddress: '',
     buyerEmail: '',
-    paymentMethod: 'atutalas',
+    paymentMethod: 'bankkártya',
     fulfillmentDate: '',
     dueDate: '',
     issueDate: '',
   });
   const [invoiceItems, setInvoiceItems] = useState<
-    { name: string; unit: string; qty: number; unitPriceNet: number; vatRate: number }[]
+    { name: string; unit: string; qty: number; unitPriceNet: number; vatRate: number | string; comment?: string }[]
   >([]);
+  const invoiceItemsRef = useRef<typeof invoiceItems>([]);
   const [invoiceComment, setInvoiceComment] = useState('');
   const [issueDateText, setIssueDateText] = useState('');
   const [fulfillmentDateText, setFulfillmentDateText] = useState('');
@@ -112,6 +115,7 @@ export function QuoteEditorPage() {
   const [validUntilModalOpen, setValidUntilModalOpen] = useState(false);
   const [validUntilText, setValidUntilText] = useState('');
   const [quoteInvoices, setQuoteInvoices] = useState<InvoiceRecord[]>([]);
+  const [invoiceSortAsc, setInvoiceSortAsc] = useState(true);
   const [invoiceDraggedIndex, setInvoiceDraggedIndex] = useState<number | null>(null);
   const [invoiceDragOverIndex, setInvoiceDragOverIndex] = useState<number | null>(null);
   const [invoiceType, setInvoiceType] = useState<InvoiceType>('normal');
@@ -367,12 +371,13 @@ export function QuoteEditorPage() {
   const categories = Object.keys(itemsByCategory) as CatalogCategory[];
 
   const buildInvoicePayload = () => {
-    const vatRate = settings.invoice?.defaultVatRate ?? 0;
+    const vatRate = settings.invoice?.defaultVatRate ?? 'TAM';
+    const numericVat = typeof vatRate === 'number' ? vatRate : 0;
     let payloadItems = [...invoiceItems];
 
     if (invoiceType === 'advance') {
       // For advance invoices, send only the advance item
-      const unitPriceNet = vatRate > 0 ? Number((advanceAmount / (1 + vatRate / 100)).toFixed(2)) : advanceAmount;
+      const unitPriceNet = numericVat > 0 ? Number((advanceAmount / (1 + numericVat / 100)).toFixed(2)) : advanceAmount;
       payloadItems = [{
         name: t.invoices.advanceItemName,
         unit: 'db',
@@ -385,7 +390,7 @@ export function QuoteEditorPage() {
       const advanceTotal = quoteInvoices
         .filter((inv) => inv.status !== 'storno' && inv.invoiceType === 'advance')
         .reduce((sum, inv) => sum + (inv.totalGross || 0), 0);
-      const deductionNet = vatRate > 0 ? Number((advanceTotal / (1 + vatRate / 100)).toFixed(2)) : advanceTotal;
+      const deductionNet = numericVat > 0 ? Number((advanceTotal / (1 + numericVat / 100)).toFixed(2)) : advanceTotal;
       payloadItems.push({
         name: t.invoices.advanceItemName,
         unit: 'db',
@@ -435,33 +440,59 @@ export function QuoteEditorPage() {
       buyerCity: patient.city || '',
       buyerAddress: patient.street || '',
       buyerEmail: patient.email || '',
-      paymentMethod: 'atutalas',
+      paymentMethod: settings.invoice?.defaultPaymentMethod || 'bankkártya',
       fulfillmentDate: today,
       dueDate,
       issueDate: today,
     });
-    // Initialize invoice items from quote items using settings VAT rate
-    const vatRate = settings.invoice?.defaultVatRate ?? 0;
-    setInvoiceItems(
-      quote.items.map((item) => {
-        const grossUnit = Number(item.quoteUnitPriceGross || 0);
-        const unitPriceNet = vatRate > 0 ? Number((grossUnit / (1 + vatRate / 100)).toFixed(2)) : grossUnit;
-        return {
-          name: item.quoteName,
-          unit: item.quoteUnit,
-          qty: Number(item.quoteQty || 1),
-          unitPriceNet,
-          vatRate,
-        };
-      })
-    );
+    // Initialize invoice items from quote items (grouped by catalogItemId)
+    const vatRate = settings.invoice?.defaultVatRate ?? 'TAM';
+    const numericVat = typeof vatRate === 'number' ? vatRate : 0;
+    const merged = mergeQuoteItems(quote.items);
+    const items = merged.map((group) => {
+      const grossUnit = Number(group.quoteUnitPriceGross || 0);
+      const unitPriceNet = numericVat > 0 ? Number((grossUnit / (1 + numericVat / 100)).toFixed(2)) : grossUnit;
+      return {
+        name: group.quoteName,
+        unit: group.quoteUnit,
+        qty: group.totalQty,
+        unitPriceNet,
+        vatRate,
+        comment: group.treatedAreaText || undefined,
+      };
+    });
+    // For final invoices, subtract items already invoiced by normal invoices
+    if (hasActiveAdvanceInvoice) {
+      const normalInvoices = quoteInvoices.filter(
+        (inv) => inv.status !== 'storno' && (!inv.invoiceType || inv.invoiceType === 'normal')
+      );
+      const invoicedQtyByName = new Map<string, number>();
+      for (const inv of normalInvoices) {
+        for (const ii of inv.items) {
+          invoicedQtyByName.set(ii.name, (invoicedQtyByName.get(ii.name) || 0) + ii.qty);
+        }
+      }
+      const filtered = items
+        .map((item) => {
+          const alreadyInvoiced = invoicedQtyByName.get(item.name) || 0;
+          if (alreadyInvoiced >= item.qty) return null;
+          return { ...item, qty: item.qty - alreadyInvoiced };
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null);
+      setInvoiceItems(filtered);
+      invoiceItemsRef.current = filtered;
+    } else {
+      setInvoiceItems(items);
+      invoiceItemsRef.current = items;
+    }
     // Pre-fill comment from settings + quote number
     const defaultComment = settings.invoice?.defaultComment || '';
-    setInvoiceComment(
-      defaultComment
-        ? `${defaultComment} - ${quote.quoteNumber} - ${quote.quoteName}`
-        : `${quote.quoteNumber} - ${quote.quoteName}`
-    );
+    const quoteRef = `${quote.quoteNumber} - ${quote.quoteName}`;
+    const line1 = defaultComment
+      ? `${defaultComment}\nA számla a "${quoteRef}" árajánlat alapján készült`
+      : `A számla a "${quoteRef}" árajánlat alapján készült`;
+    const line2 = 'A nyújtott szolgáltatás a 2007. évi CXXVII. törvény (Áfa tv.) 85. § (1) bekezdés e) pontja értelmében mentes az adó alól.';
+    setInvoiceComment(`${line1}\n${line2}`);
     // Determine default invoice type
     if (hasActiveAdvanceInvoice) {
       setInvoiceType('final');
@@ -504,7 +535,7 @@ export function QuoteEditorPage() {
       // Always calculate totals from items
       const calculatedTotals = payload.items.reduce((acc, item) => {
         const net = item.qty * item.unitPriceNet;
-        const vat = (net * item.vatRate) / 100;
+        const vat = (net * (typeof item.vatRate === 'number' ? item.vatRate : 0)) / 100;
         return { net: acc.net + net, vat: acc.vat + vat, gross: acc.gross + net + vat };
       }, { net: 0, vat: 0, gross: 0 });
       const totalGross = Math.round((calculatedTotals.gross + Number.EPSILON) * 100) / 100;
@@ -548,7 +579,8 @@ export function QuoteEditorPage() {
         invoiceType,
         items: payload.items.map((item) => {
           const net = Number((item.qty * item.unitPriceNet).toFixed(2));
-          const vat = Number((net * (item.vatRate / 100)).toFixed(2));
+          const numVat = typeof item.vatRate === 'number' ? item.vatRate : 0;
+          const vat = Number((net * (numVat / 100)).toFixed(2));
           const gross = Number((net + vat).toFixed(2));
           return {
             name: item.name,
@@ -556,6 +588,7 @@ export function QuoteEditorPage() {
             qty: item.qty,
             unitPriceNet: item.unitPriceNet,
             vatRate: item.vatRate,
+            comment: item.comment,
             net,
             vat,
             gross,
@@ -708,16 +741,19 @@ export function QuoteEditorPage() {
                   <label className="text-sm font-medium text-gray-700">
                     {t.quotes.doctor}:
                   </label>
-                  <Select
-                    value={quote.doctorId || (settings.doctors.length > 0 ? settings.doctors[0].id : '')}
-                    onChange={(e) => handleDoctorChange(e.target.value)}
-                    options={settings.doctors.map((doc) => ({
-                      value: doc.id,
-                      label: doc.name || t.patients.unknownDoctor,
-                    }))}
-                    className="w-56"
-                    disabled={quote.quoteStatus !== 'draft'}
-                  />
+                  {quote.quoteStatus === 'draft' ? (
+                    <Select
+                      value={quote.doctorId || (settings.doctors.length > 0 ? settings.doctors[0].id : '')}
+                      onChange={(e) => handleDoctorChange(e.target.value)}
+                      options={settings.doctors.map((doc) => ({
+                        value: doc.id,
+                        label: doc.name || t.patients.unknownDoctor,
+                      }))}
+                      className="w-56"
+                    />
+                  ) : (
+                    <span className="text-sm font-semibold text-gray-900">{doctorName || '-'}</span>
+                  )}
                 </div>
 
                 {/* Expected Treatments, Language and Discount Preset */}
@@ -725,49 +761,60 @@ export function QuoteEditorPage() {
                   <label className="text-sm font-medium text-gray-700">
                     {t.quotes.expectedTreatments}
                   </label>
-                  <Select
-                    value={String(quote.expectedTreatments || 1)}
-                    onChange={(e) => handleExpectedTreatmentsChange(parseInt(e.target.value))}
-                    options={[
-                      ...Array.from({ length: 9 }, (_, i) => ({
-                        value: String(i + 1),
-                        label: `${i + 1} ${t.quotes.treatmentSession}`,
-                      })),
-                    ]}
-                    className="w-40"
-                    disabled={quote.quoteStatus !== 'draft'}
-                  />
+                  {quote.quoteStatus === 'draft' ? (
+                    <Select
+                      value={String(quote.expectedTreatments || 1)}
+                      onChange={(e) => handleExpectedTreatmentsChange(parseInt(e.target.value))}
+                      options={[
+                        ...Array.from({ length: 9 }, (_, i) => ({
+                          value: String(i + 1),
+                          label: `${i + 1} ${t.quotes.treatmentSession}`,
+                        })),
+                      ]}
+                      className="w-40"
+                    />
+                  ) : (
+                    <span className="text-sm font-semibold text-gray-900">{quote.expectedTreatments || 1} {t.quotes.treatmentSession}</span>
+                  )}
                   <label className="text-sm font-medium text-gray-700">{t.quotes.quoteLang}</label>
-                  <Select
-                    value={effectiveQuoteLang}
-                    onChange={(e) => editQuote(quote.quoteId, { quoteLang: e.target.value as 'hu' | 'en' | 'de' })}
-                    options={[
-                      { value: 'hu', label: 'Magyar' },
-                      { value: 'en', label: 'English' },
-                      { value: 'de', label: 'Deutsch' },
-                    ]}
-                    className="w-40"
-                    disabled={quote.quoteStatus !== 'draft'}
-                  />
+                  {quote.quoteStatus === 'draft' ? (
+                    <Select
+                      value={effectiveQuoteLang}
+                      onChange={(e) => editQuote(quote.quoteId, { quoteLang: e.target.value as 'hu' | 'en' | 'de' })}
+                      options={[
+                        { value: 'hu', label: 'Magyar' },
+                        { value: 'en', label: 'English' },
+                        { value: 'de', label: 'Deutsch' },
+                      ]}
+                      className="w-40"
+                    />
+                  ) : (
+                    <span className="text-sm font-semibold text-gray-900">{effectiveQuoteLang === 'hu' ? 'Magyar' : effectiveQuoteLang === 'en' ? 'English' : 'Deutsch'}</span>
+                  )}
                   <div className="flex items-center gap-3">
                     <label className="text-sm font-medium text-gray-700">
                       {t.quotes.generalDiscount}
                     </label>
-                    <Select
-                      value={lineDiscountPreset}
-                      onChange={(e) => handleLineDiscountPresetChange(e.target.value as LineDiscountPreset)}
-                      options={[
-                        { value: 'none', label: t.common.none },
-                        { value: '10', label: '10%' },
-                        { value: '20', label: '20%' },
-                        { value: '30', label: '30%' },
-                        { value: '40', label: '40%' },
-                        { value: '50', label: '50%' },
-                        { value: 'custom', label: t.common.custom },
-                      ]}
-                      className="w-28"
-                      disabled={quote.quoteStatus !== 'draft'}
-                    />
+                    {quote.quoteStatus === 'draft' ? (
+                      <Select
+                        value={lineDiscountPreset}
+                        onChange={(e) => handleLineDiscountPresetChange(e.target.value as LineDiscountPreset)}
+                        options={[
+                          { value: 'none', label: t.common.none },
+                          { value: '10', label: '10%' },
+                          { value: '20', label: '20%' },
+                          { value: '30', label: '30%' },
+                          { value: '40', label: '40%' },
+                          { value: '50', label: '50%' },
+                          { value: 'custom', label: t.common.custom },
+                        ]}
+                        className="w-28"
+                      />
+                    ) : (
+                      <span className="text-sm font-semibold text-gray-900">
+                        {lineDiscountPreset === 'none' ? t.common.none : lineDiscountPreset === 'custom' ? t.common.custom : `${lineDiscountPreset}%`}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -861,14 +908,16 @@ export function QuoteEditorPage() {
 
         {/* Summary */}
         <div className="space-y-4">
-          {/* Valid Until */}
+          {/* Status & Validity Card */}
           <Card>
-            <CardHeader>
-              <h3 className="font-semibold">{t.quotes.quoteValidity}</h3>
+            <CardHeader className="flex items-center justify-between">
+              <h3 className="font-semibold">{t.quotes.acceptanceCardTitle}</h3>
+              <QuoteProgressBar status={quote.quoteStatus} isDeleted={quote.isDeleted} />
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-bold text-gray-900">
+              <div className="flex items-center gap-2 mb-3 pb-3 border-b">
+                <span className="text-sm text-gray-500">{t.quotes.quoteValidity}:</span>
+                <span className="text-base font-semibold text-gray-900">
                   {formatDate(quote.validUntil)}
                 </span>
                 {(() => {
@@ -876,9 +925,10 @@ export function QuoteEditorPage() {
                   const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00');
                   const diff = Math.round((valid.getTime() - today.getTime()) / 86400000);
                   return diff > 0
-                    ? <span className="text-sm text-gray-500 ml-1">({diff} {t.quotes.quoteValidityDays})</span>
-                    : <span className="text-sm text-red-500 font-medium ml-1">({t.quotes.quoteValidityExpired})</span>;
+                    ? <span className="text-xs text-gray-500">({diff} {t.quotes.quoteValidityDays})</span>
+                    : <span className="text-xs text-red-500 font-medium">({t.quotes.quoteValidityExpired})</span>;
                 })()}
+                {quote.quoteStatus === 'draft' && (
                 <button
                   onClick={() => {
                     setValidUntilText(formatBirthDateForDisplay(quote.validUntil.slice(0, 10)));
@@ -891,17 +941,8 @@ export function QuoteEditorPage() {
                     <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                   </svg>
                 </button>
+                )}
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Acceptance Card */}
-          <Card>
-            <CardHeader className="flex items-center justify-between">
-              <h3 className="font-semibold">{t.quotes.acceptanceCardTitle}</h3>
-              <QuoteProgressBar status={quote.quoteStatus} isDeleted={quote.isDeleted} />
-            </CardHeader>
-            <CardContent>
               {quote.isDeleted ? (
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">{t.quotes.acceptanceDeleted}</span>
@@ -1045,9 +1086,17 @@ export function QuoteEditorPage() {
                 </div>
               ) : quote.quoteStatus === 'completed' ? (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">
-                    {remainingAmount <= 0 ? t.invoices.completedAndFullyInvoiced : t.quotes.acceptanceCompleted}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {remainingAmount <= 0 && (
+                      <svg className="h-5 w-5 text-green-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="1" x2="12" y2="23" />
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                      </svg>
+                    )}
+                    <span className="text-sm text-gray-600">
+                      {remainingAmount <= 0 ? t.invoices.completedAndFullyInvoiced : t.quotes.acceptanceCompleted}
+                    </span>
+                  </div>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -1066,24 +1115,26 @@ export function QuoteEditorPage() {
             </CardContent>
           </Card>
 
-          {/* Patient Info */}
-          <Card>
-            <CardHeader>
-              <h3 className="font-semibold">{t.quotes.patientCard}</h3>
-            </CardHeader>
-            <CardContent>
-              <p className="font-medium">{formatPatientName(patient.lastName, patient.firstName, patient.title)}</p>
-              <p className="text-sm text-gray-500">{formatDate(patient.birthDate, 'long')}</p>
-              {patient.phone && <p className="text-sm text-gray-500">{patient.phone}</p>}
-            </CardContent>
-          </Card>
-
           {/* Totals */}
           <Card>
             <CardHeader>
               <h3 className="font-semibold">{t.quotes.summary}</h3>
             </CardHeader>
             <CardContent className="space-y-3">
+              {(quote.expectedTreatments || 1) > 1 && (() => {
+                const sessions = Array.from({ length: quote.expectedTreatments || 1 }, (_, i) => i + 1);
+                return sessions.map((sessionNum) => {
+                  const sessionItems = quote.items.filter((item) => (item.treatmentSession || 1) === sessionNum);
+                  const sessionTotal = sessionItems.reduce((sum, item) => sum + item.quoteQty * item.quoteUnitPriceGross, 0);
+                  return (
+                    <div key={sessionNum} className="flex justify-between text-sm">
+                      <span className="text-gray-500">{t.quotes.treatmentNTotal.replace('{n}', String(sessionNum))}</span>
+                      <span className="font-medium">{formatCurrency(Math.round(sessionTotal))}</span>
+                    </div>
+                  );
+                });
+              })()}
+
               <div className="flex justify-between">
                 <span className="text-gray-600">{t.quotes.subtotal}</span>
                 <span className="font-medium">{formatCurrency(totals.subtotal)}</span>
@@ -1170,26 +1221,78 @@ export function QuoteEditorPage() {
           {/* Issued Invoices */}
           {quoteInvoices.length > 0 && (
             <Card>
-              <CardHeader>
+              <CardHeader className="flex items-center justify-between">
                 <h3 className="font-semibold">{t.invoices.issuedInvoices}</h3>
+                <button
+                  onClick={() => setInvoiceSortAsc((v) => !v)}
+                  className="p-1 text-gray-400 hover:text-dental-600 transition-colors"
+                  title={invoiceSortAsc ? 'Z → A' : 'A → Z'}
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    {invoiceSortAsc ? (
+                      <>
+                        <path d="M12 5v14" />
+                        <path d="M5 12l7 7 7-7" />
+                      </>
+                    ) : (
+                      <>
+                        <path d="M12 19V5" />
+                        <path d="M5 12l7-7 7 7" />
+                      </>
+                    )}
+                  </svg>
+                </button>
               </CardHeader>
               <CardContent className="space-y-2">
-                {quoteInvoices.map((inv) => (
-                  <div key={inv.id} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500">{formatDate(inv.createdAt)}</span>
-                      <Link to={`/invoices/${inv.id}`} className="text-dental-600 hover:text-dental-700 hover:underline font-medium">
-                        {inv.szamlazzInvoiceNumber || inv.id.slice(0, 8)}
-                      </Link>
-                      {inv.status === 'storno' && (
-                        <Badge variant="danger">{t.invoices.statusStorno}</Badge>
-                      )}
-                    </div>
-                    <span className={`font-medium ${inv.status === 'storno' ? 'line-through text-gray-400' : ''}`}>
-                      {formatCurrency(inv.totalGross, inv.currency)}
-                    </span>
-                  </div>
-                ))}
+                {(() => {
+                  const rows: { sortKey: string; node: React.ReactNode }[] = [];
+                  quoteInvoices.forEach((inv) => {
+                    const typeLabel = inv.invoiceType === 'advance' ? t.invoices.invoiceTypeAdvance
+                      : inv.invoiceType === 'final' ? t.invoices.invoiceTypeFinal
+                      : t.invoices.invoiceTypeNormal;
+                    rows.push({
+                      sortKey: inv.szamlazzInvoiceNumber || inv.id,
+                      node: (
+                        <div key={inv.id} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500">{formatDate(inv.createdAt)}</span>
+                            <Link to={`/invoices/${inv.id}`} className="text-dental-600 hover:text-dental-700 hover:underline font-medium">
+                              {inv.szamlazzInvoiceNumber || inv.id.slice(0, 8)}
+                            </Link>
+                            <span className="text-xs text-gray-400">[{typeLabel}]</span>
+                            {inv.status === 'storno' && (
+                              <svg className="h-4 w-4 text-red-500 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="15" y1="9" x2="9" y2="15" />
+                                <line x1="9" y1="9" x2="15" y2="15" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className={`font-medium ${inv.status === 'storno' ? 'text-gray-400 line-through' : ''}`}>
+                            {formatCurrency(inv.totalGross, inv.currency)}
+                          </span>
+                        </div>
+                      ),
+                    });
+                    if (inv.status === 'storno' && inv.stornoInvoiceNumber) {
+                      rows.push({
+                        sortKey: inv.stornoInvoiceNumber,
+                        node: (
+                          <div key={`${inv.id}-storno`} className="flex items-center justify-between text-sm py-1 border-b last:border-0 bg-red-50">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500">{formatDate(inv.createdAt)}</span>
+                              <span className="text-red-600 font-medium">{inv.stornoInvoiceNumber}</span>
+                              <span className="text-xs text-red-400">[{t.invoices.invoiceTypeStorno}]</span>
+                            </div>
+                            <span className="font-medium text-red-600">-{formatCurrency(inv.totalGross, inv.currency)}</span>
+                          </div>
+                        ),
+                      });
+                    }
+                  });
+                  rows.sort((a, b) => invoiceSortAsc ? naturalCompare(a.sortKey, b.sortKey) : naturalCompare(b.sortKey, a.sortKey));
+                  return rows.map((r) => r.node);
+                })()}
                 <div className="pt-2 space-y-1">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">{t.invoices.invoicedAmount}</span>
@@ -1350,51 +1453,52 @@ export function QuoteEditorPage() {
               value={invoiceForm.paymentMethod}
               onChange={(e) => setInvoiceForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
               options={[
-                { value: 'atutalas', label: t.invoices.paymentTransfer },
-                { value: 'keszpenz', label: t.invoices.paymentCash },
-                { value: 'bankkartya', label: t.invoices.paymentCard },
+                { value: 'átutalás', label: t.invoices.paymentTransfer },
+                { value: 'készpénz', label: t.invoices.paymentCash },
+                { value: 'bankkártya', label: t.invoices.paymentCard },
               ]}
             />
-            <Input
-              label={t.invoices.comment}
-              value={invoiceComment}
-              onChange={(e) => setInvoiceComment(e.target.value)}
-            />
-          </div>
-
-          {/* Invoice type selector */}
-          <div>
             <Select
               label={t.invoices.invoiceType}
               value={invoiceType}
-              onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
+              onChange={(e) => {
+                const newType = e.target.value as InvoiceType;
+                const prevType = invoiceType;
+                setInvoiceType(newType);
+                if (newType === 'advance') {
+                  invoiceItemsRef.current = invoiceItems;
+                  setInvoiceItems([]);
+                } else if (prevType === 'advance') {
+                  setInvoiceItems(invoiceItemsRef.current);
+                }
+              }}
               options={[
                 { value: 'normal', label: t.invoices.invoiceTypeNormal, disabled: hasActiveAdvanceInvoice },
-                { value: 'advance', label: t.invoices.invoiceTypeAdvance, disabled: (() => {
-                  const itemsGross = invoiceItems.reduce((sum, it) => {
-                    const net = it.qty * it.unitPriceNet;
-                    return sum + net + (net * it.vatRate / 100);
-                  }, 0);
-                  return itemsGross >= remainingAmount;
-                })() },
-                { value: 'final', label: t.invoices.invoiceTypeFinal },
+                { value: 'advance', label: t.invoices.invoiceTypeAdvance, disabled: hasActiveAdvanceInvoice },
+                { value: 'final', label: t.invoices.invoiceTypeFinal, disabled: !hasActiveAdvanceInvoice },
               ]}
-              className="w-64"
             />
           </div>
+          <TextArea
+            label={t.invoices.comment}
+            value={invoiceComment}
+            onChange={(e) => setInvoiceComment(e.target.value)}
+            rows={3}
+          />
 
           {/* Invoice items (read-only qty/price) */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold text-gray-700">{t.invoices.items}</h3>
             </div>
-            {invoiceItems.length === 0 ? (
+            {invoiceItems.length === 0 && invoiceType !== 'advance' ? (
               <p className="text-sm text-gray-400">{t.quotes.noItems}</p>
             ) : (
               <div className="space-y-2">
                 {invoiceItems.map((item, idx) => {
                   const net = Number((item.qty * item.unitPriceNet).toFixed(2));
-                  const vat = Number(((net * item.vatRate) / 100).toFixed(2));
+                  const numVat = typeof item.vatRate === 'number' ? item.vatRate : 0;
+                  const vat = Number(((net * numVat) / 100).toFixed(2));
                   const gross = Number((net + vat).toFixed(2));
                   return (
                     <div
@@ -1424,11 +1528,16 @@ export function QuoteEditorPage() {
                         </svg>
                       </div>
                       <span className="text-gray-500 w-6 text-center">{idx + 1}.</span>
-                      <span className="flex-1 font-medium">{item.name}</span>
+                      <span className="flex-1">
+                        <span className="font-medium">{item.name}</span>
+                        {item.comment && (
+                          <span className="block text-xs text-gray-400">{item.comment}</span>
+                        )}
+                      </span>
                       <span className="text-gray-600 w-10 text-center">{item.qty}</span>
                       <span className="text-gray-500">{item.unit}</span>
                       <span className="text-gray-600 w-24 text-right">{formatCurrency(item.unitPriceNet)}</span>
-                      <span className="text-gray-500 w-12 text-center">{item.vatRate}%</span>
+                      <span className="text-gray-500 w-12 text-center">{typeof item.vatRate === 'number' ? `${item.vatRate}%` : item.vatRate}</span>
                       <span className="w-24 text-right font-semibold">{formatCurrency(gross)}</span>
                       <button
                         type="button"
@@ -1451,7 +1560,8 @@ export function QuoteEditorPage() {
                       value={advanceAmount}
                       onChange={(e) => setAdvanceAmount(Number(e.target.value) || 0)}
                       min={0}
-                      max={remainingAmount}
+                      max={totals.total}
+                      step={1000}
                       className="w-28"
                     />
                     <span className="text-gray-500">{quote.currency}</span>
@@ -1480,7 +1590,8 @@ export function QuoteEditorPage() {
           {(() => {
             const itemsGross = invoiceItems.reduce((sum, it) => {
               const net = it.qty * it.unitPriceNet;
-              return sum + net + (net * it.vatRate / 100);
+              const vr = typeof it.vatRate === 'number' ? it.vatRate : 0;
+              return sum + net + (net * vr / 100);
             }, 0);
             let currentTotal = Math.round((itemsGross + Number.EPSILON) * 100) / 100;
             if (invoiceType === 'advance') {
@@ -1533,10 +1644,10 @@ export function QuoteEditorPage() {
             <Button variant="secondary" onClick={() => setInvoiceModalOpen(false)}>
               {t.common.cancel}
             </Button>
-            <Button variant="secondary" onClick={handlePreviewInvoice} disabled={invoiceSubmitting}>
+            <Button variant="secondary" onClick={handlePreviewInvoice} disabled={invoiceSubmitting || (invoiceType === 'advance' && (advanceAmount <= 0 || advanceAmount > totals.total))}>
               {t.invoices.preview}
             </Button>
-            <Button onClick={handleCreateInvoice} disabled={invoiceSubmitting}>
+            <Button onClick={handleCreateInvoice} disabled={invoiceSubmitting || (invoiceType === 'advance' && (advanceAmount <= 0 || advanceAmount > totals.total))}>
               {t.invoices.createInvoice}
             </Button>
           </div>
@@ -1657,7 +1768,6 @@ export function QuoteEditorPage() {
                         {(() => {
                           const evtAmount = formatCurrency(event.invoiceAmount || 0, event.invoiceCurrency as 'HUF' | 'EUR' | undefined);
                           const evtNumber = event.invoiceNumber || '';
-                          // Calculate remaining after this event
                           const evtIdx = quote.events.indexOf(event);
                           const invoicedUpToEvent = quote.events
                             .filter((e, i) => e.type === 'invoice_created' && i <= evtIdx)
@@ -1665,28 +1775,42 @@ export function QuoteEditorPage() {
                           const evtRemaining = Math.max(0, totals.total - invoicedUpToEvent);
                           const evtRemainingStr = formatCurrency(evtRemaining, event.invoiceCurrency as 'HUF' | 'EUR' | undefined);
                           const eType = event.invoiceType || 'normal';
+                          const linkedNumber = `__LINK__`;
                           let msg = '';
                           if (eType === 'advance') {
                             msg = t.invoices.eventAdvanceCreated
-                              .replace('{number}', evtNumber).replace('{amount}', evtAmount).replace('{remaining}', evtRemainingStr);
+                              .replace('{number}', linkedNumber).replace('{amount}', evtAmount).replace('{remaining}', evtRemainingStr);
                           } else if (eType === 'final') {
                             msg = t.invoices.eventFinalCreated
-                              .replace('{number}', evtNumber).replace('{amount}', evtAmount);
+                              .replace('{number}', linkedNumber).replace('{amount}', evtAmount);
                           } else if (evtRemaining <= 0) {
                             msg = t.invoices.eventInvoiceFull
-                              .replace('{number}', evtNumber).replace('{amount}', evtAmount);
+                              .replace('{number}', linkedNumber).replace('{amount}', evtAmount);
                           } else {
                             msg = t.invoices.eventInvoicePartial
-                              .replace('{number}', evtNumber).replace('{amount}', evtAmount).replace('{remaining}', evtRemainingStr);
+                              .replace('{number}', linkedNumber).replace('{amount}', evtAmount).replace('{remaining}', evtRemainingStr);
                           }
-                          return msg;
-                        })()}{' '}
-                        <Link
-                          to={`/invoices/${event.invoiceId}`}
-                          className="text-dental-600 hover:text-dental-700 hover:underline"
-                        >
-                          {event.invoiceNumber}
-                        </Link>
+                          const parts = msg.split('__LINK__');
+                          return (
+                            <>
+                              {parts[0]}
+                              <Link
+                                to={`/invoices/${event.invoiceId}`}
+                                className="text-dental-600 hover:text-dental-700 hover:underline"
+                              >
+                                {evtNumber}
+                              </Link>
+                              {parts[1]}
+                            </>
+                          );
+                        })()}
+                      </span>
+                    ) : event.type === 'invoice_storno' ? (
+                      <span className="font-medium text-red-600">
+                        {t.invoices.eventStornoCreated
+                          .replace('{stornoNumber}', event.stornoInvoiceNumber || '')
+                          .replace('{originalNumber}', event.originalInvoiceNumber || '')
+                          .replace('{amount}', formatCurrency(event.invoiceAmount || 0, event.invoiceCurrency as 'HUF' | 'EUR' | undefined))}
                       </span>
                     ) : (
                       <span className="font-medium">

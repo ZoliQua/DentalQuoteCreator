@@ -182,10 +182,10 @@ export function PatientDetailPage() {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
   const { t } = useSettings();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const hostRef = useRef<OdontogramHostHandle | null>(null);
   const { getPatient, editPatient, duplicatePatient, archivePatient, deletePatient } = usePatients();
-  const { getQuotesByPatient, createQuote, deleteQuote, duplicateQuote } = useQuotes();
+  const { getQuotesByPatient, createQuote, deleteQuote, duplicateQuote, addEventToQuote, getQuote, reopenTreatment } = useQuotes();
   const [deleteQuoteConfirm, setDeleteQuoteConfirm] = useState<string | null>(null);
   const [deletePatientConfirm, setDeletePatientConfirm] = useState(false);
   const [duplicatePatientConfirm, setDuplicatePatientConfirm] = useState(false);
@@ -304,6 +304,23 @@ export function PatientDetailPage() {
       saveInvoice(updated);
       refreshPatientInvoices();
       setStornoConfirmInvoiceId(null);
+      // Add storno event to quote event log
+      if (invoice.quoteId) {
+        addEventToQuote(invoice.quoteId, {
+          type: 'invoice_storno',
+          doctorName: user?.fullName || '',
+          invoiceId: invoice.id,
+          invoiceAmount: invoice.totalGross || 0,
+          invoiceCurrency: invoice.currency,
+          stornoInvoiceNumber: response.invoiceNumber || undefined,
+          originalInvoiceNumber: invoice.szamlazzInvoiceNumber || undefined,
+        });
+        // Revert completed quote back to started
+        const q = getQuote(invoice.quoteId);
+        if (q?.quoteStatus === 'completed') {
+          reopenTreatment(invoice.quoteId);
+        }
+      }
       // Auto-open storno PDF
       if (response.pdfBase64) {
         openInvoicePdf(response.pdfBase64);
@@ -809,7 +826,9 @@ export function PatientDetailPage() {
                     </Link>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <p className="font-semibold text-gray-900">{formatCurrency(invoice.totalGross, invoice.currency)}</p>
+                        <p className={`font-semibold ${invoice.status === 'storno' ? 'text-red-600' : 'text-gray-900'}`}>
+                          {invoice.status === 'storno' ? `-${formatCurrency(invoice.totalGross, invoice.currency)}` : formatCurrency(invoice.totalGross, invoice.currency)}
+                        </p>
                       </div>
                       <div className="flex items-center gap-1">
                         {invoice.pdfBase64 && (

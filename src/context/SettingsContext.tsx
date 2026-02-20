@@ -14,6 +14,7 @@ import {
 interface SettingsContextType {
   settings: Settings;
   updateSettings: (settings: Settings) => void;
+  refreshSettings: () => void;
   appLanguage: OdontogramLanguage;
   setAppLanguage: (language: OdontogramLanguage) => void;
   odontogramNumbering: OdontogramNumberingSystem;
@@ -40,6 +41,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     storage.saveSettings(syncedSettings);
     setSettings(syncedSettings);
   }, [appLanguage]);
+
+  const refreshSettings = useCallback(() => {
+    setSettings(storage.getSettings());
+  }, []);
 
   const setAppLanguage = useCallback((language: OdontogramLanguage) => {
     persistOdontogramLanguage(language);
@@ -83,6 +88,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       value={{
         settings,
         updateSettings,
+        refreshSettings,
         appLanguage,
         setAppLanguage,
         odontogramNumbering,

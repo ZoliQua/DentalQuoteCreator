@@ -6,7 +6,7 @@ export interface InvoiceItemSnapshot {
   unit: string;
   qty: number;
   unitPriceNet: number;
-  vatRate: number;
+  vatRate: number | string;
   net: number;
   vat: number;
   gross: number;

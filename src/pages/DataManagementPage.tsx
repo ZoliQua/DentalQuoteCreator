@@ -4,7 +4,6 @@ import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { useApp } from '../context/AppContext';
 import { useCatalog, usePriceLists } from '../hooks';
-import { defaultCatalog } from '../data/defaultCatalog';
 import { defaultSettings } from '../data/defaultSettings';
 import { defaultPriceLists, defaultPriceListCategories, defaultCatalogItems } from '../data/defaultPriceLists';
 import type { ExportData } from '../repositories/StorageRepository';
@@ -199,7 +198,7 @@ const createOdontogramStateFromQuotes = (quotes: Quote[]): OdontogramState => {
 };
 
 export function DataManagementPage() {
-  const { t } = useSettings();
+  const { t, refreshSettings } = useSettings();
   const {
     patients: patientsFromContext,
     quotes,
@@ -225,6 +224,7 @@ export function DataManagementPage() {
 
   const [importConfirm, setImportConfirm] = useState(false);
   const [clearAllConfirm, setClearAllConfirm] = useState(false);
+  const [mockLoadConfirm, setMockLoadConfirm] = useState(false);
   const [pendingImportData, setPendingImportData] = useState<string | null>(null);
   const [pendingCatalogImport, setPendingCatalogImport] = useState<{ format: 'json' | 'csv'; data: string } | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
@@ -338,11 +338,11 @@ export function DataManagementPage() {
       'started',
       'completed',
     ];
-    const doctorId = defaultSettings.doctors[0]?.id || 'doc-1';
+    const doctorId = defaultSettings.doctors[0]?.id || 'DOC0001';
     const doctorName = defaultSettings.doctors[0]?.name || 'Dr. Demo';
     const pickStatus = () => statuses[Math.floor(Math.random() * statuses.length)];
 
-    const activeCatalog = defaultCatalog.filter((item) => item.isActive);
+    const activeCatalog = defaultCatalogItems.filter((item) => item.isActive);
     const toQuoteItems = (quoteCatalog: CatalogItem[]): QuoteItem[] =>
       quoteCatalog.map((catalogItem) => {
         const itemName = catalogItem.catalogName.toLowerCase();
@@ -398,7 +398,7 @@ export function DataManagementPage() {
         const items = toQuoteItems(selectedCatalog);
 
         return {
-          quoteId: nanoid(),
+          quoteId: `${patient.patientId}q${String(quoteIndex + 1).padStart(3, '0')}`,
           quoteNumber: `MOCK-${String(patientIndex * 2 + quoteIndex + 1).padStart(4, '0')}`,
           patientId: patient.patientId,
           doctorId,
@@ -442,10 +442,18 @@ export function DataManagementPage() {
       version: '1.0.0',
       exportedAt: new Date().toISOString(),
       patients,
-      catalog: defaultCatalog,
+      catalog: defaultCatalogItems,
       quotes,
       settings: defaultSettings,
       dentalStatusSnapshots: [],
+      pricelists: defaultPriceLists,
+      pricelistCategories: defaultPriceListCategories,
+      doctors: defaultSettings.doctors.map((d) => ({
+        doctorId: d.id,
+        doctorName: d.name,
+        doctorNum: d.stampNumber || '',
+        doctorEESZTId: '',
+      })),
     };
 
     clearOdontogramStorageKeys();
@@ -457,6 +465,7 @@ export function DataManagementPage() {
         saveDailySnapshot(patientId, state, dateKey);
       });
       refreshData();
+      refreshSettings();
       setMessage({ type: 'success', text: t.dataManagement.databaseOnly.mockLoadSuccess });
     } else {
       setMessage({ type: 'error', text: t.dataManagement.importError });
@@ -479,6 +488,7 @@ export function DataManagementPage() {
     const success = importData(JSON.stringify(payload));
     if (success) {
       refreshData();
+      refreshSettings();
       setMessage({ type: 'success', text: t.dataManagement.databaseOnly.clearAllSuccess });
     } else {
       setMessage({ type: 'error', text: t.dataManagement.importError });
@@ -592,6 +602,7 @@ export function DataManagementPage() {
     const success = importData(pendingImportData);
     if (success) {
       refreshData();
+      refreshSettings();
       setMessage({ type: 'success', text: t.dataManagement.importSuccess });
     } else {
       setMessage({ type: 'error', text: t.dataManagement.importError });
@@ -1106,17 +1117,17 @@ export function DataManagementPage() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="rounded-lg border border-red-200 p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">
+                  <p className="text-sm font-semibold text-red-700">
                     {t.dataManagement.databaseOnly.mockLoadTitle}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-red-600">
                     {t.dataManagement.databaseOnly.mockLoadDescription}
                   </p>
                 </div>
-                <Button size="sm" onClick={handleLoadMockData}>
+                <Button size="sm" variant="danger" onClick={() => setMockLoadConfirm(true)}>
                   {t.dataManagement.databaseOnly.mockLoadButton}
                 </Button>
               </div>
@@ -1187,6 +1198,17 @@ export function DataManagementPage() {
         title={t.common.confirm}
         message={t.dataManagement.importWarning}
         confirmText={t.dataManagement.importButton}
+        cancelText={t.common.cancel}
+        variant="danger"
+      />
+
+      <ConfirmModal
+        isOpen={mockLoadConfirm}
+        onClose={() => setMockLoadConfirm(false)}
+        onConfirm={() => { setMockLoadConfirm(false); handleLoadMockData(); }}
+        title={t.common.confirm}
+        message={t.dataManagement.databaseOnly.mockLoadConfirm}
+        confirmText={t.dataManagement.databaseOnly.mockLoadButton}
         cancelText={t.common.cancel}
         variant="danger"
       />

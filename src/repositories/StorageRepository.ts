@@ -47,6 +47,13 @@ export interface StorageRepository {
   importAll(data: string): boolean;
 }
 
+export interface ExportDoctor {
+  doctorId: string;
+  doctorName: string;
+  doctorNum?: string;
+  doctorEESZTId?: string;
+}
+
 export interface ExportData {
   version: string;
   exportedAt: string;
@@ -57,4 +64,5 @@ export interface ExportData {
   dentalStatusSnapshots?: DentalStatusSnapshot[];
   pricelists?: PriceList[];
   pricelistCategories?: PriceListCategory[];
+  doctors?: ExportDoctor[];
 }

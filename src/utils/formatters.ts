@@ -198,3 +198,28 @@ export function parseBirthDateFromDisplay(displayValue: string): string {
 
   return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
+
+/**
+ * Natural string comparison that handles embedded numbers correctly.
+ * e.g. "MAC-2026-2" < "MAC-2026-10" (unlike plain localeCompare).
+ */
+export function naturalCompare(a: string, b: string): number {
+  const re = /(\d+)/g;
+  const aParts = a.split(re);
+  const bParts = b.split(re);
+  const len = Math.min(aParts.length, bParts.length);
+  for (let i = 0; i < len; i++) {
+    const ap = aParts[i];
+    const bp = bParts[i];
+    if (ap === bp) continue;
+    const an = Number(ap);
+    const bn = Number(bp);
+    if (!Number.isNaN(an) && !Number.isNaN(bn)) {
+      if (an !== bn) return an - bn;
+    } else {
+      const cmp = ap.localeCompare(bp, 'hu');
+      if (cmp !== 0) return cmp;
+    }
+  }
+  return aParts.length - bParts.length;
+}

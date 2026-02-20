@@ -43,7 +43,8 @@ export type DateFormat =
 export interface InvoiceSettings {
   invoiceType: 'paper' | 'electronic';
   defaultComment: string;
-  defaultVatRate: 0 | 27;
+  defaultVatRate: 0 | 27 | 'TAM';
+  defaultPaymentMethod: 'átutalás' | 'készpénz' | 'bankkártya';
 }
 
 export interface PatientSettings {
