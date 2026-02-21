@@ -566,6 +566,12 @@ export function PatientDetailPage() {
                 <p className="font-medium">{patient.birthPlace}</p>
               </div>
             )}
+            {patient.mothersName && (
+              <div>
+                <label className="text-sm text-gray-500">{t.patients.mothersName}</label>
+                <p className="font-medium">{patient.mothersName}</p>
+              </div>
+            )}
             <div>
               <label className="text-sm text-gray-500">{t.patients.sex}</label>
               <p className="font-medium">{t.patients[patient.sex]}</p>
@@ -575,6 +581,11 @@ export function PatientDetailPage() {
                 <label className="text-sm text-gray-500">{t.patients.insuranceNum}</label>
                 <div className="flex items-center gap-2">
                   <p className="font-medium">{patient.insuranceNum}</p>
+                  {patient.neakDocumentType != null && patient.neakDocumentType !== 1 && (
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                      {t.patients[`neakDocType${patient.neakDocumentType}` as keyof typeof t.patients] || t.patients.neakDocumentType}
+                    </span>
+                  )}
                   {patient.patientType?.toLowerCase().includes('neak') && (
                     <button
                       type="button"
@@ -622,6 +633,19 @@ export function PatientDetailPage() {
               <div>
                 <label className="text-sm text-gray-500">{t.patients.email}</label>
                 <p className="font-medium">{patient.email}</p>
+              </div>
+            )}
+            {(patient.patientVATName || patient.patientVATNumber) && (
+              <div>
+                <label className="text-sm text-gray-500">{t.patients.billingSection}</label>
+                {patient.patientVATName && <p className="font-medium">{patient.patientVATName}</p>}
+                {patient.patientVATNumber && <p className="text-sm text-gray-600">{t.patients.patientVATNumber}: {patient.patientVATNumber}</p>}
+              </div>
+            )}
+            {patient.patientDiscount != null && patient.patientDiscount > 0 && (
+              <div>
+                <label className="text-sm text-gray-500">{t.patients.patientDiscount}</label>
+                <p className="font-medium">{patient.patientDiscount}%</p>
               </div>
             )}
             {patient.patientType && (
@@ -1107,6 +1131,11 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
     street: '',
     patientType: '',
     notes: '',
+    mothersName: '',
+    neakDocumentType: 1,
+    patientVATName: '',
+    patientVATNumber: '',
+    patientDiscount: null,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
@@ -1131,6 +1160,11 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
       street: patient.street || '',
       patientType: patient.patientType || settings.patient.patientTypes[0] || '',
       notes: patient.notes || '',
+      mothersName: patient.mothersName || '',
+      neakDocumentType: patient.neakDocumentType ?? 1,
+      patientVATName: patient.patientVATName || '',
+      patientVATNumber: patient.patientVATNumber || '',
+      patientDiscount: patient.patientDiscount ?? null,
     });
     setBirthDateText(formatBirthDateForDisplay(patient.birthDate));
     setErrors({});
@@ -1152,7 +1186,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
     if (!formData.city?.trim()) nextErrors.city = t.validation.required;
     if (!formData.street?.trim()) nextErrors.street = t.validation.required;
 
-    const tajState = getTajValidationState(formData.insuranceNum || '');
+    const tajState = getTajValidationState(formData.insuranceNum || '', formData.neakDocumentType);
     if (tajState !== 'empty' && tajState !== 'valid') {
       nextErrors.insuranceNum = t.validation.invalidInsuranceNum;
     }
@@ -1166,9 +1200,9 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
       return;
     }
     onSubmit(formData);
-    // Fire-and-forget NEAK auto-check
+    // Fire-and-forget NEAK auto-check (only when document type is TAJ)
     const tajDigits = formData.insuranceNum?.replace(/-/g, '') || '';
-    if (formData.patientType?.toLowerCase().includes('neak') && tajDigits.length === 9) {
+    if (formData.neakDocumentType === 1 && formData.patientType?.toLowerCase().includes('neak') && tajDigits.length === 9) {
       const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       checkJogviszony(tajDigits, date).then(result => {
         saveCheck({ id: nanoid(), patientId: patient.patientId, taj: tajDigits, checkedAt: new Date().toISOString(), date, result });
@@ -1257,7 +1291,29 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
           </div>
         </div>
 
-        {/* Row 2: Birth Date, Birth Place */}
+        {/* Row 2: Mother's Name, Sex */}
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label={t.patients.mothersName}
+            value={formData.mothersName || ''}
+            onChange={(e) => setFormData({ ...formData, mothersName: e.target.value })}
+          />
+          <Select
+            label={t.patients.sex}
+            value={formData.sex}
+            onChange={(e) =>
+              setFormData({ ...formData, sex: e.target.value as PatientFormData['sex'] })
+            }
+            options={[
+              { value: 'male', label: t.patients.male },
+              { value: 'female', label: t.patients.female },
+              { value: 'other', label: t.patients.other },
+            ]}
+            required
+          />
+        </div>
+
+        {/* Row 3: Birth Date, Birth Place */}
         <div className="grid grid-cols-2 gap-4">
           <div className="w-full">
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1304,20 +1360,25 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
           />
         </div>
 
-        {/* Row 3: Sex, TAJ */}
+        {/* Row 4: NEAK Document Type, TAJ */}
         <div className="grid grid-cols-2 gap-4">
           <Select
-            label={t.patients.sex}
-            value={formData.sex}
+            label={t.patients.neakDocumentType}
+            value={String(formData.neakDocumentType ?? 1)}
             onChange={(e) =>
-              setFormData({ ...formData, sex: e.target.value as PatientFormData['sex'] })
+              setFormData({ ...formData, neakDocumentType: Number(e.target.value) })
             }
             options={[
-              { value: 'male', label: t.patients.male },
-              { value: 'female', label: t.patients.female },
-              { value: 'other', label: t.patients.other },
+              { value: '0', label: t.patients.neakDocType0 },
+              { value: '1', label: t.patients.neakDocType1 },
+              { value: '2', label: t.patients.neakDocType2 },
+              { value: '3', label: t.patients.neakDocType3 },
+              { value: '5', label: t.patients.neakDocType5 },
+              { value: '6', label: t.patients.neakDocType6 },
+              { value: '7', label: t.patients.neakDocType7 },
+              { value: '8', label: t.patients.neakDocType8 },
+              { value: '9', label: t.patients.neakDocType9 },
             ]}
-            required
           />
           <div className="w-full">
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1327,13 +1388,13 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
               <input
                 value={formData.insuranceNum || ''}
                 onChange={(e) =>
-                  setFormData({ ...formData, insuranceNum: formatInsuranceNum(e.target.value) })
+                  setFormData({ ...formData, insuranceNum: formData.neakDocumentType === 1 ? formatInsuranceNum(e.target.value) : e.target.value })
                 }
-                placeholder={t.patients.insuranceNumPlaceholder}
-                maxLength={11}
+                placeholder={formData.neakDocumentType === 1 ? t.patients.insuranceNumPlaceholder : ''}
+                maxLength={formData.neakDocumentType === 1 ? 11 : undefined}
                 className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
                   (() => {
-                    const state = getTajValidationState(formData.insuranceNum || '');
+                    const state = getTajValidationState(formData.insuranceNum || '', formData.neakDocumentType);
                     if (state === 'empty') return 'border-gray-300 focus:ring-dental-500';
                     if (state === 'incomplete') return 'border-yellow-300 bg-yellow-50 focus:ring-yellow-500';
                     if (state === 'valid') return 'border-green-500 bg-green-50 focus:ring-green-500';
@@ -1341,8 +1402,8 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
                   })()
                 }`}
               />
-              {formData.patientType?.toLowerCase().includes('neak') &&
-                getTajValidationState(formData.insuranceNum || '') === 'valid' && (
+              {formData.neakDocumentType === 1 && formData.patientType?.toLowerCase().includes('neak') &&
+                getTajValidationState(formData.insuranceNum || '', formData.neakDocumentType) === 'valid' && (
                 <button
                   type="button"
                   onClick={() => setNeakModalOpen(true)}
@@ -1356,10 +1417,10 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
                 </button>
               )}
             </div>
-            {getTajValidationState(formData.insuranceNum || '') === 'invalid' && (
+            {formData.neakDocumentType === 1 && getTajValidationState(formData.insuranceNum || '', formData.neakDocumentType) === 'invalid' && (
               <p className="mt-1 text-sm text-red-600">{t.validation.invalidInsuranceNum}</p>
             )}
-            {getTajValidationState(formData.insuranceNum || '') === 'valid' && (
+            {getTajValidationState(formData.insuranceNum || '', formData.neakDocumentType) === 'valid' && (
               <p className="mt-1 text-sm text-green-600">{t.patients.tajValid}</p>
             )}
             {errors.insuranceNum && (
@@ -1455,15 +1516,54 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
           </div>
         </div>
 
-        {/* Patient Type */}
-        {settings.patient.patientTypes.length > 0 && (
-          <Select
-            label={t.patients.patientType}
-            value={formData.patientType || ''}
-            onChange={(e) => setFormData({ ...formData, patientType: e.target.value })}
-            options={settings.patient.patientTypes.map((pt) => ({ value: pt, label: pt }))}
-          />
-        )}
+        {/* Billing Section */}
+        <div className="border-t pt-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.billingSection}</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label={t.patients.patientVATName}
+              value={formData.patientVATName || ''}
+              onChange={(e) => setFormData({ ...formData, patientVATName: e.target.value })}
+            />
+            <Input
+              label={t.patients.patientVATNumber}
+              value={formData.patientVATNumber || ''}
+              onChange={(e) => setFormData({ ...formData, patientVATNumber: e.target.value })}
+            />
+          </div>
+        </div>
+
+        {/* Patient Characteristics Section */}
+        <div className="border-t pt-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.characteristicsSection}</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label={t.patients.patientDiscount}
+              value={formData.patientDiscount != null ? String(formData.patientDiscount) : ''}
+              onChange={(e) =>
+                setFormData({ ...formData, patientDiscount: e.target.value ? Number(e.target.value) : null })
+              }
+              options={[
+                { value: '', label: t.patients.noDiscount },
+                { value: '5', label: '5%' },
+                { value: '10', label: '10%' },
+                { value: '15', label: '15%' },
+                { value: '20', label: '20%' },
+                { value: '25', label: '25%' },
+                { value: '30', label: '30%' },
+                { value: '50', label: '50%' },
+              ]}
+            />
+            {settings.patient.patientTypes.length > 0 && (
+              <Select
+                label={t.patients.patientType}
+                value={formData.patientType || ''}
+                onChange={(e) => setFormData({ ...formData, patientType: e.target.value })}
+                options={settings.patient.patientTypes.map((pt) => ({ value: pt, label: pt }))}
+              />
+            )}
+          </div>
+        </div>
 
         {/* Notes */}
         <TextArea

@@ -1105,6 +1105,10 @@ server.get('/patients/:patientId', async (request, reply) => {
   return patient;
 });
 
+server.get('/neak-document-types', async () => {
+  return prisma.neakDocumentType.findMany();
+});
+
 server.post('/patients', async (request, reply) => {
   const user = await requirePermission(request, reply, 'patients.create');
   if (!user) return;
@@ -1133,6 +1137,11 @@ server.post('/patients', async (request, reply) => {
       street: body.street ? String(body.street) : null,
       patientType: body.patientType ? String(body.patientType) : null,
       notes: body.notes ? String(body.notes) : null,
+      mothersName: body.mothersName ? String(body.mothersName) : null,
+      neakDocumentType: body.neakDocumentType !== undefined ? Number(body.neakDocumentType) : 1,
+      patientVATName: body.patientVATName ? String(body.patientVATName) : null,
+      patientVATNumber: body.patientVATNumber ? String(body.patientVATNumber) : null,
+      patientDiscount: body.patientDiscount != null ? Number(body.patientDiscount) : null,
       createdAt: body.createdAt ? toDate(String(body.createdAt)) : new Date(),
       updatedAt: body.updatedAt ? toDate(String(body.updatedAt)) : new Date(),
       isArchived: Boolean(body.isArchived),
@@ -1172,6 +1181,11 @@ server.patch('/patients/:patientId', async (request, reply) => {
     street: body.street === undefined ? undefined : (body.street ? String(body.street) : null),
     patientType: body.patientType === undefined ? undefined : (body.patientType ? String(body.patientType) : null),
     notes: body.notes === undefined ? undefined : (body.notes ? String(body.notes) : null),
+    mothersName: body.mothersName === undefined ? undefined : (body.mothersName ? String(body.mothersName) : null),
+    neakDocumentType: body.neakDocumentType === undefined ? undefined : Number(body.neakDocumentType),
+    patientVATName: body.patientVATName === undefined ? undefined : (body.patientVATName ? String(body.patientVATName) : null),
+    patientVATNumber: body.patientVATNumber === undefined ? undefined : (body.patientVATNumber ? String(body.patientVATNumber) : null),
+    patientDiscount: body.patientDiscount === undefined ? undefined : (body.patientDiscount != null ? Number(body.patientDiscount) : null),
     isArchived: body.isArchived === undefined ? undefined : Boolean(body.isArchived),
     updatedAt: body.updatedAt ? toDate(String(body.updatedAt)) : new Date(),
   };
@@ -2264,6 +2278,11 @@ server.post('/data/import', async (request, reply) => {
           street: rawPatient.street ? String(rawPatient.street) : null,
           patientType: rawPatient.patientType ? String(rawPatient.patientType) : null,
           notes: rawPatient.notes ? String(rawPatient.notes) : null,
+          mothersName: rawPatient.mothersName ? String(rawPatient.mothersName) : null,
+          neakDocumentType: rawPatient.neakDocumentType !== undefined ? Number(rawPatient.neakDocumentType) : 1,
+          patientVATName: rawPatient.patientVATName ? String(rawPatient.patientVATName) : null,
+          patientVATNumber: rawPatient.patientVATNumber ? String(rawPatient.patientVATNumber) : null,
+          patientDiscount: rawPatient.patientDiscount != null ? Number(rawPatient.patientDiscount) : null,
           createdAt: rawPatient.createdAt ? toDate(String(rawPatient.createdAt)) : new Date(),
           updatedAt: rawPatient.updatedAt ? toDate(String(rawPatient.updatedAt)) : new Date(),
           isArchived: Boolean(rawPatient.isArchived),

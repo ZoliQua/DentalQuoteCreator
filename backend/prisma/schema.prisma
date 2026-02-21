@@ -123,6 +123,11 @@ model Patient {
   updatedAt        DateTime @updatedAt
   isArchived       Boolean  @default(false)
   createdByUserId  String?
+  mothersName          String?
+  neakDocumentType     Int      @default(1)
+  patientVATName       String?
+  patientVATNumber     String?
+  patientDiscount      Int?
 
   quotes    Quote[]
   snapshots DentalStatusSnapshot[]
@@ -299,4 +304,10 @@ model OdontogramTimeline {
 
   @@index([patientId])
   @@index([updatedAt])
+}
+
+model NeakDocumentType {
+  neakDocumentId       String @id
+  neakDocumentTypeCode Int
+  neakDocumentDetails  String
 }

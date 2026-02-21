@@ -248,6 +248,9 @@ export function DataManagementPage() {
         phone: '+36 30 123 4567', email: 'andras.teszt@gmail.com',
         country: 'Magyarország', zipCode: '9700', city: 'Szombathely',
         street: 'Teszt Elek utca 28.', patientType: 'NEAK páciens',
+        mothersName: 'Kiss Mária', neakDocumentType: 1,
+        patientVATName: '', patientVATNumber: '',
+        patientDiscount: 10 as number | null,
       },
       {
         title: '',
@@ -257,6 +260,9 @@ export function DataManagementPage() {
         phone: '+36 20 234 5678', email: 'anett.teszt@example.com',
         country: 'Magyarország', zipCode: '9700', city: 'Szombathely',
         street: 'Teszt Anett 28.', patientType: 'NEAK páciens',
+        mothersName: 'Nagy Erzsébet', neakDocumentType: 1,
+        patientVATName: 'Tóth és Társa Kft.', patientVATNumber: '12345678-1-18',
+        patientDiscount: null as number | null,
       },
       {
         title: '',
@@ -266,6 +272,9 @@ export function DataManagementPage() {
         phone: '+36 70 345 6789', email: 'toth.mark@example.com',
         country: 'Magyarország', zipCode: '4024', city: 'Debrecen',
         street: 'Piac u. 45.', patientType: 'Privát páciens',
+        mothersName: 'Tóth Katalin', neakDocumentType: 1,
+        patientVATName: '', patientVATNumber: '',
+        patientDiscount: 5 as number | null,
       },
       {
         title: '',
@@ -275,6 +284,9 @@ export function DataManagementPage() {
         phone: '+36 30 456 7890', email: 'illes.teszt@yahoo.com',
         country: 'Magyarország', zipCode: '6720', city: 'Szeged',
         street: 'Tisza Lajos krt. 67.', patientType: 'NEAK páciens',
+        mothersName: 'Szabó Ilona', neakDocumentType: 1,
+        patientVATName: '', patientVATNumber: '',
+        patientDiscount: null as number | null,
       },
       {
         title: '',
@@ -284,6 +296,9 @@ export function DataManagementPage() {
         phone: '+36 20 567 8901', email: 'kiss.reka@example.com',
         country: 'Magyarország', zipCode: '7621', city: 'Pécs',
         street: 'Király u. 23.', patientType: 'NEAK páciens',
+        mothersName: 'Horváth Judit', neakDocumentType: 1,
+        patientVATName: '', patientVATNumber: '',
+        patientDiscount: null as number | null,
       },
       {
         title: '',
@@ -293,6 +308,9 @@ export function DataManagementPage() {
         phone: '+36 70 678 9012', email: 'farkas.lilla@example.com',
         country: 'Magyarország', zipCode: '8200', city: 'Veszprém',
         street: 'Óváros tér 4.', patientType: 'NEAK páciens',
+        mothersName: 'Varga Anna', neakDocumentType: 1,
+        patientVATName: '', patientVATNumber: '',
+        patientDiscount: null as number | null,
       },
     ];
 
@@ -324,6 +342,11 @@ export function DataManagementPage() {
       street: entry.street,
       patientType: entry.patientType,
       notes: '',
+      mothersName: entry.mothersName,
+      neakDocumentType: entry.neakDocumentType,
+      patientVATName: entry.patientVATName,
+      patientVATNumber: entry.patientVATNumber,
+      patientDiscount: entry.patientDiscount,
       createdAt: now,
       updatedAt: now,
       isArchived: false,

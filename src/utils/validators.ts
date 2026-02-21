@@ -51,8 +51,11 @@ export function validateInsuranceNum(insuranceNum: string): boolean {
  */
 export type TajValidationState = 'empty' | 'incomplete' | 'invalid' | 'valid';
 
-export function getTajValidationState(insuranceNum: string): TajValidationState {
+export function getTajValidationState(insuranceNum: string, neakDocumentType?: number): TajValidationState {
   if (!insuranceNum || insuranceNum.trim() === '') return 'empty';
+
+  // When NEAK document type is not TAJ (1), accept any non-empty value
+  if (neakDocumentType !== undefined && neakDocumentType !== 1) return 'valid';
 
   // Remove dashes for length check
   const digitsOnly = insuranceNum.replace(/-/g, '');

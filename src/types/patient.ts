@@ -16,6 +16,11 @@ export interface Patient {
   street?: string;
   patientType?: string;
   notes?: string;
+  mothersName?: string;
+  neakDocumentType?: number;
+  patientVATName?: string;
+  patientVATNumber?: string;
+  patientDiscount?: number | null;
   createdAt: string;
   updatedAt: string;
   isArchived: boolean;
