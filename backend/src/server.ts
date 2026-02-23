@@ -38,20 +38,23 @@ const ALL_PERMISSION_KEYS = [
   'quotes.create',
   'quotes.delete',
   'invoices.view',
+  'invoices.view.detail',
   'invoices.issue',
   'invoices.storno',
-  'catalog.view',
-  'catalog.create',
-  'catalog.update',
-  'catalog.delete',
   'pricelist.view',
   'pricelist.create',
   'pricelist.update',
   'pricelist.delete',
-  'pricelist.category.create',
-  'pricelist.category.delete',
   'pricelist.restore',
+  'pricelist.category.create',
+  'pricelist.category.update',
+  'pricelist.category.delete',
   'pricelist.category.restore',
+  'catalog.create',
+  'catalog.update',
+  'catalog.deactivate',
+  'catalog.delete',
+  'catalog.restore',
   'patients.update',
   'patients.create',
   'patients.delete',
@@ -178,8 +181,8 @@ const ROLE_PERMISSION_PRESETS: Record<UserRole, readonly PermissionKey[]> = {
   admin: [...ALL_PERMISSION_KEYS],
   beta_tester: [...ALL_PERMISSION_KEYS],
   receptionist: ALL_PERMISSION_KEYS.filter(k => !['admin.users.manage', 'admin.permissions.manage', 'lab.view', 'data.browse'].includes(k)),
-  doctor: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'pricelist.view', 'catalog.view'],
-  assistant: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'patients.delete', 'pricelist.view', 'catalog.view'],
+  doctor: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.view.detail', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'pricelist.view', 'catalog.deactivate'],
+  assistant: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.view.detail', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'patients.delete', 'pricelist.view', 'catalog.deactivate'],
   user: [],
 };
 
@@ -236,7 +239,7 @@ declare module 'fastify' {
 }
 
 const SESSION_TTL_DAYS = Number(process.env.AUTH_SESSION_TTL_DAYS || 14);
-const PUBLIC_ROUTE_PATTERNS = new Set(['/health', '/db-health', '/auth/login']);
+const PUBLIC_ROUTE_PATTERNS = new Set(['/health', '/db-health', '/auth/login', '/api/szamlazz/query-taxpayer']);
 
 const toClientPermissions = (permissions: PermissionMap) => {
   return ALL_PERMISSION_KEYS.map((key) => ({ key, isAllowed: permissions[key] }));
@@ -1141,6 +1144,7 @@ server.post('/patients', async (request, reply) => {
       neakDocumentType: body.neakDocumentType !== undefined ? Number(body.neakDocumentType) : 1,
       patientVATName: body.patientVATName ? String(body.patientVATName) : null,
       patientVATNumber: body.patientVATNumber ? String(body.patientVATNumber) : null,
+      patientVATAddress: body.patientVATAddress ? String(body.patientVATAddress) : null,
       patientDiscount: body.patientDiscount != null ? Number(body.patientDiscount) : null,
       createdAt: body.createdAt ? toDate(String(body.createdAt)) : new Date(),
       updatedAt: body.updatedAt ? toDate(String(body.updatedAt)) : new Date(),
@@ -1185,6 +1189,7 @@ server.patch('/patients/:patientId', async (request, reply) => {
     neakDocumentType: body.neakDocumentType === undefined ? undefined : Number(body.neakDocumentType),
     patientVATName: body.patientVATName === undefined ? undefined : (body.patientVATName ? String(body.patientVATName) : null),
     patientVATNumber: body.patientVATNumber === undefined ? undefined : (body.patientVATNumber ? String(body.patientVATNumber) : null),
+    patientVATAddress: body.patientVATAddress === undefined ? undefined : (body.patientVATAddress ? String(body.patientVATAddress) : null),
     patientDiscount: body.patientDiscount === undefined ? undefined : (body.patientDiscount != null ? Number(body.patientDiscount) : null),
     isArchived: body.isArchived === undefined ? undefined : Boolean(body.isArchived),
     updatedAt: body.updatedAt ? toDate(String(body.updatedAt)) : new Date(),
@@ -1321,11 +1326,41 @@ server.post('/catalog', async (request, reply) => {
 });
 
 server.patch('/catalog/:catalogItemId', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'catalog.update');
-  if (!user) return;
+  const currentUser = await requireAuth(request, reply);
+  if (!currentUser) return;
+  const canUpdate = hasPermission(currentUser, 'catalog.update');
+  const canDeactivate = hasPermission(currentUser, 'catalog.deactivate');
+  const canRestore = hasPermission(currentUser, 'catalog.restore');
+  if (!canUpdate && !canDeactivate && !canRestore) {
+    return reply.code(403).send({ message: 'Nincs jogosultság ehhez a művelethez.' });
+  }
 
   const { catalogItemId } = request.params as { catalogItemId: string };
   const body = request.body as JsonRecord;
+
+  // If user has no catalog.update, restrict to allowed fields only
+  if (!canUpdate) {
+    const data: Record<string, unknown> = {};
+    if (canDeactivate && body.isActive !== undefined) {
+      data.isActive = Boolean(body.isActive);
+    }
+    if (canRestore && body.isDeleted !== undefined) {
+      data.isDeleted = Boolean(body.isDeleted);
+    }
+    if (Object.keys(data).length === 0) {
+      return reply.code(403).send({ message: 'Nincs jogosultság ehhez a művelethez.' });
+    }
+    try {
+      const updated = await prisma.priceListCatalogItem.update({
+        where: { catalogItemId },
+        data,
+      });
+      return mapCatalogItem(updated as unknown as Record<string, unknown>);
+    } catch {
+      return reply.code(404).send({ message: 'Catalog item not found' });
+    }
+  }
+
   const nameHuVal = body.catalogNameHu !== undefined ? String(body.catalogNameHu) : (body.catalogName !== undefined ? String(body.catalogName) : undefined);
   try {
     const updated = await prisma.priceListCatalogItem.update({
@@ -1357,6 +1392,7 @@ server.patch('/catalog/:catalogItemId', async (request, reply) => {
         allowedTeeth: body.allowedTeeth === undefined ? undefined : (Array.isArray(body.allowedTeeth) ? (body.allowedTeeth as number[]).map(Number) : []),
         milkToothOnly: body.milkToothOnly === undefined ? undefined : Boolean(body.milkToothOnly),
         isActive: body.isActive === undefined ? undefined : Boolean(body.isActive),
+        isDeleted: body.isDeleted === undefined ? undefined : Boolean(body.isDeleted),
       },
     });
     return mapCatalogItem(updated as unknown as Record<string, unknown>);
@@ -1371,7 +1407,7 @@ server.delete('/catalog/:catalogItemId', async (request, reply) => {
 
   const { catalogItemId } = request.params as { catalogItemId: string };
   try {
-    await prisma.priceListCatalogItem.delete({ where: { catalogItemId } });
+    await prisma.priceListCatalogItem.update({ where: { catalogItemId }, data: { isDeleted: true } });
     return { status: 'ok' };
   } catch {
     return reply.code(404).send({ message: 'Catalog item not found' });
@@ -1554,11 +1590,36 @@ server.post('/pricelists', async (request, reply) => {
 });
 
 server.patch('/pricelists/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'pricelist.update');
-  if (!user) return;
+  const currentUser = await requireAuth(request, reply);
+  if (!currentUser) return;
+  const canUpdate = hasPermission(currentUser, 'pricelist.update');
+  const canRestore = hasPermission(currentUser, 'pricelist.restore');
+  if (!canUpdate && !canRestore) {
+    return reply.code(403).send({ message: 'Nincs jogosultság ehhez a művelethez.' });
+  }
 
   const { id } = request.params as { id: string };
   const body = request.body as JsonRecord;
+
+  // If user has no pricelist.update, restrict to allowed fields only
+  if (!canUpdate) {
+    const data: Record<string, unknown> = {};
+    if (canRestore && body.isDeleted !== undefined) {
+      data.isDeleted = Boolean(body.isDeleted);
+    }
+    if (Object.keys(data).length === 0) {
+      return reply.code(403).send({ message: 'Nincs jogosultság ehhez a művelethez.' });
+    }
+    try {
+      return await prisma.priceList.update({
+        where: { priceListId: id },
+        data,
+      });
+    } catch {
+      return reply.code(404).send({ message: 'Price list not found' });
+    }
+  }
+
   try {
     return await prisma.priceList.update({
       where: { priceListId: id },
@@ -1605,7 +1666,7 @@ server.get('/pricelists/:id/categories', async (request, reply) => {
 });
 
 server.get('/pricelists/:id/items', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'catalog.view');
+  const user = await requirePermission(request, reply, 'pricelist.view');
   if (!user) return;
 
   const { id } = request.params as { id: string };
@@ -1654,11 +1715,36 @@ server.post('/pricelist-categories', async (request, reply) => {
 });
 
 server.patch('/pricelist-categories/:id', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'pricelist.update');
-  if (!user) return;
+  const currentUser = await requireAuth(request, reply);
+  if (!currentUser) return;
+  const canUpdate = hasPermission(currentUser, 'pricelist.category.update');
+  const canRestore = hasPermission(currentUser, 'pricelist.category.restore');
+  if (!canUpdate && !canRestore) {
+    return reply.code(403).send({ message: 'Nincs jogosultság ehhez a művelethez.' });
+  }
 
   const { id } = request.params as { id: string };
   const body = request.body as JsonRecord;
+
+  // If user has no category.update, restrict to allowed fields only
+  if (!canUpdate) {
+    const data: Record<string, unknown> = {};
+    if (canRestore && body.isDeleted !== undefined) {
+      data.isDeleted = Boolean(body.isDeleted);
+    }
+    if (Object.keys(data).length === 0) {
+      return reply.code(403).send({ message: 'Nincs jogosultság ehhez a művelethez.' });
+    }
+    try {
+      return await prisma.priceListCategory.update({
+        where: { catalogCategoryId: id },
+        data,
+      });
+    } catch {
+      return reply.code(404).send({ message: 'Category not found' });
+    }
+  }
+
   try {
     return await prisma.priceListCategory.update({
       where: { catalogCategoryId: id },
@@ -1912,14 +1998,23 @@ server.put('/dental-status-snapshots/:snapshotId', async (request, reply) => {
 });
 
 // Invoices
-server.get('/invoices', async () => {
+server.get('/invoices', async (request, reply) => {
+  const currentUser = await requireAuth(request, reply);
+  if (!currentUser) return;
+  if (!hasPermission(currentUser, 'invoices.view') && !hasPermission(currentUser, 'invoices.view.detail')) {
+    return reply.code(403).send({ message: 'Nincs jogosultság ehhez a művelethez.' });
+  }
   const rows = await prisma.invoice.findMany({ orderBy: { createdAt: 'desc' } });
   return rows.map((row) => row.data);
 });
 
 server.put('/invoices/:invoiceId', async (request, reply) => {
-  const user = await requirePermission(request, reply, 'invoices.issue');
-  if (!user) return;
+  const currentUser = await requireAuth(request, reply);
+  if (!currentUser) return;
+  if (!hasPermission(currentUser, 'invoices.issue') && !hasPermission(currentUser, 'invoices.storno')) {
+    return reply.code(403).send({ message: 'Nincs jogosultság ehhez a művelethez.' });
+  }
+  const user = currentUser;
 
   const { invoiceId } = request.params as { invoiceId: string };
   const body = request.body as JsonRecord;
@@ -2282,6 +2377,7 @@ server.post('/data/import', async (request, reply) => {
           neakDocumentType: rawPatient.neakDocumentType !== undefined ? Number(rawPatient.neakDocumentType) : 1,
           patientVATName: rawPatient.patientVATName ? String(rawPatient.patientVATName) : null,
           patientVATNumber: rawPatient.patientVATNumber ? String(rawPatient.patientVATNumber) : null,
+          patientVATAddress: rawPatient.patientVATAddress ? String(rawPatient.patientVATAddress) : null,
           patientDiscount: rawPatient.patientDiscount != null ? Number(rawPatient.patientDiscount) : null,
           createdAt: rawPatient.createdAt ? toDate(String(rawPatient.createdAt)) : new Date(),
           updatedAt: rawPatient.updatedAt ? toDate(String(rawPatient.updatedAt)) : new Date(),
@@ -2716,7 +2812,7 @@ const buildInvoiceXml = (params: {
     <cim>${escapeXml(buyer.address || '')}</cim>
     <email>${escapeXml(buyer.email || '')}</email>
     <sendEmail>false</sendEmail>
-    <adoszam></adoszam>
+    <adoszam>${escapeXml(buyer.taxNumber || '')}</adoszam>
     <postazasiNev></postazasiNev>
     <postazasiIrsz></postazasiIrsz>
     <postazasiTelepules></postazasiTelepules>
@@ -2934,6 +3030,71 @@ server.post('/api/szamlazz/storno-invoice', async (request, reply) => {
 });
 
 server.get('/api/szamlazz/health', async () => ({ ok: true, mode: INVOICE_MODE }));
+
+server.post('/api/szamlazz/query-taxpayer', async (request, reply) => {
+  const body = request.body as JsonRecord;
+  const taxNumber = String(body.taxNumber || '');
+  // Extract first 8 digits (törzsszám)
+  const torzsszam = taxNumber.replace(/\D/g, '').slice(0, 8);
+  if (torzsszam.length !== 8) {
+    return reply.code(400).send({ success: false, message: 'Az adószám törzsszáma 8 számjegyből kell álljon.' });
+  }
+  if (!AGENT_KEY) {
+    return reply.code(500).send({ success: false, message: 'Hiányzik a SZAMLAZZ_AGENT_KEY' });
+  }
+  try {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<xmltaxpayer xmlns="http://www.szamlazz.hu/xmltaxpayer" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmltaxpayer http://www.szamlazz.hu/docs/xsds/agent/xmltaxpayer.xsd">
+    <beallitasok>
+        <szamlaagentkulcs>${escapeXml(AGENT_KEY)}</szamlaagentkulcs>
+    </beallitasok>
+    <torzsszam>${escapeXml(torzsszam)}</torzsszam>
+</xmltaxpayer>`;
+    const form = new FormData();
+    form.append('action-szamla_agent_taxpayer', new Blob([xml], { type: 'application/xml' }), 'taxpayer.xml');
+    const response = await fetch(SZAMLAZZ_ENDPOINT, { method: 'POST', body: form });
+    const text = await response.text();
+
+    // Parse relevant fields from XML response
+    const validityMatch = text.match(/<ns2:taxpayerValidity>(true|false)<\/ns2:taxpayerValidity>/);
+    const isValid = validityMatch?.[1] === 'true';
+
+    if (!isValid) {
+      return { success: true, valid: false };
+    }
+
+    const nameMatch = text.match(/<ns2:taxpayerName>([^<]+)<\/ns2:taxpayerName>/);
+    const shortNameMatch = text.match(/<ns2:taxpayerShortName>([^<]+)<\/ns2:taxpayerShortName>/);
+
+    // Parse HQ address
+    const hqBlock = text.match(/<ns2:taxpayerAddressType>HQ<\/ns2:taxpayerAddressType>\s*<ns2:taxpayerAddress>([\s\S]*?)<\/ns2:taxpayerAddress>/);
+    let address: { postalCode?: string; city?: string; street?: string } = {};
+    if (hqBlock) {
+      const addr = hqBlock[1];
+      const postalCode = addr.match(/<ns3:postalCode>([^<]+)<\/ns3:postalCode>/)?.[1];
+      const city = addr.match(/<ns3:city>([^<]+)<\/ns3:city>/)?.[1];
+      const streetName = addr.match(/<ns3:streetName>([^<]+)<\/ns3:streetName>/)?.[1];
+      const placeCategory = addr.match(/<ns3:publicPlaceCategory>([^<]+)<\/ns3:publicPlaceCategory>/)?.[1];
+      const number = addr.match(/<ns3:number>([^<]+)<\/ns3:number>/)?.[1];
+      const floor = addr.match(/<ns3:floor>([^<]+)<\/ns3:floor>/)?.[1];
+      const door = addr.match(/<ns3:door>([^<]+)<\/ns3:door>/)?.[1];
+      const streetParts = [streetName, placeCategory?.toLowerCase(), number].filter(Boolean);
+      if (floor) streetParts.push(floor + (door ? '/' + door : ''));
+      else if (door) streetParts.push(door);
+      address = { postalCode, city, street: streetParts.join(' ') };
+    }
+
+    return {
+      success: true,
+      valid: true,
+      taxpayerName: nameMatch?.[1] || '',
+      taxpayerShortName: shortNameMatch?.[1] || '',
+      address,
+    };
+  } catch (err) {
+    return reply.code(500).send({ success: false, message: 'Adószám lekérdezés sikertelen.' });
+  }
+});
 
 const NEAK_OJOTE_KEY = process.env.NEAK_OJOTE_KEY || '';
 const NEAK_OJOTE_ENV = process.env.NEAK_OJOTE_ENV || 'production';

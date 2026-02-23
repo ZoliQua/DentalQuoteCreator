@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { usePriceLists, usePriceListCategories } from '../hooks';
@@ -23,6 +23,13 @@ export function PriceListCategoriesPage() {
   const [selectedPriceListId, setSelectedPriceListId] = useState<string>(
     defaultPriceList?.priceListId || activePriceLists[0]?.priceListId || ''
   );
+
+  useEffect(() => {
+    if (!selectedPriceListId && (defaultPriceList || activePriceLists.length > 0)) {
+      setSelectedPriceListId(defaultPriceList?.priceListId || activePriceLists[0]?.priceListId || '');
+    }
+  }, [defaultPriceList, activePriceLists, selectedPriceListId]);
+
   const { categories, allCategories, createCategory, editCategory, deleteCategory } =
     usePriceListCategories(selectedPriceListId || undefined);
 
@@ -228,7 +235,7 @@ export function PriceListCategoriesPage() {
                             </button>
                           ) : (
                             <>
-                              {hasPermission('pricelist.update') && (
+                              {hasPermission('pricelist.category.update') && (
                                 <button
                                   onClick={() => openEditModal(item)}
                                   title={t.common.edit}

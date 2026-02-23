@@ -20,6 +20,7 @@ export interface Patient {
   neakDocumentType?: number;
   patientVATName?: string;
   patientVATNumber?: string;
+  patientVATAddress?: string;
   patientDiscount?: number | null;
   createdAt: string;
   updatedAt: string;

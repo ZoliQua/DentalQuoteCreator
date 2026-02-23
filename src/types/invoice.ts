@@ -34,6 +34,7 @@ export interface InvoiceRecord {
     city?: string;
     address?: string;
     email?: string;
+    taxNumber?: string;
   };
   invoiceType?: InvoiceType;
   items: InvoiceItemSnapshot[];

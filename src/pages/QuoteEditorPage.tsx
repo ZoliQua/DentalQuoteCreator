@@ -34,6 +34,7 @@ import {
   naturalCompare,
 } from '../utils';
 import { generateQuotePdf } from '../components/pdf/QuotePdfGenerator';
+import { generateInvoicePreviewPdf } from '../components/pdf/InvoicePdfGenerator';
 import { OdontogramHost } from '../modules/odontogram/OdontogramHost';
 import { loadCurrent } from '../modules/odontogram/odontogramStorage';
 import type { OdontogramState } from '../modules/odontogram/types';
@@ -94,11 +95,14 @@ export function QuoteEditorPage() {
   const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [invoiceForm, setInvoiceForm] = useState({
+    buyerType: 'individual' as 'individual' | 'company',
     buyerName: '',
     buyerZip: '',
     buyerCity: '',
     buyerAddress: '',
     buyerEmail: '',
+    buyerTaxNumber: '',
+    buyerCompanyAddress: '',
     paymentMethod: 'bankkártya',
     fulfillmentDate: '',
     dueDate: '',
@@ -405,13 +409,28 @@ export function QuoteEditorPage() {
         name: settings.clinic.name,
         email: settings.clinic.email,
       },
-      buyer: {
-        name: invoiceForm.buyerName,
-        zip: invoiceForm.buyerZip,
-        city: invoiceForm.buyerCity,
-        address: invoiceForm.buyerAddress,
-        email: invoiceForm.buyerEmail,
-      },
+      buyer: (() => {
+        if (invoiceForm.buyerType === 'company') {
+          // Parse "NNNN City Street..." from the single company address field
+          const m = invoiceForm.buyerCompanyAddress.match(/^(\d{4})\s+(\S+)\s+(.*)$/);
+          return {
+            name: invoiceForm.buyerName,
+            zip: m ? m[1] : '',
+            city: m ? m[2] : '',
+            address: m ? m[3] : invoiceForm.buyerCompanyAddress,
+            email: invoiceForm.buyerEmail,
+            taxNumber: invoiceForm.buyerTaxNumber,
+          };
+        }
+        return {
+          name: invoiceForm.buyerName,
+          zip: invoiceForm.buyerZip,
+          city: invoiceForm.buyerCity,
+          address: invoiceForm.buyerAddress,
+          email: invoiceForm.buyerEmail,
+          taxNumber: undefined,
+        };
+      })(),
       invoice: {
         paymentMethod: invoiceForm.paymentMethod,
         fulfillmentDate: invoiceForm.fulfillmentDate,
@@ -434,12 +453,16 @@ export function QuoteEditorPage() {
   const handleOpenInvoiceModal = () => {
     const today = new Date().toISOString().slice(0, 10);
     const dueDate = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const isCompany = !!patient.patientVATName;
     setInvoiceForm({
-      buyerName: formatPatientName(patient.lastName, patient.firstName, patient.title),
+      buyerType: isCompany ? 'company' : 'individual',
+      buyerName: isCompany ? (patient.patientVATName || '') : formatPatientName(patient.lastName, patient.firstName, patient.title),
       buyerZip: patient.zipCode || '',
       buyerCity: patient.city || '',
       buyerAddress: patient.street || '',
       buyerEmail: patient.email || '',
+      buyerTaxNumber: patient.patientVATNumber || '',
+      buyerCompanyAddress: patient.patientVATAddress || '',
       paymentMethod: settings.invoice?.defaultPaymentMethod || 'bankkártya',
       fulfillmentDate: today,
       dueDate,
@@ -569,13 +592,27 @@ export function QuoteEditorPage() {
         paymentMethod: invoiceForm.paymentMethod,
         fulfillmentDate: invoiceForm.fulfillmentDate,
         dueDate: invoiceForm.dueDate,
-        buyer: {
-          name: invoiceForm.buyerName,
-          zip: invoiceForm.buyerZip,
-          city: invoiceForm.buyerCity,
-          address: invoiceForm.buyerAddress,
-          email: invoiceForm.buyerEmail,
-        },
+        buyer: (() => {
+          if (invoiceForm.buyerType === 'company') {
+            const m2 = invoiceForm.buyerCompanyAddress.match(/^(\d{4})\s+(\S+)\s+(.*)$/);
+            return {
+              name: invoiceForm.buyerName,
+              zip: m2 ? m2[1] : '',
+              city: m2 ? m2[2] : '',
+              address: m2 ? m2[3] : invoiceForm.buyerCompanyAddress,
+              email: invoiceForm.buyerEmail,
+              taxNumber: invoiceForm.buyerTaxNumber,
+            };
+          }
+          return {
+            name: invoiceForm.buyerName,
+            zip: invoiceForm.buyerZip,
+            city: invoiceForm.buyerCity,
+            address: invoiceForm.buyerAddress,
+            email: invoiceForm.buyerEmail,
+            taxNumber: undefined,
+          };
+        })(),
         invoiceType,
         items: payload.items.map((item) => {
           const net = Number((item.qty * item.unitPriceNet).toFixed(2));
@@ -1319,10 +1356,16 @@ export function QuoteEditorPage() {
       >
         <div className="space-y-4">
           {/* Buyer section */}
-          <h4 className="text-sm font-semibold text-gray-900 border-b pb-1">{t.invoices.buyerSection}</h4>
+          <div className="flex items-center justify-between border-b pb-1">
+            <h4 className="text-sm font-semibold text-gray-900">{t.invoices.buyerSection}</h4>
+            <div className="flex gap-1">
+              <button onClick={() => setInvoiceForm((prev) => ({ ...prev, buyerType: 'individual', buyerName: patient ? formatPatientName(patient.lastName, patient.firstName, patient.title) : prev.buyerName }))} className={`px-3 py-1 text-xs rounded-full ${invoiceForm.buyerType === 'individual' ? 'bg-dental-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.invoices.buyerTypeIndividual}</button>
+              <button onClick={() => setInvoiceForm((prev) => ({ ...prev, buyerType: 'company', buyerName: patient?.patientVATName || prev.buyerName }))} className={`px-3 py-1 text-xs rounded-full ${invoiceForm.buyerType === 'company' ? 'bg-dental-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.invoices.buyerTypeCompany}</button>
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Input
-              label={t.invoices.buyerName}
+              label={invoiceForm.buyerType === 'company' ? t.invoices.buyerCompanyName : t.invoices.buyerName}
               value={invoiceForm.buyerName}
               onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerName: e.target.value }))}
             />
@@ -1332,23 +1375,38 @@ export function QuoteEditorPage() {
               onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerEmail: e.target.value }))}
             />
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Input
-              label={t.invoices.buyerZip}
-              value={invoiceForm.buyerZip}
-              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerZip: e.target.value }))}
-            />
-            <Input
-              label={t.invoices.buyerCity}
-              value={invoiceForm.buyerCity}
-              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerCity: e.target.value }))}
-            />
-            <Input
-              label={t.invoices.buyerAddress}
-              value={invoiceForm.buyerAddress}
-              onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerAddress: e.target.value }))}
-            />
-          </div>
+          {invoiceForm.buyerType === 'individual' ? (
+            <div className="grid grid-cols-3 gap-3">
+              <Input
+                label={t.invoices.buyerZip}
+                value={invoiceForm.buyerZip}
+                onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerZip: e.target.value }))}
+              />
+              <Input
+                label={t.invoices.buyerCity}
+                value={invoiceForm.buyerCity}
+                onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerCity: e.target.value }))}
+              />
+              <Input
+                label={t.invoices.buyerAddress}
+                value={invoiceForm.buyerAddress}
+                onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerAddress: e.target.value }))}
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Input
+                label={t.invoices.buyerTaxNumber}
+                value={invoiceForm.buyerTaxNumber}
+                onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerTaxNumber: e.target.value }))}
+              />
+              <Input
+                label={t.invoices.buyerCompanyAddress}
+                value={invoiceForm.buyerCompanyAddress}
+                onChange={(e) => setInvoiceForm((prev) => ({ ...prev, buyerCompanyAddress: e.target.value }))}
+              />
+            </div>
+          )}
 
           {/* Invoice data section */}
           <h4 className="text-sm font-semibold text-gray-900 border-b pb-1">{t.invoices.invoiceDataSection}</h4>
@@ -1643,6 +1701,9 @@ export function QuoteEditorPage() {
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setInvoiceModalOpen(false)}>
               {t.common.cancel}
+            </Button>
+            <Button variant="secondary" onClick={() => generateInvoicePreviewPdf(buildInvoicePayload())}>
+              {t.invoices.pdfPreview}
             </Button>
             <Button variant="secondary" onClick={handlePreviewInvoice} disabled={invoiceSubmitting || (invoiceType === 'advance' && (advanceAmount <= 0 || advanceAmount > totals.total))}>
               {t.invoices.preview}

@@ -7,6 +7,7 @@ import { usePatients, useCatalog, useCatalogCodeFormatter, useQuotes } from '../
 import { Card, Button, Input, Select, Modal, Badge, ConfirmModal } from '../components/common';
 import { formatCurrency, formatDate, formatPatientName, formatBirthDateForDisplay, parseBirthDateFromDisplay, getDatePlaceholder, naturalCompare } from '../utils';
 import { createInvoice, previewInvoice, stornoInvoice } from '../modules/invoicing/api';
+import { generateInvoicePreviewPdf } from '../components/pdf/InvoicePdfGenerator';
 import { listInvoices, saveInvoice } from '../modules/invoicing/storage';
 import type { InvoiceRecord } from '../types/invoice';
 import { getAuthHeaders } from '../utils/auth';
@@ -33,8 +34,10 @@ export function InvoicesPage() {
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => listInvoices());
   const [resendLoadingId, setResendLoadingId] = useState<string | null>(null);
   const [errorById, setErrorById] = useState<Record<string, string>>({});
-  const [sortKey, setSortKey] = useState<SortKey>('invoiceNumber');
+  const [sortKey, setSortKey] = useState<SortKey>('issueDate');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [filterYear, setFilterYear] = useState<string>('');
+  const [filterMonth, setFilterMonth] = useState<string>('');
   const [stornoConfirmInvoice, setStornoConfirmInvoice] = useState<InvoiceRecord | null>(null);
   const [stornoLoading, setStornoLoading] = useState(false);
   const [stornoError, setStornoError] = useState<string | null>(null);
@@ -43,11 +46,14 @@ export function InvoicesPage() {
   const [newInvoiceOpen, setNewInvoiceOpen] = useState(false);
   const [newInvoiceForm, setNewInvoiceForm] = useState({
     patientId: '',
+    buyerType: 'individual' as 'individual' | 'company',
     buyerName: '',
     buyerZip: '',
     buyerCity: '',
     buyerAddress: '',
     buyerEmail: '',
+    buyerTaxNumber: '',
+    buyerCompanyAddress: '',
     paymentMethod: 'bankkártya',
     fulfillmentDate: '',
     dueDate: '',
@@ -92,6 +98,27 @@ export function InvoicesPage() {
     return rows;
   }, [invoices]);
 
+  // Available years from invoices
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    for (const inv of invoices) {
+      const y = new Date(inv.createdAt).getFullYear().toString();
+      years.add(y);
+    }
+    return [...years].sort().reverse();
+  }, [invoices]);
+
+  // Filter display rows by year/month
+  const filteredRows = useMemo(() => {
+    if (!filterYear) return displayRows;
+    return displayRows.filter((row) => {
+      const d = new Date(row.invoice.createdAt);
+      if (d.getFullYear().toString() !== filterYear) return false;
+      if (filterMonth && (d.getMonth() + 1).toString() !== filterMonth) return false;
+      return true;
+    });
+  }, [displayRows, filterYear, filterMonth]);
+
   const invoiceTypeLabel = useCallback((row: DisplayRow): string => {
     if (row.isStornoRow) return t.invoices.invoiceTypeStorno;
     const it = row.invoice.invoiceType;
@@ -121,7 +148,7 @@ export function InvoicesPage() {
   }, [invoiceTypeLabel, t]);
 
   const sortedRows = useMemo(() => {
-    const rows = [...displayRows];
+    const rows = [...filteredRows];
     rows.sort((a, b) => {
       const va = getRowSortValue(a, sortKey);
       const vb = getRowSortValue(b, sortKey);
@@ -131,7 +158,80 @@ export function InvoicesPage() {
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return rows;
-  }, [displayRows, sortKey, sortDir, getRowSortValue]);
+  }, [filteredRows, sortKey, sortDir, getRowSortValue]);
+
+  // Summary by payment method (net income = sent - storno)
+  const paymentSummary = useMemo(() => {
+    const map = new Map<string, { sent: number; storno: number; sentCount: number; stornoCount: number }>();
+    for (const row of filteredRows) {
+      if (row.isStornoRow) continue; // skip virtual storno rows, we handle via status
+      const inv = row.invoice;
+      const method = inv.paymentMethod;
+      if (!map.has(method)) map.set(method, { sent: 0, storno: 0, sentCount: 0, stornoCount: 0 });
+      const entry = map.get(method)!;
+      if (inv.status === 'sent') {
+        entry.sent += inv.totalGross;
+        entry.sentCount += 1;
+      } else if (inv.status === 'storno') {
+        // Stornoed invoice was originally issued — count in both columns
+        entry.sent += inv.totalGross;
+        entry.sentCount += 1;
+        entry.storno += inv.totalGross;
+        entry.stornoCount += 1;
+      }
+    }
+    const entries = [...map.entries()].map(([method, data]) => ({
+      method,
+      sent: data.sent,
+      storno: data.storno,
+      net: data.sent - data.storno,
+      sentCount: data.sentCount,
+      stornoCount: data.stornoCount,
+    }));
+    const totalSent = entries.reduce((s, e) => s + e.sent, 0);
+    const totalStorno = entries.reduce((s, e) => s + e.storno, 0);
+    const totalNet = entries.reduce((s, e) => s + e.net, 0);
+    const totalSentCount = entries.reduce((s, e) => s + e.sentCount, 0);
+    const totalStornoCount = entries.reduce((s, e) => s + e.stornoCount, 0);
+    return { entries, totalSent, totalStorno, totalNet, totalSentCount, totalStornoCount };
+  }, [filteredRows]);
+
+  // Summary by patient
+  const patientSummary = useMemo(() => {
+    const map = new Map<string, { name: string; sent: number; storno: number; sentCount: number; stornoCount: number }>();
+    for (const row of filteredRows) {
+      if (row.isStornoRow) continue;
+      const inv = row.invoice;
+      const key = inv.patientId || inv.patientName;
+      if (!map.has(key)) map.set(key, { name: inv.patientName, sent: 0, storno: 0, sentCount: 0, stornoCount: 0 });
+      const entry = map.get(key)!;
+      if (inv.status === 'sent') {
+        entry.sent += inv.totalGross;
+        entry.sentCount += 1;
+      } else if (inv.status === 'storno') {
+        entry.sent += inv.totalGross;
+        entry.sentCount += 1;
+        entry.storno += inv.totalGross;
+        entry.stornoCount += 1;
+      }
+    }
+    const entries = [...map.entries()]
+      .map(([, data]) => ({
+        name: data.name,
+        sent: data.sent,
+        storno: data.storno,
+        net: data.sent - data.storno,
+        sentCount: data.sentCount,
+        stornoCount: data.stornoCount,
+      }))
+      .sort((a, b) => naturalCompare(a.name, b.name));
+    const totalSent = entries.reduce((s, e) => s + e.sent, 0);
+    const totalStorno = entries.reduce((s, e) => s + e.storno, 0);
+    const totalNet = entries.reduce((s, e) => s + e.net, 0);
+    const totalSentCount = entries.reduce((s, e) => s + e.sentCount, 0);
+    const totalStornoCount = entries.reduce((s, e) => s + e.stornoCount, 0);
+    return { entries, totalSent, totalStorno, totalNet, totalSentCount, totalStornoCount };
+  }, [filteredRows]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -291,11 +391,14 @@ export function InvoicesPage() {
     const dueDate = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     setNewInvoiceForm({
       patientId: '',
+      buyerType: 'individual',
       buyerName: '',
       buyerZip: '',
       buyerCity: '',
       buyerAddress: '',
       buyerEmail: '',
+      buyerTaxNumber: '',
+      buyerCompanyAddress: '',
       paymentMethod: settings.invoice?.defaultPaymentMethod || 'bankkártya',
       fulfillmentDate: today,
       dueDate,
@@ -315,14 +418,18 @@ export function InvoicesPage() {
   const handlePatientSelect = (patientId: string) => {
     const patient = patients.find((p) => p.patientId === patientId);
     if (patient) {
+      const isCompany = !!patient.patientVATName;
       setNewInvoiceForm((prev) => ({
         ...prev,
         patientId,
-        buyerName: formatPatientName(patient.lastName, patient.firstName, patient.title),
+        buyerType: isCompany ? 'company' : 'individual',
+        buyerName: isCompany ? (patient.patientVATName || '') : formatPatientName(patient.lastName, patient.firstName, patient.title),
         buyerZip: patient.zipCode || '',
         buyerCity: patient.city || '',
         buyerAddress: patient.street || '',
         buyerEmail: patient.email || '',
+        buyerTaxNumber: patient.patientVATNumber || '',
+        buyerCompanyAddress: patient.patientVATAddress || '',
       }));
     } else {
       setNewInvoiceForm((prev) => ({ ...prev, patientId }));
@@ -354,13 +461,27 @@ export function InvoicesPage() {
 
   const buildNewInvoicePayload = () => ({
     seller: { name: settings.clinic.name, email: settings.clinic.email },
-    buyer: {
-      name: newInvoiceForm.buyerName,
-      zip: newInvoiceForm.buyerZip,
-      city: newInvoiceForm.buyerCity,
-      address: newInvoiceForm.buyerAddress,
-      email: newInvoiceForm.buyerEmail,
-    },
+    buyer: (() => {
+      if (newInvoiceForm.buyerType === 'company') {
+        const m = newInvoiceForm.buyerCompanyAddress.match(/^(\d{4})\s+(\S+)\s+(.*)$/);
+        return {
+          name: newInvoiceForm.buyerName,
+          zip: m ? m[1] : '',
+          city: m ? m[2] : '',
+          address: m ? m[3] : newInvoiceForm.buyerCompanyAddress,
+          email: newInvoiceForm.buyerEmail,
+          taxNumber: newInvoiceForm.buyerTaxNumber,
+        };
+      }
+      return {
+        name: newInvoiceForm.buyerName,
+        zip: newInvoiceForm.buyerZip,
+        city: newInvoiceForm.buyerCity,
+        address: newInvoiceForm.buyerAddress,
+        email: newInvoiceForm.buyerEmail,
+        taxNumber: undefined,
+      };
+    })(),
     invoice: {
       paymentMethod: newInvoiceForm.paymentMethod,
       fulfillmentDate: newInvoiceForm.fulfillmentDate,
@@ -430,13 +551,27 @@ export function InvoicesPage() {
         paymentMethod: newInvoiceForm.paymentMethod,
         fulfillmentDate: newInvoiceForm.fulfillmentDate,
         dueDate: newInvoiceForm.dueDate,
-        buyer: {
-          name: newInvoiceForm.buyerName,
-          zip: newInvoiceForm.buyerZip,
-          city: newInvoiceForm.buyerCity,
-          address: newInvoiceForm.buyerAddress,
-          email: newInvoiceForm.buyerEmail,
-        },
+        buyer: (() => {
+          if (newInvoiceForm.buyerType === 'company') {
+            const m2 = newInvoiceForm.buyerCompanyAddress.match(/^(\d{4})\s+(\S+)\s+(.*)$/);
+            return {
+              name: newInvoiceForm.buyerName,
+              zip: m2 ? m2[1] : '',
+              city: m2 ? m2[2] : '',
+              address: m2 ? m2[3] : newInvoiceForm.buyerCompanyAddress,
+              email: newInvoiceForm.buyerEmail,
+              taxNumber: newInvoiceForm.buyerTaxNumber,
+            };
+          }
+          return {
+            name: newInvoiceForm.buyerName,
+            zip: newInvoiceForm.buyerZip,
+            city: newInvoiceForm.buyerCity,
+            address: newInvoiceForm.buyerAddress,
+            email: newInvoiceForm.buyerEmail,
+            taxNumber: undefined,
+          };
+        })(),
         items: payload.items.map((item) => {
           const net = Number((item.qty * item.unitPriceNet).toFixed(2));
           const numVat = typeof item.vatRate === 'number' ? item.vatRate : 0;
@@ -490,6 +625,33 @@ export function InvoicesPage() {
         </div>
       )}
 
+      {/* Year/Month filter */}
+      <div className="flex items-center gap-3">
+        <Select
+          value={filterYear}
+          onChange={(e) => { setFilterYear(e.target.value); if (!e.target.value) setFilterMonth(''); }}
+          options={[
+            { value: '', label: t.invoices.filterAll },
+            ...availableYears.map((y) => ({ value: y, label: y })),
+          ]}
+          className="w-32"
+        />
+        {filterYear && (
+          <Select
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            options={[
+              { value: '', label: `${t.invoices.filterAll} ${t.invoices.filterMonth.toLowerCase()}`},
+              ...Array.from({ length: 12 }, (_, i) => ({
+                value: String(i + 1),
+                label: String(i + 1).padStart(2, '0'),
+              })),
+            ]}
+            className="w-28"
+          />
+        )}
+      </div>
+
       <Card>
         <div className="overflow-x-auto">
           {sortedRows.length === 0 ? (
@@ -498,10 +660,10 @@ export function InvoicesPage() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <SortHeader col="issueDate">{t.invoices.issueDate}</SortHeader>
                   <SortHeader col="invoiceNumber">{t.invoices.invoiceNumber}</SortHeader>
                   <SortHeader col="patientName">{t.invoices.patientName}</SortHeader>
                   <SortHeader col="invoiceType">{t.invoices.invoiceType}</SortHeader>
-                  <SortHeader col="issueDate">{t.invoices.issueDate}</SortHeader>
                   <SortHeader col="dueDate">{t.invoices.dueDate}</SortHeader>
                   <SortHeader col="paymentMethod">{t.invoices.paymentMethod}</SortHeader>
                   <SortHeader col="amount" className="text-right">{t.invoices.amount}</SortHeader>
@@ -520,6 +682,9 @@ export function InvoicesPage() {
                   if (row.isStornoRow) {
                     return (
                       <tr key={row.key} className="bg-red-50/60 hover:bg-red-50">
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {formatDate(inv.createdAt)}
+                        </td>
                         <td className="px-4 py-3 text-sm font-medium text-red-700">
                           <Link to={`/invoices/${inv.id}`} className="text-red-600 hover:text-red-700 hover:underline">
                             {row.displayNumber}
@@ -534,9 +699,6 @@ export function InvoicesPage() {
                         </td>
                         <td className="px-4 py-3 text-sm text-red-600 font-medium">
                           {t.invoices.invoiceTypeStorno}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-500">
-                          {formatDate(inv.createdAt)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
                           {formatDate(inv.dueDate)}
@@ -588,9 +750,12 @@ export function InvoicesPage() {
                   // Normal invoice row
                   return (
                     <tr key={row.key} className={isStornoed ? 'bg-red-50/40 hover:bg-red-50/60' : 'hover:bg-gray-50'}>
-                      <td className={`px-4 py-3 text-sm font-medium ${isStornoed ? 'text-red-700' : 'text-gray-900'}`}>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {formatDate(inv.createdAt)}
+                      </td>
+                      <td className={`px-4 py-3 text-sm font-medium ${isStornoed ? 'line-through' : ''} text-gray-900`}>
                         {inv.szamlazzInvoiceNumber ? (
-                          <Link to={`/invoices/${inv.id}`} className={isStornoed ? 'text-red-600 hover:text-red-700 hover:underline' : 'text-dental-600 hover:text-dental-700 hover:underline'}>
+                          <Link to={`/invoices/${inv.id}`} className="text-dental-600 hover:text-dental-700 hover:underline">
                             {inv.szamlazzInvoiceNumber}
                           </Link>
                         ) : '-'}
@@ -606,15 +771,12 @@ export function InvoicesPage() {
                         {invoiceTypeLabel(row)}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500">
-                        {formatDate(inv.createdAt)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
                         {formatDate(inv.dueDate)}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500">
                         {paymentLabel(inv.paymentMethod)}
                       </td>
-                      <td className={`px-4 py-3 text-sm text-right font-semibold ${isStornoed ? 'text-red-600 line-through' : ''}`}>
+                      <td className={`px-4 py-3 text-sm text-right font-semibold ${isStornoed ? 'line-through' : ''}`}>
                         {formatCurrency(inv.totalGross, inv.currency)}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -646,15 +808,17 @@ export function InvoicesPage() {
                               </svg>
                             </button>
                           )}
-                          <Link
-                            to={`/invoices/${inv.id}`}
-                            title={t.invoices.open}
-                            className="rounded p-1.5 text-dental-600 hover:bg-dental-50 hover:text-dental-700"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </Link>
+                          {hasPermission('invoices.view.detail') && (
+                            <Link
+                              to={`/invoices/${inv.id}`}
+                              title={t.invoices.open}
+                              className="rounded p-1.5 text-dental-600 hover:bg-dental-50 hover:text-dental-700"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </Link>
+                          )}
                           {hasPermission('invoices.storno') && inv.status === 'sent' && inv.szamlazzInvoiceNumber && (
                             <button
                               type="button"
@@ -680,6 +844,96 @@ export function InvoicesPage() {
           )}
         </div>
       </Card>
+
+      {/* Payment method summary */}
+      {paymentSummary.entries.length > 0 && (
+        <Card>
+          <div className="px-4 py-3 border-b border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900">{t.invoices.summaryByPaymentMethod}</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t.invoices.paymentMethod}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.summaryInvoiceCount}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.amount}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.summaryStornoCount}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.storno}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.summaryNetIncome}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {paymentSummary.entries.map((entry) => (
+                  <tr key={entry.method} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 text-sm font-medium text-gray-900">{paymentLabel(entry.method)}</td>
+                    <td className="px-4 py-2 text-sm text-right text-gray-700">{entry.sentCount}</td>
+                    <td className="px-4 py-2 text-sm text-right text-gray-700">{formatCurrency(entry.sent)}</td>
+                    <td className="px-4 py-2 text-sm text-right text-red-600">{entry.stornoCount}</td>
+                    <td className="px-4 py-2 text-sm text-right text-red-600">-{formatCurrency(entry.storno)}</td>
+                    <td className="px-4 py-2 text-sm text-right font-semibold text-gray-900">{formatCurrency(entry.net)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-gray-50 border-t-2 border-gray-300">
+                <tr>
+                  <td className="px-4 py-2 text-sm font-bold text-gray-900">{t.invoices.summaryTotal}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-gray-900">{paymentSummary.totalSentCount}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-gray-900">{formatCurrency(paymentSummary.totalSent)}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-red-600">{paymentSummary.totalStornoCount}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-red-600">-{formatCurrency(paymentSummary.totalStorno)}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-green-700">{formatCurrency(paymentSummary.totalNet)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Patient summary */}
+      {patientSummary.entries.length > 0 && (
+        <Card>
+          <div className="px-4 py-3 border-b border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900">{t.invoices.summaryByPatient}</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t.invoices.patientName}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.summaryInvoiceCount}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.amount}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.summaryStornoCount}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.storno}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.summaryNetIncome}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {patientSummary.entries.map((entry) => (
+                  <tr key={entry.name} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 text-sm font-medium text-gray-900">{entry.name}</td>
+                    <td className="px-4 py-2 text-sm text-right text-gray-700">{entry.sentCount}</td>
+                    <td className="px-4 py-2 text-sm text-right text-gray-700">{formatCurrency(entry.sent)}</td>
+                    <td className="px-4 py-2 text-sm text-right text-red-600">{entry.stornoCount}</td>
+                    <td className="px-4 py-2 text-sm text-right text-red-600">-{formatCurrency(entry.storno)}</td>
+                    <td className="px-4 py-2 text-sm text-right font-semibold text-gray-900">{formatCurrency(entry.net)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-gray-50 border-t-2 border-gray-300">
+                <tr>
+                  <td className="px-4 py-2 text-sm font-bold text-gray-900">{t.invoices.summaryTotal}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-gray-900">{patientSummary.totalSentCount}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-gray-900">{formatCurrency(patientSummary.totalSent)}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-red-600">{patientSummary.totalStornoCount}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-red-600">-{formatCurrency(patientSummary.totalStorno)}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-green-700">{formatCurrency(patientSummary.totalNet)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {/* Storno Confirmation Modal */}
       <ConfirmModal
@@ -715,9 +969,16 @@ export function InvoicesPage() {
             ]}
           />
 
+          <div className="flex items-center justify-between border-b pb-1">
+            <h4 className="text-sm font-semibold text-gray-900">{t.invoices.buyerSection}</h4>
+            <div className="flex gap-1">
+              <button onClick={() => { const patient = patients.find((p) => p.patientId === newInvoiceForm.patientId); setNewInvoiceForm((prev) => ({ ...prev, buyerType: 'individual', buyerName: patient ? formatPatientName(patient.lastName, patient.firstName, patient.title) : prev.buyerName })); }} className={`px-3 py-1 text-xs rounded-full ${newInvoiceForm.buyerType === 'individual' ? 'bg-dental-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.invoices.buyerTypeIndividual}</button>
+              <button onClick={() => { const patient = patients.find((p) => p.patientId === newInvoiceForm.patientId); setNewInvoiceForm((prev) => ({ ...prev, buyerType: 'company', buyerName: patient?.patientVATName || prev.buyerName })); }} className={`px-3 py-1 text-xs rounded-full ${newInvoiceForm.buyerType === 'company' ? 'bg-dental-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.invoices.buyerTypeCompany}</button>
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Input
-              label={t.invoices.buyerName}
+              label={newInvoiceForm.buyerType === 'company' ? t.invoices.buyerCompanyName : t.invoices.buyerName}
               value={newInvoiceForm.buyerName}
               onChange={(e) =>
                 setNewInvoiceForm((prev) => ({ ...prev, buyerName: e.target.value }))
@@ -730,27 +991,50 @@ export function InvoicesPage() {
                 setNewInvoiceForm((prev) => ({ ...prev, buyerEmail: e.target.value }))
               }
             />
-            <Input
-              label={t.invoices.buyerZip}
-              value={newInvoiceForm.buyerZip}
-              onChange={(e) =>
-                setNewInvoiceForm((prev) => ({ ...prev, buyerZip: e.target.value }))
-              }
-            />
-            <Input
-              label={t.invoices.buyerCity}
-              value={newInvoiceForm.buyerCity}
-              onChange={(e) =>
-                setNewInvoiceForm((prev) => ({ ...prev, buyerCity: e.target.value }))
-              }
-            />
-            <Input
-              label={t.invoices.buyerAddress}
-              value={newInvoiceForm.buyerAddress}
-              onChange={(e) =>
-                setNewInvoiceForm((prev) => ({ ...prev, buyerAddress: e.target.value }))
-              }
-            />
+          </div>
+          {newInvoiceForm.buyerType === 'individual' ? (
+            <div className="grid grid-cols-3 gap-3">
+              <Input
+                label={t.invoices.buyerZip}
+                value={newInvoiceForm.buyerZip}
+                onChange={(e) =>
+                  setNewInvoiceForm((prev) => ({ ...prev, buyerZip: e.target.value }))
+                }
+              />
+              <Input
+                label={t.invoices.buyerCity}
+                value={newInvoiceForm.buyerCity}
+                onChange={(e) =>
+                  setNewInvoiceForm((prev) => ({ ...prev, buyerCity: e.target.value }))
+                }
+              />
+              <Input
+                label={t.invoices.buyerAddress}
+                value={newInvoiceForm.buyerAddress}
+                onChange={(e) =>
+                  setNewInvoiceForm((prev) => ({ ...prev, buyerAddress: e.target.value }))
+                }
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Input
+                label={t.invoices.buyerTaxNumber}
+                value={newInvoiceForm.buyerTaxNumber}
+                onChange={(e) =>
+                  setNewInvoiceForm((prev) => ({ ...prev, buyerTaxNumber: e.target.value }))
+                }
+              />
+              <Input
+                label={t.invoices.buyerCompanyAddress}
+                value={newInvoiceForm.buyerCompanyAddress}
+                onChange={(e) =>
+                  setNewInvoiceForm((prev) => ({ ...prev, buyerCompanyAddress: e.target.value }))
+                }
+              />
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Select
               label={t.invoices.paymentMethod}
               value={newInvoiceForm.paymentMethod}
@@ -957,6 +1241,12 @@ export function InvoicesPage() {
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setNewInvoiceOpen(false)}>
               {t.common.cancel}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => generateInvoicePreviewPdf(buildNewInvoicePayload())}
+            >
+              {t.invoices.pdfPreview}
             </Button>
             <Button
               variant="secondary"

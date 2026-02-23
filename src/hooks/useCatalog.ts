@@ -18,9 +18,11 @@ export function useCatalog() {
     resetCatalog,
   } = useApp();
 
-  const activeItems = useMemo(() => catalog.filter((c) => c.isActive), [catalog]);
+  const activeItems = useMemo(() => catalog.filter((c) => c.isActive && !c.isDeleted), [catalog]);
 
-  const inactiveItems = useMemo(() => catalog.filter((c) => !c.isActive), [catalog]);
+  const inactiveItems = useMemo(() => catalog.filter((c) => !c.isActive && !c.isDeleted), [catalog]);
+
+  const deletedItems = useMemo(() => catalog.filter((c) => c.isDeleted), [catalog]);
 
   const itemsByCategory = useMemo(() => {
     const grouped: Record<string, CatalogItem[]> = {};
@@ -244,6 +246,7 @@ export function useCatalog() {
     catalog,
     activeItems,
     inactiveItems,
+    deletedItems,
     itemsByCategory,
     getCatalogItem,
     createCatalogItem,

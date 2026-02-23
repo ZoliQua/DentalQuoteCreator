@@ -635,11 +635,12 @@ export function PatientDetailPage() {
                 <p className="font-medium">{patient.email}</p>
               </div>
             )}
-            {(patient.patientVATName || patient.patientVATNumber) && (
+            {(patient.patientVATName || patient.patientVATNumber || patient.patientVATAddress) && (
               <div>
                 <label className="text-sm text-gray-500">{t.patients.billingSection}</label>
                 {patient.patientVATName && <p className="font-medium">{patient.patientVATName}</p>}
                 {patient.patientVATNumber && <p className="text-sm text-gray-600">{t.patients.patientVATNumber}: {patient.patientVATNumber}</p>}
+                {patient.patientVATAddress && <p className="text-sm text-gray-600">{t.patients.patientVATAddress}: {patient.patientVATAddress}</p>}
               </div>
             )}
             {patient.patientDiscount != null && patient.patientDiscount > 0 && (
@@ -826,8 +827,31 @@ export function PatientDetailPage() {
               {patientInvoices.map((invoice) => (
                 <Card key={invoice.id} hoverable>
                   <CardContent className="flex items-center justify-between">
-                    <Link to={`/invoices/${invoice.id}`} className="flex-1">
-                      <div>
+                    {hasPermission('invoices.view.detail') ? (
+                      <Link to={`/invoices/${invoice.id}`} className="flex-1">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">
+                            {invoice.szamlazzInvoiceNumber || t.invoices.preview}
+                          </h3>
+                          <div className="flex items-center gap-3 text-sm text-gray-500">
+                            <span>{formatDateTime(invoice.createdAt)}</span>
+                            <Badge
+                              variant={
+                                invoice.status === 'sent' ? 'success' :
+                                invoice.status === 'storno' ? 'danger' : 'warning'
+                              }
+                              size="sm"
+                            >
+                              {invoice.status === 'sent' ? t.invoices.statusSent :
+                               invoice.status === 'draft' ? t.invoices.statusDraft :
+                               invoice.status === 'storno' ? t.invoices.statusStorno :
+                               invoice.status}
+                            </Badge>
+                          </div>
+                        </div>
+                      </Link>
+                    ) : (
+                      <div className="flex-1">
                         <h3 className="font-semibold text-gray-900">
                           {invoice.szamlazzInvoiceNumber || t.invoices.preview}
                         </h3>
@@ -847,7 +871,7 @@ export function PatientDetailPage() {
                           </Badge>
                         </div>
                       </div>
-                    </Link>
+                    )}
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className={`font-semibold ${invoice.status === 'storno' ? 'text-red-600' : 'text-gray-900'}`}>
@@ -864,7 +888,7 @@ export function PatientDetailPage() {
                             {t.invoices.pdf}
                           </Button>
                         )}
-                        {invoice.status === 'sent' && invoice.szamlazzInvoiceNumber && (
+                        {hasPermission('invoices.storno') && invoice.status === 'sent' && invoice.szamlazzInvoiceNumber && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1135,11 +1159,49 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
     neakDocumentType: 1,
     patientVATName: '',
     patientVATNumber: '',
+    patientVATAddress: '',
     patientDiscount: null,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
   const [birthDateText, setBirthDateText] = useState('');
+  const [vatChecking, setVatChecking] = useState(false);
+  const [vatResult, setVatResult] = useState<string | null>(null);
+
+  const handleVatCheck = async () => {
+    const taxNum = formData.patientVATNumber || '';
+    const digits = taxNum.replace(/\D/g, '');
+    if (digits.length < 8) return;
+    setVatChecking(true);
+    setVatResult(null);
+    try {
+      const resp = await fetch('/api/szamlazz/query-taxpayer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taxNumber: taxNum }),
+      });
+      const data = await resp.json();
+      if (data.success && data.valid) {
+        const name = data.taxpayerShortName || data.taxpayerName || '';
+        const addr = data.address;
+        const addrStr = addr ? [addr.postalCode, addr.city, addr.street].filter(Boolean).join(' ') : '';
+        setVatResult(t.patients.vatValid);
+        setFormData(prev => ({
+          ...prev,
+          patientVATName: name || prev.patientVATName,
+          patientVATAddress: addrStr || prev.patientVATAddress,
+        }));
+      } else if (data.success && !data.valid) {
+        setVatResult(t.patients.vatInvalid);
+      } else {
+        setVatResult(data.message || t.patients.vatCheckFailed);
+      }
+    } catch {
+      setVatResult(t.patients.vatCheckFailed);
+    } finally {
+      setVatChecking(false);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -1164,11 +1226,13 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
       neakDocumentType: patient.neakDocumentType ?? 1,
       patientVATName: patient.patientVATName || '',
       patientVATNumber: patient.patientVATNumber || '',
+      patientVATAddress: patient.patientVATAddress || '',
       patientDiscount: patient.patientDiscount ?? null,
     });
     setBirthDateText(formatBirthDateForDisplay(patient.birthDate));
     setErrors({});
     setCitySuggestions([]);
+    setVatResult(null);
   }, [isOpen, patient, settings.patient.defaultCountry, settings.patient.patientTypes]);
 
   const validateEmail = (email: string): boolean => {
@@ -1525,10 +1589,49 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
               value={formData.patientVATName || ''}
               onChange={(e) => setFormData({ ...formData, patientVATName: e.target.value })}
             />
+            <div className="w-full">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {t.patients.patientVATNumber}
+              </label>
+              <div className="flex gap-1">
+                <input
+                  value={formData.patientVATNumber || ''}
+                  onChange={(e) => { setFormData({ ...formData, patientVATNumber: e.target.value }); setVatResult(null); }}
+                  placeholder="12345678-1-42"
+                  className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                />
+                {(formData.patientVATNumber?.replace(/\D/g, '').length ?? 0) >= 8 && (
+                  <button
+                    type="button"
+                    onClick={handleVatCheck}
+                    disabled={vatChecking}
+                    className="shrink-0 rounded-lg border border-gray-300 p-2 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors disabled:opacity-50"
+                    title={t.patients.vatCheckButton}
+                  >
+                    {vatChecking ? (
+                      <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4m-3.93 7.07l-2.83-2.83M7.76 7.76L4.93 4.93" />
+                      </svg>
+                    ) : (
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+              </div>
+              {vatResult && (
+                <p className={`mt-1 text-sm ${vatResult === t.patients.vatValid ? 'text-green-600' : vatResult === t.patients.vatInvalid ? 'text-red-600' : 'text-orange-600'}`}>
+                  {vatResult}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="mt-3">
             <Input
-              label={t.patients.patientVATNumber}
-              value={formData.patientVATNumber || ''}
-              onChange={(e) => setFormData({ ...formData, patientVATNumber: e.target.value })}
+              label={t.patients.patientVATAddress}
+              value={formData.patientVATAddress || ''}
+              onChange={(e) => setFormData({ ...formData, patientVATAddress: e.target.value })}
             />
           </div>
         </div>

@@ -50,6 +50,7 @@ export interface CatalogItem {
   catalogNameEn?: string;
   catalogNameDe?: string;
   isActive: boolean;
+  isDeleted?: boolean;
 }
 
 export type CatalogItemFormData = Omit<CatalogItem, 'catalogItemId'>;

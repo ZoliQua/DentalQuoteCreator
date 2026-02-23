@@ -127,6 +127,7 @@ model Patient {
   neakDocumentType     Int      @default(1)
   patientVATName       String?
   patientVATNumber     String?
+  patientVATAddress    String?
   patientDiscount      Int?
 
   quotes    Quote[]
@@ -223,6 +224,7 @@ model PriceListCatalogItem {
   catalogNameEn         String  @default("")
   catalogNameDe         String  @default("")
   isActive              Boolean @default(true)
+  isDeleted             Boolean @default(false)
 
   priceList         PriceList?         @relation(fields: [priceListId], references: [priceListId])
   priceListCategory PriceListCategory? @relation(fields: [catalogCategoryId], references: [catalogCategoryId])

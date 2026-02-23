@@ -20,6 +20,7 @@ export type InvoiceRequestPayload = {
     city?: string;
     address?: string;
     email?: string;
+    taxNumber?: string;
   };
   invoice: {
     paymentMethod: string;

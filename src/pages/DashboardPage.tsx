@@ -154,7 +154,7 @@ export function DashboardPage() {
                   <span className="text-gray-700">{t.patients.newPatient}</span>
                 </button>
               )}
-              {hasPermission('catalog.view') && (
+              {hasPermission('pricelist.view') && (
                 <Link
                   to="/catalog"
                   className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-dental-50 transition-colors"

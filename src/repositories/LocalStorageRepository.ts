@@ -100,6 +100,10 @@ export class LocalStorageRepository implements StorageRepository {
 
   savePriceList(priceList: PriceList): void {
     try {
+      if (priceList.priceListId && priceList.priceListId.startsWith('plist')) {
+        requestJsonSync('PATCH', `${API_PREFIX}/pricelists/${priceList.priceListId}`, priceList);
+        return;
+      }
       requestJsonSync('POST', `${API_PREFIX}/pricelists`, priceList);
     } catch {
       // ignore
@@ -141,6 +145,10 @@ export class LocalStorageRepository implements StorageRepository {
 
   savePriceListCategory(category: PriceListCategory): void {
     try {
+      if (category.catalogCategoryId && category.catalogCategoryId.startsWith('pcat')) {
+        requestJsonSync('PATCH', `${API_PREFIX}/pricelist-categories/${category.catalogCategoryId}`, category);
+        return;
+      }
       requestJsonSync('POST', `${API_PREFIX}/pricelist-categories`, category);
     } catch {
       // ignore
@@ -321,6 +329,7 @@ function normalizeCatalogItem(item: Partial<CatalogItem>): CatalogItem {
     catalogNameEn: item.catalogNameEn ? item.catalogNameEn.toString() : '',
     catalogNameDe: item.catalogNameDe ? item.catalogNameDe.toString() : '',
     isActive: toBoolean(item.isActive, true),
+    isDeleted: toBoolean(item.isDeleted),
   };
 }
 

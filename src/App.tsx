@@ -1,6 +1,8 @@
+import { ReactNode } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout';
 import { useAuth } from './context/AuthContext';
+import { useSettings } from './context/SettingsContext';
 import { DashboardPage } from './pages/DashboardPage';
 import { PatientsPage } from './pages/PatientsPage';
 import { PatientDetailPage } from './pages/PatientDetailPage';
@@ -18,6 +20,38 @@ import { LoginPage } from './pages/LoginPage';
 import { AdminPage } from './pages/AdminPage';
 import { VisualQuoteEditorPage } from './pages/VisualQuoteEditorPage';
 import { DatabaseBrowserPage } from './pages/DatabaseBrowserPage';
+import { Card, CardContent } from './components/common';
+
+function NoPermissionPage() {
+  const { t } = useSettings();
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <Card>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center py-12 px-8 text-center">
+            <div className="text-red-400 mb-4">
+              <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-900">{t.common.noPagePermission}</h3>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function Guard({ permission, children }: { permission: string; children: ReactNode }) {
+  const { hasPermission } = useAuth();
+  if (!hasPermission(permission)) return <NoPermissionPage />;
+  return <>{children}</>;
+}
 
 function App() {
   const { isAuthenticated, hasPermission } = useAuth();
@@ -39,24 +73,24 @@ function App() {
         <Route path="/patients" element={<PatientsPage />} />
         <Route path="/patients/deleted" element={<PatientsPage showDeleted />} />
         <Route path="/patients/:patientId" element={<PatientDetailPage />} />
-        <Route path="/patients/:patientId/quotes/new" element={<QuoteEditorPage />} />
-        <Route path="/patients/:patientId/quotes/:quoteId" element={<QuoteEditorPage />} />
-        <Route path="/patients/:patientId/visual-quotes/:quoteId" element={<VisualQuoteEditorPage />} />
-        <Route path="/quotes" element={<QuotesPage />} />
-        <Route path="/quotes/deleted" element={<QuotesPage showDeleted />} />
+        <Route path="/patients/:patientId/quotes/new" element={<Guard permission="quotes.create"><QuoteEditorPage /></Guard>} />
+        <Route path="/patients/:patientId/quotes/:quoteId" element={<Guard permission="quotes.view"><QuoteEditorPage /></Guard>} />
+        <Route path="/patients/:patientId/visual-quotes/:quoteId" element={<Guard permission="quotes.view"><VisualQuoteEditorPage /></Guard>} />
+        <Route path="/quotes" element={<Guard permission="quotes.view"><QuotesPage /></Guard>} />
+        <Route path="/quotes/deleted" element={<Guard permission="quotes.view"><QuotesPage showDeleted /></Guard>} />
         <Route path="/catalog" element={<Navigate to="/catalog/items" replace />} />
-        <Route path="/catalog/items" element={<CatalogPage />} />
-        <Route path="/catalog/lists" element={<PriceListsPage />} />
-        <Route path="/catalog/categories" element={<PriceListCategoriesPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/invoices" element={<InvoicesPage />} />
-        <Route path="/invoices/:invoiceId" element={<InvoiceDetailPage />} />
-        <Route path="/data" element={<DataManagementPage />} />
-        <Route path="/data/browser" element={<DatabaseBrowserPage />} />
-        <Route path="/odontogram-lab" element={<OdontogramLabPage />} />
+        <Route path="/catalog/items" element={<Guard permission="pricelist.view"><CatalogPage /></Guard>} />
+        <Route path="/catalog/lists" element={<Guard permission="pricelist.view"><PriceListsPage /></Guard>} />
+        <Route path="/catalog/categories" element={<Guard permission="pricelist.view"><PriceListCategoriesPage /></Guard>} />
+        <Route path="/settings" element={<Guard permission="settings.view"><SettingsPage /></Guard>} />
+        <Route path="/invoices" element={<Guard permission="invoices.view"><InvoicesPage /></Guard>} />
+        <Route path="/invoices/:invoiceId" element={<Guard permission="invoices.view.detail"><InvoiceDetailPage /></Guard>} />
+        <Route path="/data" element={<Guard permission="data.view"><DataManagementPage /></Guard>} />
+        <Route path="/data/browser" element={<Guard permission="data.browse"><DatabaseBrowserPage /></Guard>} />
+        <Route path="/odontogram-lab" element={<Guard permission="lab.view"><OdontogramLabPage /></Guard>} />
         <Route
           path="/admin"
-          element={canOpenAdmin ? <AdminPage /> : <Navigate to="/" replace />}
+          element={canOpenAdmin ? <AdminPage /> : <NoPermissionPage />}
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import dcqLogo from '../../assets/dcq_logo.svg';
 
 interface NavChild {
   to: string;
@@ -106,7 +107,7 @@ export function Layout({ children }: LayoutProps) {
       key: 'catalog',
       to: '/catalog',
       label: t.nav.catalog,
-      permission: 'catalog.view',
+      permission: 'pricelist.view',
       icon: (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
@@ -218,10 +219,8 @@ export function Layout({ children }: LayoutProps) {
           {isSidebarOpen && (
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-2">
-                <svg className="w-8 h-8 text-dental-600 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C9.5 2 7.5 3.5 7 6c-.5 2.5-1 5-2 7-1 2-1.5 4-1 6 .5 2 2 3 3.5 3s2.5-1 3-2.5c.3-.9.5-2 .5-3.5 0 1.5.2 2.6.5 3.5.5 1.5 1.5 2.5 3 2.5s3-1 3.5-3c.5-2 0-4-1-6-1-2-1.5-4.5-2-7-.5-2.5-2.5-4-5-4z" />
-                </svg>
-                <span className="font-semibold text-gray-800">DentalQuote</span>
+                <img src={dcqLogo} alt="DentalQuoter" className="w-12 h-12 flex-shrink-0" />
+                <span className="font-semibold text-gray-800">DentalQuoter</span>
               </div>
               {user && (
                 <p className="text-xs text-gray-500 truncate pl-10">{user.email}</p>

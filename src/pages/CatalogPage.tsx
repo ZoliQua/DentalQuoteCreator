@@ -31,6 +31,7 @@ export function CatalogPage() {
     catalog,
     activeItems,
     inactiveItems,
+    deletedItems,
     createCatalogItem,
     editCatalogItem,
     deleteCatalogItem,
@@ -41,6 +42,13 @@ export function CatalogPage() {
   const [selectedPriceListId, setSelectedPriceListId] = useState<string>(
     defaultPriceList?.priceListId || activePriceLists[0]?.priceListId || ''
   );
+
+  useEffect(() => {
+    if (!selectedPriceListId && (defaultPriceList || activePriceLists.length > 0)) {
+      setSelectedPriceListId(defaultPriceList?.priceListId || activePriceLists[0]?.priceListId || '');
+    }
+  }, [defaultPriceList, activePriceLists, selectedPriceListId]);
+
   const { categories: priceListCategories, allCategories, getCategoryName } = usePriceListCategories(selectedPriceListId || undefined);
   const { formatCode, prefixLookup } = useCatalogCodeFormatter();
 
@@ -60,9 +68,11 @@ export function CatalogPage() {
     return CATALOG_CATEGORIES as unknown as string[];
   }, [priceListCategories, allCategories]);
   const [showInactive, setShowInactive] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [restoreConfirm, setRestoreConfirm] = useState<string | null>(null);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [inlineItems, setInlineItems] = useState<Partial<Record<string, CatalogItemFormData>>>(
     {}
@@ -130,10 +140,14 @@ export function CatalogPage() {
   );
 
   const filteredItems = useMemo(() => {
-    // 1. Start from active or full catalog
-    let source = !showInactive ? activeItems : catalog;
-    if (showInactive) {
-      source = source.filter((item) => !item.isActive);
+    // 1. Start from active, inactive, or deleted catalog
+    let source: CatalogItem[];
+    if (showDeleted) {
+      source = deletedItems;
+    } else if (showInactive) {
+      source = inactiveItems;
+    } else {
+      source = activeItems;
     }
 
     // 2. Filter to selected price list
@@ -178,7 +192,7 @@ export function CatalogPage() {
       }
       return false;
     });
-  }, [catalog, activeItems, showInactive, selectedPriceListId, priceListCategoryNames, deletedCategoryNames, selectedCategory, searchQuery, formatCode, prefixToCategoryName]);
+  }, [catalog, activeItems, inactiveItems, deletedItems, showInactive, showDeleted, selectedPriceListId, priceListCategoryNames, deletedCategoryNames, selectedCategory, searchQuery, formatCode, prefixToCategoryName]);
 
   const handleCreateItem = (data: CatalogItemFormData) => {
     createCatalogItem(data);
@@ -195,6 +209,11 @@ export function CatalogPage() {
   const handleDelete = (catalogItemId: string) => {
     deleteCatalogItem(catalogItemId);
     setDeleteConfirm(null);
+  };
+
+  const handleRestore = (catalogItemId: string) => {
+    editCatalogItem(catalogItemId, { isDeleted: false } as Partial<CatalogItemFormData>);
+    setRestoreConfirm(null);
   };
 
   const handleReset = () => {
@@ -327,7 +346,7 @@ export function CatalogPage() {
               ? activeItems.filter((i) => i.priceListId === selectedPriceListId || priceListCategoryNames.has(i.catalogCategory)).length
               : activeItems.length} {t.common.active}, {selectedPriceListId && priceListCategoryNames.size > 0
               ? inactiveItems.filter((i) => i.priceListId === selectedPriceListId || priceListCategoryNames.has(i.catalogCategory)).length
-              : inactiveItems.length} {t.catalog.inactiveItems}
+              : inactiveItems.length} {t.catalog.inactiveItems}{deletedItems.length > 0 ? `, ${deletedItems.length} ${t.common.deleted.toLowerCase()}` : ''}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -381,34 +400,53 @@ export function CatalogPage() {
         />
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowInactive(false)}
+            onClick={() => { setShowInactive(false); setShowDeleted(false); }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              !showInactive ? 'bg-dental-100 text-dental-700' : 'text-gray-600 hover:bg-gray-100'
+              !showInactive && !showDeleted ? 'bg-dental-100 text-dental-700' : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
             {t.common.active}
           </button>
+          {hasPermission('catalog.deactivate') && (
           <button
-            onClick={() => setShowInactive(true)}
+            onClick={() => { setShowInactive(true); setShowDeleted(false); }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              showInactive ? 'bg-dental-100 text-dental-700' : 'text-gray-600 hover:bg-gray-100'
+              showInactive && !showDeleted ? 'bg-dental-100 text-dental-700' : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
             {t.common.inactive}
           </button>
+          )}
+          {hasPermission('catalog.restore') && (
+          <button
+            onClick={() => { setShowDeleted(true); setShowInactive(false); }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              showDeleted ? 'bg-red-100 text-red-700' : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            {t.common.deleted}
+          </button>
+          )}
         </div>
       </div>
 
       {filteredItems.length === 0 ? (
         <Card>
           <CardContent>
-            <EmptyState
-              icon={<EmptyCatalogIcon />}
-              title={t.catalog.noItems}
-              description={t.catalog.addFirstItem}
-              actionLabel={t.catalog.newItem}
-              onAction={() => setIsModalOpen(true)}
-            />
+            {showDeleted ? (
+              <EmptyState
+                icon={<EmptyCatalogIcon />}
+                title={t.catalog.noDeletedItems}
+              />
+            ) : (
+              <EmptyState
+                icon={<EmptyCatalogIcon />}
+                title={t.catalog.noItems}
+                description={t.catalog.addFirstItem}
+                actionLabel={t.catalog.newItem}
+                onAction={() => setIsModalOpen(true)}
+              />
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -510,34 +548,46 @@ export function CatalogPage() {
                           </td>
                           <td className="py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {hasPermission('catalog.update') && (
-                                <IconBtn onClick={() => setEditingItem(item)} title={t.common.edit} className="text-gray-600 hover:bg-gray-100">
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                  </svg>
-                                </IconBtn>
-                              )}
-                              {hasPermission('catalog.update') && (
-                                item.isActive ? (
-                                <IconBtn onClick={() => toggleItemActive(item.catalogItemId)} title="Deaktiválás" className="text-red-600 hover:bg-red-50">
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </IconBtn>
-                                ) : (
-                                <IconBtn onClick={() => toggleItemActive(item.catalogItemId)} title="Aktiválás" className="text-green-600 hover:bg-green-50">
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                  </svg>
-                                </IconBtn>
+                              {showDeleted ? (
+                                hasPermission('catalog.delete') && (
+                                  <IconBtn onClick={() => setRestoreConfirm(item.catalogItemId)} title={t.common.restore} className="text-green-600 hover:bg-green-50">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                  </IconBtn>
                                 )
-                              )}
-                              {hasPermission('catalog.delete') && (
-                                <IconBtn onClick={() => setDeleteConfirm(item.catalogItemId)} title={t.common.delete} className="text-red-500 hover:bg-red-50">
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </IconBtn>
+                              ) : (
+                                <>
+                                  {hasPermission('catalog.update') && (
+                                    <IconBtn onClick={() => setEditingItem(item)} title={t.common.edit} className="text-gray-600 hover:bg-gray-100">
+                                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                      </svg>
+                                    </IconBtn>
+                                  )}
+                                  {hasPermission('catalog.deactivate') && (
+                                    item.isActive ? (
+                                    <IconBtn onClick={() => toggleItemActive(item.catalogItemId)} title="Deaktiválás" className="text-red-600 hover:bg-red-50">
+                                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </IconBtn>
+                                    ) : (
+                                    <IconBtn onClick={() => toggleItemActive(item.catalogItemId)} title="Aktiválás" className="text-green-600 hover:bg-green-50">
+                                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    </IconBtn>
+                                    )
+                                  )}
+                                  {hasPermission('catalog.delete') && (
+                                    <IconBtn onClick={() => setDeleteConfirm(item.catalogItemId)} title={t.common.delete} className="text-red-500 hover:bg-red-50">
+                                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                    </IconBtn>
+                                  )}
+                                </>
                               )}
                             </div>
                           </td>
@@ -666,6 +716,17 @@ export function CatalogPage() {
         confirmText={t.common.delete}
         cancelText={t.common.cancel}
         variant="danger"
+      />
+
+      {/* Restore Confirmation */}
+      <ConfirmModal
+        isOpen={restoreConfirm !== null}
+        onClose={() => setRestoreConfirm(null)}
+        onConfirm={() => restoreConfirm && handleRestore(restoreConfirm)}
+        title={t.common.confirm}
+        message={t.catalog.restoreConfirm}
+        confirmText={t.common.restore}
+        cancelText={t.common.cancel}
       />
 
       {/* Reset Confirmation */}
