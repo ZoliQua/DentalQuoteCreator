@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
+import dcqLogo from '../assets/dcq_logo.svg';
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -26,6 +27,10 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4 relative">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+        <div className="flex flex-col items-center mb-6">
+          <img src={dcqLogo} alt="DentalQuoter" className="w-24 h-24 mb-3" />
+          <span className="text-2xl font-bold text-slate-900">DentalQuoter</span>
+        </div>
         <h1 className="text-2xl font-bold text-slate-900">{t.login.title}</h1>
         <p className="text-slate-600 mt-2">{t.login.subtitle}</p>
 

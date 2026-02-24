@@ -372,6 +372,13 @@ export function PatientDetailPage() {
     await loadSnapshotForView(created.snapshotId);
   };
 
+  const handleOdontogramClick = (event: React.MouseEvent) => {
+    const target = event.target as Element | null;
+    const toothGrid = target?.closest('#toothGrid');
+    if (!toothGrid || !activeSnapshotId) return;
+    handleOpenEditSnapshot(activeSnapshotId);
+  };
+
   const handleOpenEditSnapshot = (snapshotId: string) => {
     if (!patient?.patientId) return;
     const snapshot = loadTimelineSnapshot(patient.patientId, snapshotId);
@@ -491,7 +498,7 @@ export function PatientDetailPage() {
       </div>
 
       {!editorOpen && (
-        <div id="patientOdontogramSection">
+        <div id="patientOdontogramSection" onClick={handleOdontogramClick}>
           <OdontogramHost
             ref={hostRef}
             patientId={patient.patientId}

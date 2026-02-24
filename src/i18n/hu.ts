@@ -379,6 +379,7 @@ export const hu = {
     warrantyTextHelp: 'A garancia feltételek szövege (2. oldal)',
     // Quote settings
     quoteLang: 'Árajánlat nyelve',
+    pdfFont: 'Árajánlat betűtípusa',
     quoteSettings: 'Árajánlat Beállítások',
     quoteStatistics: 'Statisztikák',
     quotePrefix: 'Előtag (4 karakter)',
@@ -703,7 +704,7 @@ export const hu = {
   // Login
   login: {
     title: 'Bejelentkezés',
-    subtitle: 'Adminisztrációs hozzáférés és jogosultságkezelés.',
+    subtitle: 'Kérem jelentkezzen be a szoftver használatához.',
     emailLabel: 'E-mail',
     passwordLabel: 'Jelszó',
     loginButton: 'Belépés',

@@ -1,15 +1,18 @@
 import jsPDF from 'jspdf';
 import { toPdfText, formatPdfDate } from './pdfUtils';
+import { registerPdfFonts } from './pdfFonts';
 import type { InvoiceRequestPayload } from '../../modules/invoicing/api';
+import type { PdfFontFamily } from '../../types/settings';
 
 function formatCurrencyPdf(amount: number): string {
   return Math.round(amount).toLocaleString('hu-HU') + ' Ft';
 }
 
-export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void {
+export async function generateInvoicePreviewPdf(payload: InvoiceRequestPayload, fontFamily?: PdfFontFamily): Promise<void> {
   const { seller, buyer, invoice, items } = payload;
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const font = await registerPdfFonts(doc, fontFamily || 'Roboto');
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
@@ -19,7 +22,7 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
 
   // --- Determine invoice title ---
   let title = 'SZÁMLA';
-  if (invoice.elolegszamla) title = 'ELÖLEGSZÁMLA';
+  if (invoice.elolegszamla) title = 'ELŐLEGSZÁMLA';
   if (invoice.vegszamla) title = 'VÉGSZÁMLA';
 
   // --- Helper: check page break ---
@@ -34,12 +37,12 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
   // 1. HEADER
   // =========================================================
   doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(toPdfText(title), margin, yPos + 6);
 
   // Right side: seller name + email
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   doc.text(toPdfText(seller.name), pageWidth - margin, yPos, { align: 'right' });
   if (seller.email) {
     doc.text(toPdfText(seller.email), pageWidth - margin, yPos + 5, { align: 'right' });
@@ -56,36 +59,36 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
   const metaX1 = margin + 3;
   const metaX2 = margin + contentWidth / 2;
 
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text('Számlaszám:', metaX1, yPos);
-  doc.setFont('helvetica', 'normal');
-  doc.text(toPdfText('ELÖNÉZET'), metaX1 + 28, yPos);
+  doc.setFont(font, 'normal');
+  doc.text(toPdfText('ELŐNÉZET'), metaX1 + 28, yPos);
 
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(toPdfText('Fizetési mód:'), metaX2, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   doc.text(toPdfText(invoice.paymentMethod), metaX2 + 28, yPos);
 
   yPos += 6;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(toPdfText('Kiállítás:'), metaX1, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   doc.text(formatPdfDate(invoice.issueDate), metaX1 + 28, yPos);
 
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(toPdfText('Teljesítés:'), metaX2, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   doc.text(formatPdfDate(invoice.fulfillmentDate), metaX2 + 28, yPos);
 
   yPos += 6;
-  doc.setFont('helvetica', 'bold');
-  doc.text(toPdfText('Fizetési határidö:'), metaX1, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'bold');
+  doc.text(toPdfText('Fizetési határidő:'), metaX1, yPos);
+  doc.setFont(font, 'normal');
   doc.text(formatPdfDate(invoice.dueDate), metaX1 + 35, yPos);
 
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text('Pénznem:', metaX2, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   doc.text(invoice.currency, metaX2 + 28, yPos);
 
   yPos += 10;
@@ -98,9 +101,9 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
   const buyerX = margin + contentWidth / 2 + 2;
 
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(toPdfText('Eladó'), sellerX, yPos);
-  doc.text(toPdfText('Vevö'), buyerX, yPos);
+  doc.text(toPdfText('Vevő'), buyerX, yPos);
   yPos += 1;
   doc.setDrawColor(200);
   doc.line(sellerX, yPos, sellerX + colW, yPos);
@@ -108,7 +111,7 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
   yPos += 5;
 
   doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
 
   // Seller details
   doc.text(toPdfText(seller.name), sellerX, yPos);
@@ -132,9 +135,9 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
     buyerY += 4;
   }
   if (buyer.taxNumber) {
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.text(toPdfText('Adószám: ') + buyer.taxNumber, buyerX, buyerY);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     buyerY += 4;
   }
 
@@ -162,7 +165,7 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
   doc.setFillColor(230, 230, 230);
   doc.rect(margin, yPos - 4, contentWidth, 7, 'F');
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text('#', col.num, yPos);
   doc.text(toPdfText('Megnevezés'), col.name, yPos);
   doc.text('Me.e.', col.unit, yPos);
@@ -199,7 +202,7 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
     totalGross += lineGross;
 
     doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     doc.text(`${idx + 1}`, col.num, yPos);
 
     // Truncate name if too long
@@ -237,7 +240,7 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
   const totalsValueX = pageWidth - margin - 2;
 
   doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   doc.text(toPdfText('Nettó összesen:'), totalsLabelX, yPos);
   doc.text(formatCurrencyPdf(totalNet), totalsValueX, yPos, { align: 'right' });
   yPos += 5;
@@ -251,7 +254,7 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
   yPos += 5;
 
   doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(toPdfText('Bruttó összesen:'), totalsLabelX, yPos);
   doc.text(formatCurrencyPdf(totalGross), totalsValueX, yPos, { align: 'right' });
 
@@ -262,10 +265,10 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
     yPos += 12;
     checkNewPage(20);
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.text(toPdfText('Megjegyzés:'), margin, yPos);
     yPos += 5;
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     const commentLines = doc.splitTextToSize(toPdfText(invoice.comment), contentWidth);
     for (const line of commentLines) {
       checkNewPage(5);
@@ -283,7 +286,7 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
     doc.saveGraphicsState();
     doc.setFontSize(60);
     doc.setTextColor(220, 220, 220);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
 
     // Rotate text 45° around page center
     const cx = pageWidth / 2;
@@ -296,7 +299,7 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
     (doc as unknown as { internal: { write: (s: string) => void } }).internal.write(
       `q ${cos.toFixed(4)} ${sin.toFixed(4)} ${(-sin).toFixed(4)} ${cos.toFixed(4)} ${cx.toFixed(2)} ${(pageHeight - cy).toFixed(2)} cm`
     );
-    doc.text(toPdfText('ELÖNÉZET'), 0, 0, { align: 'center', baseline: 'middle' });
+    doc.text(toPdfText('ELŐNÉZET'), 0, 0, { align: 'center', baseline: 'middle' });
     (doc as unknown as { internal: { write: (s: string) => void } }).internal.write('Q');
 
     doc.restoreGraphicsState();
@@ -309,7 +312,7 @@ export function generateInvoicePreviewPdf(payload: InvoiceRequestPayload): void 
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(150, 150, 150);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     doc.text(`${i} / ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
   }
 

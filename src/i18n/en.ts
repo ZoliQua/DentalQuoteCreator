@@ -380,6 +380,7 @@ export const en: TranslationKeys = {
     warrantyTextHelp: 'Warranty terms text (page 2)',
     // Quote settings
     quoteLang: 'Quote language',
+    pdfFont: 'PDF font',
     quoteSettings: 'Quote Settings',
     quoteStatistics: 'Statistics',
     quotePrefix: 'Prefix (4 characters)',
@@ -705,7 +706,7 @@ export const en: TranslationKeys = {
   // Login
   login: {
     title: 'Login',
-    subtitle: 'Administrative access and permission management.',
+    subtitle: 'Please log in to use the software.',
     emailLabel: 'Email',
     passwordLabel: 'Password',
     loginButton: 'Log in',

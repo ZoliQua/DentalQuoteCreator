@@ -1244,7 +1244,7 @@ export function InvoicesPage() {
             </Button>
             <Button
               variant="secondary"
-              onClick={() => generateInvoicePreviewPdf(buildNewInvoicePayload())}
+              onClick={() => generateInvoicePreviewPdf(buildNewInvoicePayload(), settings.pdf.pdfFont)}
             >
               {t.invoices.pdfPreview}
             </Button>

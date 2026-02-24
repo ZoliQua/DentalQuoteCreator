@@ -17,10 +17,20 @@ export interface PdfLangSettings {
   warrantyText: string;
 }
 
+export type PdfFontFamily =
+  | 'Inter'
+  | 'JetBrains Mono'
+  | 'Noto Sans'
+  | 'Noto Serif'
+  | 'Roboto'
+  | 'Source Sans 3'
+  | 'Source Serif 4';
+
 export interface PdfSettings {
   hu: PdfLangSettings;
   en: PdfLangSettings;
   de: PdfLangSettings;
+  pdfFont?: PdfFontFamily;
 }
 
 export interface QuoteSettings {

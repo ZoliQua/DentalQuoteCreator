@@ -1,11 +1,9 @@
 // Shared PDF helper functions
-// jsPDF's built-in fonts don't support ő and ű (double acute), so we replace them
+
+// With Roboto font embedded, all Hungarian characters (including ő, ű) render natively.
+// This function is kept as a pass-through for API compatibility.
 export function toPdfText(text: string): string {
-  return text
-    .replace(/ő/g, 'ö')
-    .replace(/Ő/g, 'Ö')
-    .replace(/ű/g, 'ü')
-    .replace(/Ű/g, 'Ü');
+  return text;
 }
 
 // Format date as YYYY.MM.DD for PDF

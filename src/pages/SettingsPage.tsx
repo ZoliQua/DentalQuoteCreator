@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useQuotes } from '../hooks';
-import { Settings, Doctor, DateFormat } from '../types';
+import { Settings, Doctor, DateFormat, PdfFontFamily } from '../types';
 import { Button, Card, CardContent, CardHeader, Input, TextArea, Select, ConfirmModal } from '../components/common';
 import { formatDateTimeWithPattern } from '../utils';
 import { getAuthHeaders } from '../utils/auth';
@@ -337,6 +337,27 @@ export function SettingsPage() {
               { value: 'hu', label: 'Magyar' },
               { value: 'en', label: 'English' },
               { value: 'de', label: 'Deutsch' },
+            ]}
+          />
+
+          {/* PDF Font */}
+          <Select
+            label={t.settings.pdfFont}
+            value={formData.pdf.pdfFont || 'Roboto'}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                pdf: { ...formData.pdf, pdfFont: e.target.value as PdfFontFamily },
+              })
+            }
+            options={[
+              { value: 'Inter', label: 'Inter' },
+              { value: 'JetBrains Mono', label: 'JetBrains Mono' },
+              { value: 'Noto Sans', label: 'Noto Sans' },
+              { value: 'Noto Serif', label: 'Noto Serif' },
+              { value: 'Roboto', label: 'Roboto' },
+              { value: 'Source Sans 3', label: 'Source Sans 3' },
+              { value: 'Source Serif 4', label: 'Source Serif 4' },
             ]}
           />
 

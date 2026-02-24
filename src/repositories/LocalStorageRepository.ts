@@ -3,6 +3,7 @@ import {
   CatalogItem,
   DentalStatusSnapshot,
   Patient,
+  PdfFontFamily,
   PriceList,
   PriceListCategory,
   Quote,
@@ -350,6 +351,7 @@ function normalizeSettings(raw: Settings | null | undefined): Settings | null {
         },
         en: { ...defaultSettings.pdf.en },
         de: { ...defaultSettings.pdf.de },
+        pdfFont: pdfObj.pdfFont as PdfFontFamily | undefined,
       };
     } else {
       // New format but ensure all languages exist with fallbacks
@@ -367,6 +369,7 @@ function normalizeSettings(raw: Settings | null | undefined): Settings | null {
           footerText: typedPdf.de?.footerText || defaultSettings.pdf.de.footerText,
           warrantyText: typedPdf.de?.warrantyText || defaultSettings.pdf.de.warrantyText,
         },
+        pdfFont: pdfObj.pdfFont as PdfFontFamily | undefined,
       };
     }
   } else {

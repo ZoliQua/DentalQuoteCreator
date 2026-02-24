@@ -2320,7 +2320,7 @@ export function VisualQuoteEditorPage() {
 
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setInvoiceModalOpen(false)}>{t.common.cancel}</Button>
-            <Button variant="secondary" onClick={() => { const p = buildInvoicePayload(); if (p) generateInvoicePreviewPdf(p); }}>{t.invoices.pdfPreview}</Button>
+            <Button variant="secondary" onClick={() => { const p = buildInvoicePayload(); if (p) generateInvoicePreviewPdf(p, settings.pdf.pdfFont); }}>{t.invoices.pdfPreview}</Button>
             <Button variant="secondary" onClick={handlePreviewInvoice} disabled={invoiceSubmitting || (invoiceType === 'advance' && (advanceAmount <= 0 || advanceAmount > totals.total))}>{t.invoices.preview}</Button>
             <Button onClick={handleCreateInvoice} disabled={invoiceSubmitting || (invoiceType === 'advance' && (advanceAmount <= 0 || advanceAmount > totals.total))}>{t.invoices.createInvoice}</Button>
           </div>

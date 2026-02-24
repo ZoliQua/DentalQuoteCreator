@@ -363,6 +363,7 @@ export const de: TranslationKeys = {
     warrantyText: 'Garantiebedingungen',
     warrantyTextHelp: 'Text der Garantiebedingungen (Seite 2)',
     quoteLang: 'Angebotssprache',
+    pdfFont: 'PDF-Schriftart',
     quoteSettings: 'Angebotseinstellungen',
     quoteStatistics: 'Statistiken',
     quotePrefix: 'Präfix (4 Zeichen)',
@@ -676,7 +677,7 @@ export const de: TranslationKeys = {
   // Login
   login: {
     title: 'Anmeldung',
-    subtitle: 'Administrativer Zugang und Berechtigungsverwaltung.',
+    subtitle: 'Bitte melden Sie sich an, um die Software zu nutzen.',
     emailLabel: 'E-Mail',
     passwordLabel: 'Passwort',
     loginButton: 'Anmelden',

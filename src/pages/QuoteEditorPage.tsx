@@ -368,8 +368,8 @@ export function QuoteEditorPage() {
   const selectedDoctor = settings.doctors.find((doc) => doc.id === quote.doctorId);
   const doctorName = selectedDoctor?.name || (settings.doctors.length > 0 ? settings.doctors[0].name : '');
 
-  const handleDownloadPdf = () => {
-    generateQuotePdf(quote, patient, settings, doctorName);
+  const handleDownloadPdf = async () => {
+    await generateQuotePdf(quote, patient, settings, doctorName);
   };
 
   const categories = Object.keys(itemsByCategory) as CatalogCategory[];
@@ -1702,7 +1702,7 @@ export function QuoteEditorPage() {
             <Button variant="secondary" onClick={() => setInvoiceModalOpen(false)}>
               {t.common.cancel}
             </Button>
-            <Button variant="secondary" onClick={() => generateInvoicePreviewPdf(buildInvoicePayload())}>
+            <Button variant="secondary" onClick={() => generateInvoicePreviewPdf(buildInvoicePayload(), settings.pdf.pdfFont)}>
               {t.invoices.pdfPreview}
             </Button>
             <Button variant="secondary" onClick={handlePreviewInvoice} disabled={invoiceSubmitting || (invoiceType === 'advance' && (advanceAmount <= 0 || advanceAmount > totals.total))}>

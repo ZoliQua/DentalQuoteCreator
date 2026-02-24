@@ -9,8 +9,9 @@ import {
 } from '../../utils';
 import { mergeQuoteItemsBySession, type MergedQuoteItem } from '../../utils/mergedQuoteItems';
 import { toPdfText, formatPdfDate } from './pdfUtils';
+import { registerPdfFonts } from './pdfFonts';
 
-export function generateQuotePdf(quote: Quote, patient: Patient, settings: Settings, doctorName?: string, odontogramImage?: string): void {
+export async function generateQuotePdf(quote: Quote, patient: Patient, settings: Settings, doctorName?: string, odontogramImage?: string): Promise<void> {
   const quoteLang: 'hu' | 'en' | 'de' = (quote as { quoteLang?: 'hu' | 'en' | 'de' }).quoteLang ?? (settings.quote as { quoteLang?: 'hu' | 'en' | 'de' }).quoteLang ?? 'hu';
   const pdfLangSettings = (settings.pdf as { hu?: { footerText: string; warrantyText: string }; en?: { footerText: string; warrantyText: string }; de?: { footerText: string; warrantyText: string }; footerText?: string; warrantyText?: string });
   // Support both old flat format and new per-language format
@@ -25,7 +26,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
       dentalStatus: 'Célzott fogászati státusz', itemsTitle: 'Kezelések tételek szerint',
       session: 'Alk.', name: 'Megnevezés', unitPrice: 'Egységár', qty: 'Mennyiség', total: 'Összesen',
       sessionSummary: 'Kezelések összefoglalója', sessionCol: 'Alkalom', amountCol: 'Összeg', sessionLabel: 'alkalom',
-      subtotal: 'Részösszeg:', lineDiscounts: 'Kedvezmények:', globalDiscount: 'Globális kedvezmény:', grandTotal: 'FIZETENDÖ:',
+      subtotal: 'Részösszeg:', lineDiscounts: 'Kedvezmények:', globalDiscount: 'Globális kedvezmény:', grandTotal: 'FIZETENDŐ:',
       comment: 'Megjegyzés:', warranty: 'GARANCIÁLIS FELTÉTELEK', location: 'Kelt:', patientSig: 'Páciens', doctorSig: 'Kezelőorvos',
       unit: 'db', fullMouth: 'Teljes szájüreg', lowerJaw: 'Alsó állcsont', upperJaw: 'Felső állcsont', bothJaws: 'Alsó és Felső állcsont',
       q1: '1-es kvadráns (jobb felül)', q2: '2-es kvadráns (bal felül)', q3: '3-as kvadráns (bal alul)', q4: '4-es kvadráns (jobb alul)',
@@ -62,6 +63,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
     unit: 'mm',
     format: 'a4',
   });
+  const font = await registerPdfFonts(doc, settings.pdf.pdfFont || 'Roboto');
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -83,12 +85,12 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   const addHeader = (): void => {
     // Left side - Clinic info
     doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.text(toPdfText(settings.clinic.name), margin, yPos);
     yPos += 5;
 
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     doc.text(toPdfText(settings.clinic.address), margin, yPos);
     yPos += 4;
     doc.text(toPdfText(`Tel: ${settings.clinic.phone}`), margin, yPos);
@@ -104,7 +106,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
 
     // Doctor's name
     doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.text(toPdfText(pdfLabels.doctor), margin, yPos);
     const marginDoctorName = margin + 30;
     const yPosDoctorName = yPos;
@@ -114,18 +116,18 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
 
     // Right side - Quote info
     doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.text(toPdfText(pdfLabels.title), pageWidth - margin, margin, { align: 'right' });
 
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     doc.text(toPdfText(`${pdfLabels.id} ${quote.quoteNumber}`), pageWidth - margin, margin + 7, {
       align: 'right',
     });
     doc.text(toPdfText(`${pdfLabels.created} ${formatPdfDate(quote.createdAt)}`), pageWidth - margin, margin + 12, {
       align: 'right',
     });
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.setFontSize(12);
     doc.text(toPdfText(`${pdfLabels.valid} ${formatPdfDate(quote.validUntil)}`), pageWidth - margin, yPosDoctorName, {
       align: 'right',
@@ -144,42 +146,42 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
 
   // Patient info block
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(toPdfText(pdfLabels.patient), margin, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   doc.text(toPdfText(formatPatientName(patient.lastName, patient.firstName, patient.title)), margin + 27, yPos);
   yPos += 5;
 
   if (patient.birthDate) {
     yPos -= 5;
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.text(toPdfText(pdfLabels.birthDate), margin + 80, yPos);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     doc.text(toPdfText(formatPdfDate(patient.birthDate)), margin + 110, yPos);
     yPos += 5;
   }
 
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(toPdfText(pdfLabels.address), margin, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   const zipCity = [patient.zipCode, patient.city].filter(Boolean).join(', ');
   doc.text(toPdfText(zipCity), margin + 27, yPos);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(toPdfText(pdfLabels.street), margin + 80, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   doc.text(toPdfText(patient.street || ''), margin + 110, yPos);
   yPos += 5;
 
   // Show Contact Info if any
   const contactInfo = [patient.phone, patient.email].filter(Boolean).join(' | ');
   if (contactInfo) {
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.text(toPdfText(pdfLabels.phone), margin, yPos);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     doc.text(toPdfText(patient.phone || ''), margin + 27, yPos);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.text(toPdfText(pdfLabels.email), margin + 80, yPos);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     doc.text(toPdfText(patient.email || ''), margin + 110, yPos);
     yPos += 5;
   }
@@ -199,7 +201,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   // Odontogram image (if provided)
   if (odontogramImage) {
     doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.text(toPdfText(pdfLabels.dentalStatus), margin, yPos);
     yPos += 6;
 
@@ -233,7 +235,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
     doc.setFillColor(240, 240, 240);
     doc.rect(margin, yPos - 4, contentWidth, 8, 'F');
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     let x = margin + 2;
     doc.text('#', x, yPos);
     x += colWidths.num;
@@ -295,7 +297,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
 
     let xPos = margin + 2;
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     doc.text(`${rowIndex + 1}.`, xPos, yPos);
     xPos += colWidths.num;
 
@@ -345,7 +347,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   if (isVisual) {
     // Visual quote: per-session tables with subtotals
     doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.text(toPdfText(pdfLabels.treatments), margin, yPos);
     yPos += 6;
 
@@ -358,7 +360,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
       // Session subtitle (only if multiple sessions)
       if (numberOfSessions > 1) {
         doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
+        doc.setFont(font, 'bold');
         doc.text(toPdfText(`${session}. ${pdfLabels.sessionLabel}`), margin, yPos);
         yPos += 6;
       }
@@ -374,7 +376,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
       if (numberOfSessions > 1) {
         yPos += 2;
         doc.setFontSize(9);
-        doc.setFont('helvetica', 'bold');
+        doc.setFont(font, 'bold');
         doc.text(
           toPdfText(`${session}. ${pdfLabels.sessionLabel} ${pdfLabels.total.toLowerCase()}:`),
           pageWidth - margin - 60,
@@ -388,14 +390,14 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
           { align: 'right' }
         );
         yPos += 8;
-        doc.setFont('helvetica', 'normal');
+        doc.setFont(font, 'normal');
       }
     }
     // No session summary for visual quotes
   } else {
     // Itemized quote: single table with session column + summary
     doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.text(toPdfText(pdfLabels.itemsTitle), margin, yPos);
     yPos += 6;
 
@@ -416,7 +418,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
       checkNewPage(30 + numberOfSessions * 5);
 
       doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(font, 'bold');
       doc.text(toPdfText(pdfLabels.sessionSummary), margin, yPos);
       yPos += 6;
 
@@ -429,7 +431,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
       yPos += 6;
 
       // Summary table rows
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(font, 'normal');
       sessionNumbers.forEach((session) => {
         doc.text(toPdfText(`${session}. ${pdfLabels.sessionLabel}`), margin + 2, yPos);
         doc.text(formatCurrency(sessionTotals[session]), margin + 120, yPos, { align: 'right' });
@@ -452,7 +454,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   doc.setFontSize(10);
 
   // Subtotal
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   doc.text(toPdfText(pdfLabels.subtotal), totalsX, yPos);
   doc.text(formatCurrency(totals.subtotal), pageWidth - margin - 2, yPos, { align: 'right' });
   yPos += 6;
@@ -486,7 +488,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
   yPos += 6;
 
   doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(toPdfText(pdfLabels.grandTotal), totalsX, yPos);
   doc.text(formatCurrency(totals.total), pageWidth - margin, yPos, { align: 'right' });
 
@@ -496,11 +498,11 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
     checkNewPage(30);
 
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(font, 'bold');
     doc.text(toPdfText(pdfLabels.comment), margin, yPos);
     yPos += 5;
 
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     const commentLines = doc.splitTextToSize(toPdfText(quote.commentToPatient), contentWidth);
     doc.text(commentLines, margin, yPos);
     yPos += commentLines.length * 5;
@@ -512,22 +514,22 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
 
   // Warranty title
   doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(font, 'bold');
   doc.text(toPdfText(pdfLabels.warranty), pageWidth / 2, yPos, { align: 'center' });
   yPos += 15;
 
   // Warranty text
   doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   const warrantyLines = doc.splitTextToSize(toPdfText(resolvedWarrantyText), contentWidth);
 
   warrantyLines.forEach((line: string) => {
     checkNewPage(6);
     // Check for bullet points or numbered items
     if (line.startsWith('••') || /^\d+\./.test(line.trim())) {
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(font, 'bold');
     } else {
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(font, 'normal');
     }
     doc.text(line.replace(/••/g, '•'), margin, yPos);
     yPos += 5;
@@ -538,7 +540,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
 
   // Location and date
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(font, 'normal');
   const city = settings.clinic.address
     .replace(/^\d{4}\s*/, '') // remove postal code at start
     .split(',')[0]
@@ -574,7 +576,7 @@ export function generateQuotePdf(quote: Quote, patient: Patient, settings: Setti
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(150);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(font, 'normal');
     doc.text(`${i} / ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
   }
   doc.setTextColor(0);
