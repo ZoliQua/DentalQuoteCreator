@@ -10,7 +10,7 @@ const ALL_CSV_HEADERS = [
   'catalogPriceCurrency',
   'catalogVatRate',
   'catalogTechnicalPrice',
-  'catalogCategory',
+  'catalogCategoryId',
   'svgLayer',
   'hasLayer',
   'hasTechnicalPrice',
@@ -30,7 +30,7 @@ const REQUIRED_CSV_HEADERS: readonly string[] = [
   'catalogCode',
   'catalogName',
   'catalogUnit',
-  'catalogCategory',
+  'catalogCategoryId',
 ];
 
 const needsEscaping = /["\n,]/;

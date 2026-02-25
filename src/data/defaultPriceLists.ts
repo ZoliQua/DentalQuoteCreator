@@ -77,7 +77,6 @@ function item(
     catalogPriceCurrency: 'HUF',
     catalogVatRate: 0,
     catalogTechnicalPrice: techPrice,
-    catalogCategory: cat?.catalogCategoryHu || '',
     svgLayer,
     hasLayer: svgLayer.length > 0,
     hasTechnicalPrice: techPrice > 0,

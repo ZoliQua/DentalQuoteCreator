@@ -46,6 +46,22 @@ export function usePriceListCategories(priceListId?: string) {
     [pricelistCategories]
   );
 
+  const getCategoryById = useCallback(
+    (categoryId: string): PriceListCategory | undefined => {
+      return pricelistCategories.find((c) => c.catalogCategoryId === categoryId);
+    },
+    [pricelistCategories]
+  );
+
+  const getCategoryNameById = useCallback(
+    (categoryId: string, lang: 'hu' | 'en' | 'de'): string => {
+      const found = pricelistCategories.find((c) => c.catalogCategoryId === categoryId);
+      if (!found) return categoryId;
+      return getCategoryDisplayName(found, lang);
+    },
+    [pricelistCategories]
+  );
+
   return {
     categories,
     allCategories: pricelistCategories,
@@ -53,5 +69,7 @@ export function usePriceListCategories(priceListId?: string) {
     editCategory,
     deleteCategory: removeCategory,
     getCategoryName,
+    getCategoryById,
+    getCategoryNameById,
   };
 }

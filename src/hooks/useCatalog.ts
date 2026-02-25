@@ -3,7 +3,6 @@ import { useApp } from '../context/AppContext';
 import {
   CatalogItem,
   CatalogItemFormData,
-  CATALOG_CATEGORIES,
   CATALOG_UNITS,
 } from '../types';
 import { catalogToCsv, parseCatalogCsv } from '../utils';
@@ -26,13 +25,9 @@ export function useCatalog() {
 
   const itemsByCategory = useMemo(() => {
     const grouped: Record<string, CatalogItem[]> = {};
-    // Initialize with known categories
-    for (const cat of CATALOG_CATEGORIES) {
-      grouped[cat] = [];
-    }
 
     activeItems.forEach((item) => {
-      const cat = item.catalogCategory;
+      const cat = item.catalogCategoryId;
       if (!grouped[cat]) {
         grouped[cat] = [];
       }
@@ -96,7 +91,7 @@ export function useCatalog() {
       let source = activeOnly ? activeItems : catalog;
 
       if (category) {
-        source = source.filter((c) => c.catalogCategory === category);
+        source = source.filter((c) => c.catalogCategoryId === category);
       }
 
       if (!searchLower) {
@@ -107,8 +102,7 @@ export function useCatalog() {
       return source.filter(
         (c) =>
           c.catalogName.toLowerCase().includes(searchLower) ||
-          c.catalogCode.toLowerCase().replace(/-/g, '').includes(searchNormalized) ||
-          (c.catalogCategory && c.catalogCategory.toLowerCase().includes(searchLower))
+          c.catalogCode.toLowerCase().replace(/-/g, '').includes(searchNormalized)
       );
     },
     [catalog, activeItems]
@@ -125,9 +119,9 @@ export function useCatalog() {
       const code = item.catalogCode?.toString().trim();
       const name = (item.catalogName || item.catalogNameHu)?.toString().trim();
       const unit = item.catalogUnit?.toString().trim();
-      const category = item.catalogCategory?.toString().trim();
+      const categoryId = item.catalogCategoryId?.toString().trim();
 
-      if (!code || !name || !unit || !category) {
+      if (!code || !name || !unit || !categoryId) {
         return null;
       }
 
@@ -177,7 +171,7 @@ export function useCatalog() {
         catalogPriceCurrency: item.catalogPriceCurrency === 'EUR' ? 'EUR' : 'HUF',
         catalogVatRate: Number.isFinite(vatValue) ? vatValue : 0,
         catalogTechnicalPrice: Number.isFinite(technicalValue) ? technicalValue : 0,
-        catalogCategory: category,
+        catalogCategoryId: categoryId,
         svgLayer: item.svgLayer?.toString() || '',
         hasLayer: Boolean(item.hasLayer),
         hasTechnicalPrice: Number.isFinite(technicalValue) ? technicalValue > 0 : false,

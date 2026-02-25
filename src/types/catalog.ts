@@ -1,26 +1,3 @@
-export type CatalogCategory =
-  | 'Diagnosztika'
-  | 'Parodontológia'
-  | 'Konzerváló Fogászat'
-  | 'Endodoncia'
-  | 'Szájsebészet'
-  | 'Implantáció'
-  | 'Protetika'
-  | 'Gyerekfogászat'
-  | 'Fogszabályozás';
-
-export const CATALOG_CATEGORIES: CatalogCategory[] = [
-  'Diagnosztika',
-  'Parodontológia',
-  'Konzerváló Fogászat',
-  'Endodoncia',
-  'Szájsebészet',
-  'Implantáció',
-  'Protetika',
-  'Gyerekfogászat',
-  'Fogszabályozás',
-];
-
 export type CatalogUnit = 'alkalom' | 'db' | 'állcsont' | 'kvadráns' | 'fog';
 
 export const CATALOG_UNITS: CatalogUnit[] = ['alkalom', 'db', 'állcsont', 'kvadráns', 'fog'];
@@ -35,8 +12,7 @@ export interface CatalogItem {
   catalogPriceCurrency: 'HUF' | 'EUR';
   catalogVatRate: number;
   catalogTechnicalPrice: number;
-  catalogCategory: CatalogCategory | string;
-  catalogCategoryId?: string;
+  catalogCategoryId: string;
   priceListId?: string;
   svgLayer: string;
   hasLayer: boolean;

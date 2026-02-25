@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { usePatients, useQuotes, useCatalog, useCatalogCodeFormatter, usePriceListCategories } from '../hooks';
-import { QuoteItem, CatalogItem, CatalogCategory, DiscountType } from '../types';
+import { QuoteItem, CatalogItem, DiscountType } from '../types';
 import {
   Button,
   Card,
@@ -76,13 +76,13 @@ export function QuoteEditorPage() {
   } = useQuotes();
   const { activeItems, itemsByCategory } = useCatalog();
   const { formatCode } = useCatalogCodeFormatter();
-  const { getCategoryName } = usePriceListCategories();
+  const { getCategoryNameById } = usePriceListCategories();
   const { hasPermission } = useAuth();
   const { restoreQuote } = useApp();
 
   const [isItemSelectorOpen, setIsItemSelectorOpen] = useState(false);
   const [itemSearchQuery, setItemSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<CatalogCategory | 'all'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [lineDiscountPreset, setLineDiscountPreset] = useState<LineDiscountPreset>('none');
@@ -223,7 +223,7 @@ export function QuoteEditorPage() {
     let items = activeItems;
 
     if (selectedCategory !== 'all') {
-      items = items.filter((item) => item.catalogCategory === selectedCategory);
+      items = items.filter((item) => item.catalogCategoryId === selectedCategory);
     }
 
     if (itemSearchQuery.trim()) {
@@ -238,7 +238,7 @@ export function QuoteEditorPage() {
 
     // Sort by category name, then catalogCode
     items = [...items].sort((a, b) => {
-      const catCmp = a.catalogCategory.localeCompare(b.catalogCategory);
+      const catCmp = getCategoryNameById(a.catalogCategoryId, appLanguage).localeCompare(getCategoryNameById(b.catalogCategoryId, appLanguage));
       if (catCmp !== 0) return catCmp;
       return a.catalogCode.localeCompare(b.catalogCode);
     });
@@ -372,7 +372,7 @@ export function QuoteEditorPage() {
     await generateQuotePdf(quote, patient, settings, doctorName);
   };
 
-  const categories = Object.keys(itemsByCategory) as CatalogCategory[];
+  const categories = Object.keys(itemsByCategory);
 
   const buildInvoicePayload = () => {
     const vatRate = settings.invoice?.defaultVatRate ?? 'TAM';
@@ -1771,10 +1771,10 @@ export function QuoteEditorPage() {
             </div>
             <Select
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value as CatalogCategory | 'all')}
+              onChange={(e) => setSelectedCategory(e.target.value)}
               options={[
                 { value: 'all', label: t.common.all },
-                ...categories.map((cat) => ({ value: cat, label: getCategoryName(cat, appLanguage) })),
+                ...categories.map((catId) => ({ value: catId, label: getCategoryNameById(catId, appLanguage) })),
               ]}
               className="w-48"
             />
@@ -1798,7 +1798,7 @@ export function QuoteEditorPage() {
                   <div>
                     <p className="font-medium">{getCatalogDisplayName(item, appLanguage)}</p>
                     <p className="text-sm text-gray-500">
-                      {formatCode(item)} | {getCategoryName(item.catalogCategory, appLanguage)}
+                      {formatCode(item)} | {getCategoryNameById(item.catalogCategoryId, appLanguage)}
                     </p>
                   </div>
                   <div className="text-right">

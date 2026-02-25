@@ -68,6 +68,7 @@ async function main() {
         isActive: toBool(row.isActive),
         isDeleted: toBool(row.isDeleted),
         isDefault: toBool(row.isDefault),
+        isNeak: toBool(row.isNeak || 'FALSE'),
         isUserLocked: toBool(row.isUserLocked),
         listOfUsers: row.listOfUsers === '{}' ? [] : JSON.parse(row.listOfUsers || '[]'),
       },
@@ -79,6 +80,7 @@ async function main() {
         isActive: toBool(row.isActive),
         isDeleted: toBool(row.isDeleted),
         isDefault: toBool(row.isDefault),
+        isNeak: toBool(row.isNeak || 'FALSE'),
         isUserLocked: toBool(row.isUserLocked),
         listOfUsers: row.listOfUsers === '{}' ? [] : JSON.parse(row.listOfUsers || '[]'),
       },
@@ -130,13 +132,12 @@ async function main() {
       ? row.allowedTeeth.split('|').map(Number).filter((n) => Number.isFinite(n))
       : [];
     const catInfo = catLookup[row.catalogCategoryId];
-    const catalogCategory = catInfo?.hu || '';
     const priceListId = catInfo?.priceListId || null;
 
     await prisma.priceListCatalogItem.upsert({
       where: { catalogItemId: row.catalogItemId },
       update: {
-        catalogCategoryId: row.catalogCategoryId || null,
+        catalogCategoryId: row.catalogCategoryId || '',
         priceListId,
         catalogCode: row.catalogCode,
         catalogNameHu: row.catalogNameHu,
@@ -147,7 +148,6 @@ async function main() {
         catalogPriceCurrency: row.catalogPriceCurrency || 'HUF',
         catalogVatRate: Number(row.catalogVatRate) || 0,
         catalogTechnicalPrice: Number(row.catalogTechnicalPrice) || 0,
-        catalogCategory,
         svgLayer: row.svgLayer || '',
         hasLayer: toBool(row.hasLayer),
         hasTechnicalPrice: toBool(row.hasTechnicalPrice),
@@ -161,7 +161,7 @@ async function main() {
       },
       create: {
         catalogItemId: row.catalogItemId,
-        catalogCategoryId: row.catalogCategoryId || null,
+        catalogCategoryId: row.catalogCategoryId || '',
         priceListId,
         catalogCode: row.catalogCode,
         catalogNameHu: row.catalogNameHu,
@@ -172,7 +172,6 @@ async function main() {
         catalogPriceCurrency: row.catalogPriceCurrency || 'HUF',
         catalogVatRate: Number(row.catalogVatRate) || 0,
         catalogTechnicalPrice: Number(row.catalogTechnicalPrice) || 0,
-        catalogCategory,
         svgLayer: row.svgLayer || '',
         hasLayer: toBool(row.hasLayer),
         hasTechnicalPrice: toBool(row.hasTechnicalPrice),

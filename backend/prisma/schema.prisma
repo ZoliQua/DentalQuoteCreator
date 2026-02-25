@@ -1,6 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-1.1.x"]
+  binaryTargets = ["native", "rhel-openssl-1.1.x", "debian-openssl-1.0.x"]
 }
 
 datasource db {
@@ -210,8 +210,7 @@ model PriceListCatalogItem {
   catalogPriceCurrency  String
   catalogVatRate        Float
   catalogTechnicalPrice Float
-  catalogCategory       String
-  catalogCategoryId     String?
+  catalogCategoryId     String
   priceListId           String?
   svgLayer              String  @default("")
   hasLayer              Boolean @default(false)
@@ -228,7 +227,7 @@ model PriceListCatalogItem {
   isDeleted             Boolean @default(false)
 
   priceList         PriceList?         @relation(fields: [priceListId], references: [priceListId])
-  priceListCategory PriceListCategory? @relation(fields: [catalogCategoryId], references: [catalogCategoryId])
+  priceListCategory PriceListCategory @relation(fields: [catalogCategoryId], references: [catalogCategoryId])
 
   @@index([catalogCategoryId])
   @@index([priceListId])

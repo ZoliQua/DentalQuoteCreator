@@ -11,22 +11,16 @@ export function useCatalogCodeFormatter() {
 
   const prefixLookup = useMemo(() => {
     const byId: Record<string, string> = {};
-    const byName: Record<string, string> = {};
     for (const cat of allCategories) {
       byId[cat.catalogCategoryId] = cat.catalogCategoryPrefix;
-      byName[cat.catalogCategoryHu] = cat.catalogCategoryPrefix;
     }
-    return { byId, byName };
+    return { byId };
   }, [allCategories]);
 
   const getItemPrefix = useCallback(
     (item: CatalogItem): string => {
-      if ((item as unknown as Record<string, unknown>).catalogCategoryId) {
-        const catId = (item as unknown as Record<string, unknown>).catalogCategoryId as string;
-        if (prefixLookup.byId[catId]) return prefixLookup.byId[catId];
-      }
-      if (item.catalogCategory && prefixLookup.byName[item.catalogCategory]) {
-        return prefixLookup.byName[item.catalogCategory];
+      if (item.catalogCategoryId && prefixLookup.byId[item.catalogCategoryId]) {
+        return prefixLookup.byId[item.catalogCategoryId];
       }
       return '';
     },

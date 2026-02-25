@@ -298,11 +298,6 @@ function normalizeCatalogItem(item: Partial<CatalogItem>): CatalogItem {
   const normalizedUnit = CATALOG_UNITS.includes(item.catalogUnit as (typeof CATALOG_UNITS)[number])
     ? (item.catalogUnit as (typeof CATALOG_UNITS)[number])
     : 'alkalom';
-  // Accept any non-empty category string (dynamic categories from DB)
-  const normalizedCategory = item.catalogCategory
-    ? String(item.catalogCategory)
-    : 'Diagnosztika';
-
   return {
     catalogItemId: item.catalogItemId || '',
     catalogCode: item.catalogCode ? item.catalogCode.toString().toUpperCase() : '',
@@ -313,8 +308,7 @@ function normalizeCatalogItem(item: Partial<CatalogItem>): CatalogItem {
     catalogPriceCurrency: item.catalogPriceCurrency === 'EUR' ? 'EUR' : 'HUF',
     catalogVatRate: Number.isFinite(vatValue) ? vatValue : 0,
     catalogTechnicalPrice: Number.isFinite(technicalPriceValue) ? technicalPriceValue : 0,
-    catalogCategory: normalizedCategory,
-    catalogCategoryId: item.catalogCategoryId ? String(item.catalogCategoryId) : undefined,
+    catalogCategoryId: item.catalogCategoryId ? String(item.catalogCategoryId) : '',
     priceListId: item.priceListId ? String(item.priceListId) : undefined,
     svgLayer: item.svgLayer ? item.svgLayer.toString() : '',
     hasLayer: toBoolean(item.hasLayer),

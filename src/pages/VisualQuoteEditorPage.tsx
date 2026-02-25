@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { usePatients, useQuotes, useCatalog, useCatalogCodeFormatter, usePriceListCategories } from '../hooks';
-import type { Quote, QuoteItem, CatalogItem, CatalogCategory, DiscountType } from '../types';
+import type { Quote, QuoteItem, CatalogItem, DiscountType } from '../types';
 import {
   Button,
   Card,
@@ -515,13 +515,13 @@ export function VisualQuoteEditorPage() {
   } = useQuotes();
   const { catalog, activeItems, itemsByCategory } = useCatalog();
   const { formatCode } = useCatalogCodeFormatter();
-  const { getCategoryName } = usePriceListCategories();
+  const { getCategoryNameById } = usePriceListCategories();
   const { hasPermission } = useAuth();
   const { restoreQuote } = useApp();
 
   const [activeCatalogItem, setActiveCatalogItem] = useState<CatalogItem | null>(null);
   const [itemSearchQuery, setItemSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<CatalogCategory | 'all'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [popup, setPopup] = useState<PopupState | null>(null);
   const [initialOdontogramState, setInitialOdontogramState] = useState<OdontogramState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -650,7 +650,7 @@ export function VisualQuoteEditorPage() {
   const filteredCatalogItems = useMemo(() => {
     let items = activeItems;
     if (selectedCategory !== 'all') {
-      items = items.filter((item) => item.catalogCategory === selectedCategory);
+      items = items.filter((item) => item.catalogCategoryId === selectedCategory);
     }
     if (itemSearchQuery.trim()) {
       const query = itemSearchQuery.toLowerCase().replace(/-/g, '');
@@ -663,14 +663,14 @@ export function VisualQuoteEditorPage() {
     }
     // Sort by category name, then catalogCode
     items = [...items].sort((a, b) => {
-      const catCmp = a.catalogCategory.localeCompare(b.catalogCategory);
+      const catCmp = getCategoryNameById(a.catalogCategoryId, appLanguage).localeCompare(getCategoryNameById(b.catalogCategoryId, appLanguage));
       if (catCmp !== 0) return catCmp;
       return a.catalogCode.localeCompare(b.catalogCode);
     });
     return items;
   }, [activeItems, selectedCategory, itemSearchQuery, formatCode]);
 
-  const categories = Object.keys(itemsByCategory) as CatalogCategory[];
+  const categories = Object.keys(itemsByCategory);
 
   // Close popup on outside click
   useEffect(() => {
@@ -1549,10 +1549,10 @@ export function VisualQuoteEditorPage() {
                 </div>
                 <Select
                   value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value as CatalogCategory | 'all')}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
                   options={[
                     { value: 'all', label: t.common.all },
-                    ...categories.map((cat) => ({ value: cat, label: getCategoryName(cat, appLanguage) })),
+                    ...categories.map((catId) => ({ value: catId, label: getCategoryNameById(catId, appLanguage) })),
                   ]}
                   className="text-sm"
                 />
@@ -1562,7 +1562,7 @@ export function VisualQuoteEditorPage() {
                   ) : (
                     filteredCatalogItems.map((item) => {
                       // GYER category items require milk teeth on the odontogram
-                      const isGyerDisabled = item.catalogCategory === 'Gyerefogászat' && !hasMilkTeeth;
+                      const isGyerDisabled = item.catalogCategoryId === 'pcat0003' && !hasMilkTeeth;
                       return (
                       <button
                         key={item.catalogItemId}

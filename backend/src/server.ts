@@ -1262,7 +1262,7 @@ server.post('/catalog', async (request, reply) => {
 
   const body = request.body as JsonRecord;
   const catalogNameHuValue = String(body.catalogNameHu || body.catalogName || '');
-  const catalogCategoryIdValue = body.catalogCategoryId ? String(body.catalogCategoryId) : null;
+  const catalogCategoryIdValue = String(body.catalogCategoryId || '');
   const priceListIdValue = body.priceListId ? String(body.priceListId) : null;
   let catalogItemId = body.catalogItemId ? String(body.catalogItemId) : '';
   if (!catalogItemId || !catalogItemId.startsWith('cat')) {
@@ -1282,7 +1282,6 @@ server.post('/catalog', async (request, reply) => {
       catalogPriceCurrency: String(body.catalogPriceCurrency || 'HUF'),
       catalogVatRate: Number(body.catalogVatRate || 0),
       catalogTechnicalPrice: Number(body.catalogTechnicalPrice || 0),
-      catalogCategory: String(body.catalogCategory || ''),
       catalogCategoryId: catalogCategoryIdValue,
       priceListId: priceListIdValue,
       svgLayer: String(body.svgLayer || ''),
@@ -1307,7 +1306,6 @@ server.post('/catalog', async (request, reply) => {
       catalogPriceCurrency: String(body.catalogPriceCurrency || 'HUF'),
       catalogVatRate: Number(body.catalogVatRate || 0),
       catalogTechnicalPrice: Number(body.catalogTechnicalPrice || 0),
-      catalogCategory: String(body.catalogCategory || ''),
       catalogCategoryId: catalogCategoryIdValue,
       priceListId: priceListIdValue,
       svgLayer: String(body.svgLayer || ''),
@@ -1377,9 +1375,7 @@ server.patch('/catalog/:catalogItemId', async (request, reply) => {
         catalogVatRate: body.catalogVatRate === undefined ? undefined : Number(body.catalogVatRate),
         catalogTechnicalPrice:
           body.catalogTechnicalPrice === undefined ? undefined : Number(body.catalogTechnicalPrice),
-        catalogCategory:
-          body.catalogCategory === undefined ? undefined : String(body.catalogCategory),
-        catalogCategoryId: body.catalogCategoryId === undefined ? undefined : (body.catalogCategoryId ? String(body.catalogCategoryId) : null),
+        catalogCategoryId: body.catalogCategoryId === undefined ? undefined : String(body.catalogCategoryId),
         priceListId: body.priceListId === undefined ? undefined : (body.priceListId ? String(body.priceListId) : null),
         svgLayer: body.svgLayer === undefined ? undefined : String(body.svgLayer),
         hasLayer: body.hasLayer === undefined ? undefined : Boolean(body.hasLayer),
@@ -1435,8 +1431,7 @@ server.put('/catalog/reset', async (request, reply) => {
           catalogPriceCurrency: String(item.catalogPriceCurrency || 'HUF'),
           catalogVatRate: Number(item.catalogVatRate || 0),
           catalogTechnicalPrice: Number(item.catalogTechnicalPrice || 0),
-          catalogCategory: String(item.catalogCategory || ''),
-          catalogCategoryId: item.catalogCategoryId ? String(item.catalogCategoryId) : null,
+          catalogCategoryId: String(item.catalogCategoryId || ''),
           priceListId: item.priceListId ? String(item.priceListId) : null,
           svgLayer: String(item.svgLayer || ''),
           hasLayer: Boolean(item.hasLayer),
@@ -1524,8 +1519,7 @@ server.put('/pricelists/reset', async (request, reply) => {
         catalogPriceCurrency: String(item.catalogPriceCurrency || 'HUF'),
         catalogVatRate: Number(item.catalogVatRate || 0),
         catalogTechnicalPrice: Number(item.catalogTechnicalPrice || 0),
-        catalogCategory: String(item.catalogCategory || ''),
-        catalogCategoryId: item.catalogCategoryId ? String(item.catalogCategoryId) : null,
+        catalogCategoryId: String(item.catalogCategoryId || ''),
         priceListId: item.priceListId ? String(item.priceListId) : null,
         svgLayer: String(item.svgLayer || ''),
         hasLayer: Boolean(item.hasLayer),
@@ -2439,8 +2433,7 @@ server.post('/data/import', async (request, reply) => {
           catalogPriceCurrency: String(rawCatalog.catalogPriceCurrency || 'HUF'),
           catalogVatRate: Number(rawCatalog.catalogVatRate || 0),
           catalogTechnicalPrice: Number(rawCatalog.catalogTechnicalPrice || 0),
-          catalogCategory: String(rawCatalog.catalogCategory || ''),
-          catalogCategoryId: rawCatalog.catalogCategoryId ? String(rawCatalog.catalogCategoryId) : null,
+          catalogCategoryId: String(rawCatalog.catalogCategoryId || ''),
           priceListId: rawCatalog.priceListId ? String(rawCatalog.priceListId) : null,
           svgLayer: String(rawCatalog.svgLayer || ''),
           hasLayer: Boolean(rawCatalog.hasLayer),
