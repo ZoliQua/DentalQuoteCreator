@@ -37,6 +37,7 @@ export function PriceListsPage() {
     priceListNameDe: '',
     isActive: true,
     isDefault: false,
+    isNeak: false,
     isUserLocked: false,
     isDeleted: false,
     listOfUsers: [] as string[],
@@ -49,6 +50,7 @@ export function PriceListsPage() {
       priceListNameDe: '',
       isActive: true,
       isDefault: false,
+      isNeak: false,
       isUserLocked: false,
       isDeleted: false,
       listOfUsers: [],
@@ -64,6 +66,7 @@ export function PriceListsPage() {
       priceListNameDe: item.priceListNameDe,
       isActive: item.isActive,
       isDefault: item.isDefault,
+      isNeak: item.isNeak,
       isUserLocked: item.isUserLocked,
       isDeleted: item.isDeleted,
       listOfUsers: item.listOfUsers,
@@ -165,6 +168,7 @@ export function PriceListsPage() {
                     <th className="pb-3 font-medium">{t.priceList.nameHu}</th>
                     <th className="pb-3 font-medium">{t.priceList.nameEn}</th>
                     <th className="pb-3 font-medium">{t.priceList.nameDe}</th>
+                    <th className="pb-3 font-medium text-center">{t.priceList.isNeak}</th>
                     <th className="pb-3 font-medium text-center">{t.priceList.isDefault}</th>
                     <th className="pb-3 font-medium text-center">{t.priceList.isActive}</th>
                     <th className="pb-3 font-medium text-right">{t.common.actions}</th>
@@ -176,6 +180,11 @@ export function PriceListsPage() {
                       <td className="py-3 font-medium">{item.priceListNameHu}</td>
                       <td className="py-3 text-gray-600">{item.priceListNameEn}</td>
                       <td className="py-3 text-gray-600">{item.priceListNameDe}</td>
+                      <td className="py-3 text-center">
+                        <span className={`text-sm ${item.isNeak ? 'text-green-600' : 'text-gray-400'}`}>
+                          {item.isNeak ? '✓' : '−'}
+                        </span>
+                      </td>
                       <td className="py-3 text-center">
                         {item.isDefault ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -279,6 +288,15 @@ export function PriceListsPage() {
                 className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
               />
               {t.priceList.isActive}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={formData.isNeak}
+                onChange={(e) => setFormData({ ...formData, isNeak: e.target.checked })}
+                className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
+              />
+              {t.priceList.isNeak}
             </label>
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input

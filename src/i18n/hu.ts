@@ -737,6 +737,7 @@ export const hu = {
     nameEn: 'Angol név',
     nameDe: 'Német név',
     isDefault: 'Alapértelmezett',
+    isNeak: 'NEAK Árlista',
     isActive: 'Aktív',
     isUserLocked: 'Felhasználóhoz kötött',
     setDefault: 'Beállítás alapértelmezettnek',

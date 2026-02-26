@@ -738,6 +738,7 @@ export const en: TranslationKeys = {
     nameEn: 'English name',
     nameDe: 'German name',
     isDefault: 'Default',
+    isNeak: 'NEAK Price List',
     isActive: 'Active',
     isUserLocked: 'User-locked',
     setDefault: 'Set as default',

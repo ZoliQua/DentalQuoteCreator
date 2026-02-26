@@ -178,6 +178,7 @@ model PriceList {
   isActive        Boolean @default(true)
   isDeleted       Boolean @default(false)
   isDefault       Boolean @default(false)
+  isNeak          Boolean @default(false)
   isUserLocked    Boolean @default(false)
   listOfUsers     Json    @default("[]")
 

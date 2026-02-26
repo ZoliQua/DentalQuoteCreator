@@ -40,6 +40,7 @@ export interface PriceList {
   isActive: boolean;
   isDeleted: boolean;
   isDefault: boolean;
+  isNeak: boolean;
   isUserLocked: boolean;
   listOfUsers: string[];
 }

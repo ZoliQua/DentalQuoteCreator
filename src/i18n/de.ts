@@ -709,6 +709,7 @@ export const de: TranslationKeys = {
     nameEn: 'Englischer Name',
     nameDe: 'Deutscher Name',
     isDefault: 'Standard',
+    isNeak: 'NEAK-Preisliste',
     isActive: 'Aktiv',
     isUserLocked: 'Benutzergebunden',
     setDefault: 'Als Standard festlegen',
