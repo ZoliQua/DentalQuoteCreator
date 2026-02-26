@@ -4,6 +4,7 @@ export interface ClinicSettings {
   phone: string;
   email: string;
   website: string;
+  taxNumber: string;
 }
 
 export interface Doctor {

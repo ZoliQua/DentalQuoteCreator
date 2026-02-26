@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
 import { useQuotes } from '../hooks';
 import { Settings, Doctor, DateFormat, PdfFontFamily } from '../types';
-import { Button, Card, CardContent, CardHeader, Input, TextArea, Select, ConfirmModal } from '../components/common';
+import { Button, Card, CardContent, CardHeader, Input, TextArea, Select, ConfirmModal, Modal, PageTabBar } from '../components/common';
+import type { PageTab } from '../components/common/PageTabBar';
 import { formatDateTimeWithPattern } from '../utils';
 import { getAuthHeaders } from '../utils/auth';
+
+type SettingsSection = 'general' | 'clinic' | 'patient' | 'quotes' | 'invoicing';
 
 type DoctorRow = { doctorId: string; doctorName: string; doctorNum: string; doctorEESZTId: string };
 
@@ -18,7 +22,7 @@ const DATE_FORMAT_OPTIONS: DateFormat[] = [
   'MM/DD/YYYY HH:MM:SS',
 ];
 
-export function SettingsPage() {
+export function SettingsPage({ section }: { section?: SettingsSection }) {
   const {
     t,
     settings,
@@ -29,13 +33,48 @@ export function SettingsPage() {
     setOdontogramNumbering,
   } = useSettings();
   const { getQuoteStatistics } = useQuotes();
-  const [formData, setFormData] = useState<Settings>(settings);
+  const [formData, setFormDataRaw] = useState<Settings>(settings);
+  const setFormData: typeof setFormDataRaw = (value) => {
+    setIsDirty(true);
+    setFormDataRaw(value);
+  };
   const [saved, setSaved] = useState(false);
   const [resetCounterConfirm, setResetCounterConfirm] = useState(false);
   const [doctorRows, setDoctorRows] = useState<DoctorRow[]>([]);
+  const [taxChecking, setTaxChecking] = useState(false);
+  const [taxResult, setTaxResult] = useState<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const [pendingNavTarget, setPendingNavTarget] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  // Warn on browser tab close / refresh when dirty
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
+  // Intercept in-app link clicks when dirty
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest('a[href]');
+      if (!anchor) return;
+      const href = anchor.getAttribute('href');
+      if (!href || href.startsWith('http') || href.startsWith('mailto:')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setPendingNavTarget(href);
+    };
+    document.addEventListener('click', handler, true);
+    return () => document.removeEventListener('click', handler, true);
+  }, [isDirty]);
 
   const quoteStats = getQuoteStatistics();
   const today = new Date();
+
+  const [pdfLangTab, setPdfLangTab] = useState<'hu' | 'en' | 'de'>('hu');
 
   const loadDoctors = useCallback(async () => {
     try {
@@ -43,9 +82,8 @@ export function SettingsPage() {
       if (res.ok) {
         const data = await res.json() as DoctorRow[];
         setDoctorRows(data);
-        // Also sync settings.doctors for backward compat
         const mapped: Doctor[] = data.map((d) => ({ id: d.doctorId, name: d.doctorName, stampNumber: d.doctorNum }));
-        setFormData((prev) => ({ ...prev, doctors: mapped }));
+        setFormDataRaw((prev) => ({ ...prev, doctors: mapped }));
       }
     } catch { /* ignore */ }
   }, []);
@@ -55,12 +93,13 @@ export function SettingsPage() {
   }, [loadDoctors]);
 
   useEffect(() => {
-    setFormData(settings);
+    setFormDataRaw(settings);
   }, [settings]);
 
   const handleSave = async () => {
     await handleSaveDoctors();
     updateSettings({ ...formData, language: appLanguage });
+    setIsDirty(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
@@ -74,8 +113,6 @@ export function SettingsPage() {
       },
     });
   };
-
-  const [pdfLangTab, setPdfLangTab] = useState<'hu' | 'en' | 'de'>('hu');
 
   const handlePdfLangChange = (lang: 'hu' | 'en' | 'de', field: 'footerText' | 'warrantyText', value: string) => {
     setFormData({
@@ -111,7 +148,7 @@ export function SettingsPage() {
   };
 
   const handleDoctorChange = (doctorId: string, field: 'name' | 'stampNumber', value: string) => {
-    // Update local state for optimistic UI
+    setIsDirty(true);  // doctorRows not covered by setFormData wrapper
     setDoctorRows((prev) => prev.map((d) =>
       d.doctorId === doctorId
         ? { ...d, ...(field === 'name' ? { doctorName: value } : { doctorNum: value }) }
@@ -123,7 +160,6 @@ export function SettingsPage() {
         doc.id === doctorId ? { ...doc, [field]: value } : doc
       ),
     });
-    // Debounced save on blur is handled by handleSave
   };
 
   const handleAddDoctor = async () => {
@@ -162,574 +198,799 @@ export function SettingsPage() {
     }
   };
 
+  const handleTaxCheck = async () => {
+    const taxNum = formData.clinic.taxNumber || '';
+    const digits = taxNum.replace(/\D/g, '');
+    if (digits.length < 8) return;
+    setTaxChecking(true);
+    setTaxResult(null);
+    try {
+      const resp = await fetch('/api/szamlazz/query-taxpayer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taxNumber: taxNum }),
+      });
+      const data = await resp.json();
+      if (data.success && data.valid) {
+        const name = data.taxpayerShortName || data.taxpayerName || '';
+        const addr = data.address;
+        const addrStr = addr ? [addr.postalCode, addr.city, addr.street].filter(Boolean).join(' ') : '';
+        setTaxResult(t.settings.taxValid);
+        setFormData(prev => ({
+          ...prev,
+          clinic: {
+            ...prev.clinic,
+            name: name || prev.clinic.name,
+            address: addrStr || prev.clinic.address,
+          },
+        }));
+      } else if (data.success && !data.valid) {
+        setTaxResult(t.settings.taxInvalid);
+      } else {
+        setTaxResult(data.message || t.settings.taxCheckFailed);
+      }
+    } catch {
+      setTaxResult(t.settings.taxCheckFailed);
+    } finally {
+      setTaxChecking(false);
+    }
+  };
+
+  const tabs: PageTab[] = [
+    { key: 'overview', to: '/settings', label: t.settings.tabOverview, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg> },
+    { key: 'general', to: '/settings/general', label: t.settings.tabGeneral, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
+    { key: 'clinic', to: '/settings/clinic', label: t.settings.tabClinic, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg> },
+    { key: 'patient', to: '/settings/patient', label: t.settings.tabPatient, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
+    { key: 'quotes', to: '/settings/quotes', label: t.settings.tabQuotes, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
+    { key: 'invoicing', to: '/settings/invoicing', label: t.settings.tabInvoicing, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg> },
+  ];
+
+  const overviewCards: Array<{ key: SettingsSection; to: string; title: string; description: string; icon: React.ReactNode }> = [
+    {
+      key: 'general',
+      to: '/settings/general',
+      title: t.settings.generalSettings,
+      description: t.settings.overviewGeneralDesc,
+      icon: (
+        <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+    },
+    {
+      key: 'clinic',
+      to: '/settings/clinic',
+      title: t.settings.clinicSettings,
+      description: t.settings.overviewClinicDesc,
+      icon: (
+        <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+        </svg>
+      ),
+    },
+    {
+      key: 'patient',
+      to: '/settings/patient',
+      title: t.settings.patientSettings,
+      description: t.settings.overviewPatientDesc,
+      icon: (
+        <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+    },
+    {
+      key: 'quotes',
+      to: '/settings/quotes',
+      title: t.settings.quoteSettings,
+      description: t.settings.overviewQuotesDesc,
+      icon: (
+        <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+    },
+    {
+      key: 'invoicing',
+      to: '/settings/invoicing',
+      title: t.settings.invoiceSettings,
+      description: t.settings.overviewInvoicingDesc,
+      icon: (
+        <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      ),
+    },
+  ];
+
+  const taxDigits = (formData.clinic.taxNumber || '').replace(/\D/g, '');
+
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t.settings.title}</h1>
           <p className="text-gray-500 mt-1">{t.settings.subtitle}</p>
         </div>
-        <div className="flex items-center gap-3">
-          {saved && (
-            <span className="text-green-600 flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-              {t.settings.saved}
-            </span>
-          )}
-          <Button onClick={handleSave}>{t.common.save}</Button>
-        </div>
+        {section && (
+          <div className="flex items-center gap-3">
+            {saved && (
+              <span className="text-green-600 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+                {t.settings.saved}
+              </span>
+            )}
+            <Button onClick={handleSave}>{t.common.save}</Button>
+          </div>
+        )}
       </div>
 
-      {/* Clinic Settings */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold">{t.settings.clinicSettings}</h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Input
-            label={t.settings.clinicName}
-            value={formData.clinic.name}
-            onChange={(e) => handleClinicChange('name', e.target.value)}
-          />
-          <Input
-            label={t.settings.clinicAddress}
-            value={formData.clinic.address}
-            onChange={(e) => handleClinicChange('address', e.target.value)}
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label={t.settings.clinicPhone}
-              value={formData.clinic.phone}
-              onChange={(e) => handleClinicChange('phone', e.target.value)}
-            />
-            <Input
-              label={t.settings.clinicEmail}
-              type="email"
-              value={formData.clinic.email}
-              onChange={(e) => handleClinicChange('email', e.target.value)}
-            />
-          </div>
-          <Input
-            label={t.settings.clinicWebsite}
-            value={formData.clinic.website}
-            onChange={(e) => handleClinicChange('website', e.target.value)}
-          />
-        </CardContent>
-      </Card>
+      <PageTabBar tabs={tabs} />
 
-      {/* Doctors Settings */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">{t.settings.doctorsSettings}</h2>
-            <Button variant="secondary" onClick={handleAddDoctor}>
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              {t.settings.addDoctor}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {doctorRows.map((doctor, index) => (
-            <div key={doctor.doctorId} className="flex items-end gap-3">
-              <div className="flex-1">
-                <Input
-                  label={`${t.settings.doctorName} ${index + 1}`}
-                  value={doctor.doctorName}
-                  onChange={(e) => handleDoctorChange(doctor.doctorId, 'name', e.target.value)}
-                  placeholder={t.settings.doctorNamePlaceholder}
-                />
-              </div>
-              <div className="w-32">
-                <Input
-                  label={t.settings.doctorStampNumber}
-                  value={doctor.doctorNum || ''}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
-                    handleDoctorChange(doctor.doctorId, 'stampNumber', value);
-                  }}
-                  placeholder="123456"
-                  maxLength={6}
-                />
-              </div>
-              {doctorRows.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => handleRemoveDoctor(doctor.doctorId)}
-                  className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg mb-1"
-                  title={t.settings.removeDoctor}
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* PDF Settings */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold">{t.settings.pdfSettings}</h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex border-b border-gray-200">
-            {(['hu', 'en', 'de'] as const).map((lang) => (
-              <button
-                key={lang}
-                type="button"
-                onClick={() => setPdfLangTab(lang)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  pdfLangTab === lang
-                    ? 'border-dental-500 text-dental-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+      <div className={section ? 'max-w-4xl' : ''}>
+        {/* Overview card grid */}
+        {!section && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {overviewCards.map((card) => (
+              <Link
+                key={card.key}
+                to={card.to}
+                className="block rounded-lg border border-gray-200 bg-white p-5 hover:border-dental-300 hover:shadow-md transition-all"
               >
-                {lang === 'hu' ? 'Magyar' : lang === 'en' ? 'English' : 'Deutsch'}
-              </button>
+                <div className="flex items-start gap-3">
+                  {card.icon}
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{card.title}</h3>
+                    <p className="text-sm text-gray-500 mt-1">{card.description}</p>
+                  </div>
+                </div>
+              </Link>
             ))}
           </div>
-          <TextArea
-            label={t.settings.footerText}
-            value={formData.pdf[pdfLangTab]?.footerText || ''}
-            onChange={(e) => handlePdfLangChange(pdfLangTab, 'footerText', e.target.value)}
-            rows={3}
-            helperText={t.settings.footerTextHelp}
-          />
-          <TextArea
-            label={t.settings.warrantyText}
-            value={formData.pdf[pdfLangTab]?.warrantyText || ''}
-            onChange={(e) => handlePdfLangChange(pdfLangTab, 'warrantyText', e.target.value)}
-            rows={20}
-            helperText={t.settings.warrantyTextHelp}
-            className="font-mono text-sm"
-          />
-        </CardContent>
-      </Card>
+        )}
 
-      {/* Quote Settings */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold">{t.settings.quoteSettings}</h2>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Quote Language */}
-          <Select
-            label={t.settings.quoteLang}
-            value={formData.quote.quoteLang || 'hu'}
-            onChange={(e) =>
-              setFormData({
-                ...formData,
-                quote: { ...formData.quote, quoteLang: e.target.value as 'hu' | 'en' | 'de' },
-              })
-            }
-            options={[
-              { value: 'hu', label: 'Magyar' },
-              { value: 'en', label: 'English' },
-              { value: 'de', label: 'Deutsch' },
-            ]}
-          />
+        {/* General section */}
+        {section === 'general' && (
+          <>
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  {t.settings.generalSettings}
+                </h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Select
+                  label={t.settings.language}
+                  value={appLanguage}
+                  onChange={(e) => { setIsDirty(true); setAppLanguage(e.target.value as 'hu' | 'en' | 'de'); }}
+                  options={[
+                    { value: 'hu', label: t.settings.hungarian },
+                    { value: 'en', label: t.settings.english },
+                    { value: 'de', label: t.settings.german },
+                  ]}
+                />
+                <Select
+                  label={t.settings.dateFormat}
+                  value={formData.dateFormat}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      dateFormat: e.target.value as DateFormat,
+                    })
+                  }
+                  options={DATE_FORMAT_OPTIONS.map((format) => ({
+                    value: format,
+                    label: `${formatDateTimeWithPattern(today, format)}`,
+                  }))}
+                />
+              </CardContent>
+            </Card>
 
-          {/* PDF Font */}
-          <Select
-            label={t.settings.pdfFont}
-            value={formData.pdf.pdfFont || 'Roboto'}
-            onChange={(e) =>
-              setFormData({
-                ...formData,
-                pdf: { ...formData.pdf, pdfFont: e.target.value as PdfFontFamily },
-              })
-            }
-            options={[
-              { value: 'Inter', label: 'Inter' },
-              { value: 'JetBrains Mono', label: 'JetBrains Mono' },
-              { value: 'Noto Sans', label: 'Noto Sans' },
-              { value: 'Noto Serif', label: 'Noto Serif' },
-              { value: 'Roboto', label: 'Roboto' },
-              { value: 'Source Sans 3', label: 'Source Sans 3' },
-              { value: 'Source Serif 4', label: 'Source Serif 4' },
-            ]}
-          />
+            <Card className="mt-6">
+              <CardHeader>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6m-6 0a2 2 0 00-2 2v2a2 2 0 002 2h6a2 2 0 002-2V5a2 2 0 00-2-2m-6 0v2m6-2v2M7 11h10m-9 4h8m-7 4h6" />
+                  </svg>
+                  {t.settings.odontogramSettings}
+                </h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Select
+                  label={t.settings.odontogramNumbering}
+                  value={odontogramNumbering}
+                  onChange={(e) =>
+                    { setIsDirty(true); setOdontogramNumbering(e.target.value as 'FDI' | 'UNIVERSAL' | 'PALMER'); }
+                  }
+                  options={[
+                    { value: 'FDI', label: t.settings.odontogramNumberingFdi },
+                    { value: 'UNIVERSAL', label: t.settings.odontogramNumberingUniversal },
+                    { value: 'PALMER', label: t.settings.odontogramNumberingPalmer },
+                  ]}
+                />
+              </CardContent>
+            </Card>
+          </>
+        )}
 
-          {/* Prefix and Counter */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
+        {/* Clinic section */}
+        {section === 'clinic' && (
+          <>
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  {t.settings.clinicSettings}
+                </h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    label={t.settings.clinicName}
+                    value={formData.clinic.name}
+                    onChange={(e) => handleClinicChange('name', e.target.value)}
+                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t.settings.clinicTaxNumber}
+                    </label>
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        value={formData.clinic.taxNumber || ''}
+                        onChange={(e) => handleClinicChange('taxNumber', e.target.value)}
+                        placeholder={t.settings.taxNumberPlaceholder}
+                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
+                      />
+                      {taxDigits.length >= 8 && (
+                        <button
+                          type="button"
+                          onClick={handleTaxCheck}
+                          disabled={taxChecking}
+                          className="px-3 py-2 rounded-lg bg-dental-600 text-white text-sm hover:bg-dental-700 disabled:opacity-50 flex items-center gap-1"
+                          title={t.settings.taxCheckButton}
+                        >
+                          {taxChecking ? (
+                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    {taxResult && (
+                      <p className={`text-xs mt-1 ${taxResult === t.settings.taxValid || taxResult === t.settings.taxAutoFilled ? 'text-green-600' : 'text-red-600'}`}>
+                        {taxResult}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <Input
+                  label={t.settings.clinicAddress}
+                  value={formData.clinic.address}
+                  onChange={(e) => handleClinicChange('address', e.target.value)}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    label={t.settings.clinicPhone}
+                    value={formData.clinic.phone}
+                    onChange={(e) => handleClinicChange('phone', e.target.value)}
+                  />
+                  <Input
+                    label={t.settings.clinicEmail}
+                    type="email"
+                    value={formData.clinic.email}
+                    onChange={(e) => handleClinicChange('email', e.target.value)}
+                  />
+                </div>
+                <Input
+                  label={t.settings.clinicWebsite}
+                  value={formData.clinic.website}
+                  onChange={(e) => handleClinicChange('website', e.target.value)}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    {t.settings.doctorsSettings}
+                  </h2>
+                  <Button variant="secondary" onClick={handleAddDoctor}>
+                    <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    {t.settings.addDoctor}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {doctorRows.map((doctor, index) => (
+                  <div key={doctor.doctorId} className="flex items-end gap-3">
+                    <div className="flex-1">
+                      <Input
+                        label={`${t.settings.doctorName} ${index + 1}`}
+                        value={doctor.doctorName}
+                        onChange={(e) => handleDoctorChange(doctor.doctorId, 'name', e.target.value)}
+                        placeholder={t.settings.doctorNamePlaceholder}
+                      />
+                    </div>
+                    <div className="w-32">
+                      <Input
+                        label={t.settings.doctorStampNumber}
+                        value={doctor.doctorNum || ''}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                          handleDoctorChange(doctor.doctorId, 'stampNumber', value);
+                        }}
+                        placeholder="123456"
+                        maxLength={6}
+                      />
+                    </div>
+                    {doctorRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDoctor(doctor.doctorId)}
+                        className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg mb-1"
+                        title={t.settings.removeDoctor}
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {/* Patient section */}
+        {section === 'patient' && (
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {t.settings.patientSettings}
+              </h2>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <Input
-                label={t.settings.quotePrefix}
-                value={formData.quote.prefix}
-                onChange={(e) => {
-                  const value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
-                  setFormData({
-                    ...formData,
-                    quote: { ...formData.quote, prefix: value },
-                  });
-                }}
-                maxLength={4}
-                placeholder="ABCD"
-                helperText={t.settings.quotePrefixHelp}
+                label={t.settings.defaultCountry}
+                value={formData.patient.defaultCountry}
+                onChange={(e) => handlePatientChange('defaultCountry', e.target.value)}
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t.settings.quoteCounter}
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold text-gray-900">{formData.quote.counter}</span>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {t.settings.patientTypes}
+                </label>
+                <div className="space-y-2">
+                  {formData.patient.patientTypes.map((pt, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Input
+                        value={pt}
+                        onChange={(e) => {
+                          const newTypes = [...formData.patient.patientTypes];
+                          newTypes[index] = e.target.value;
+                          setFormData({
+                            ...formData,
+                            patient: { ...formData.patient, patientTypes: newTypes },
+                          });
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => {
+                          if (index === 0) return;
+                          const newTypes = [...formData.patient.patientTypes];
+                          const [item] = newTypes.splice(index, 1);
+                          newTypes.unshift(item);
+                          setFormData({
+                            ...formData,
+                            patient: { ...formData.patient, patientTypes: newTypes },
+                          });
+                        }}
+                        className={`p-2 rounded-lg transition-colors ${
+                          index === 0
+                            ? 'text-amber-500 cursor-default'
+                            : 'text-gray-300 hover:text-amber-400 hover:bg-amber-50'
+                        }`}
+                        title={index === 0 ? t.settings.defaultPatientType : t.settings.setDefaultPatientType}
+                      >
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill={index === 0 ? 'currentColor' : 'none'}>
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                      </button>
+                      {formData.patient.patientTypes.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newTypes = formData.patient.patientTypes.filter((_, i) => i !== index);
+                            setFormData({
+                              ...formData,
+                              patient: { ...formData.patient, patientTypes: newTypes },
+                            });
+                          }}
+                          className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                          title={t.settings.removePatientType}
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
                 <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setResetCounterConfirm(true)}
+                  variant="secondary"
+                  className="mt-2"
+                  onClick={() => {
+                    setFormData({
+                      ...formData,
+                      patient: {
+                        ...formData.patient,
+                        patientTypes: [...formData.patient.patientTypes, ''],
+                      },
+                    });
+                  }}
                 >
-                  {t.settings.resetCounter}
+                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  {t.settings.addPatientType}
                 </Button>
               </div>
-              <p className="text-xs text-gray-500 mt-1">{t.settings.quoteCounterHelp}</p>
-            </div>
-          </div>
 
-          {/* Per Page */}
-          <Select
-            label={t.settings.quotesPerPageLabel}
-            value={String(formData.quote.perPage || 50)}
-            onChange={(e) =>
-              setFormData({
-                ...formData,
-                quote: { ...formData.quote, perPage: Number(e.target.value) },
-              })
-            }
-            options={[
-              { value: '20', label: '20' },
-              { value: '50', label: '50' },
-              { value: '100', label: '100' },
-            ]}
-          />
+              <Select
+                label={t.settings.patientsPerPageLabel}
+                value={String(formData.patient.perPage || 50)}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    patient: { ...formData.patient, perPage: Number(e.target.value) },
+                  })
+                }
+                options={[
+                  { value: '20', label: '20' },
+                  { value: '50', label: '50' },
+                  { value: '100', label: '100' },
+                ]}
+              />
+            </CardContent>
+          </Card>
+        )}
 
-          {/* Statistics */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-3">{t.settings.quoteStatistics}</h3>
-            <div className="grid grid-cols-2 gap-6">
-              {/* Stats List */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center py-1 border-b">
-                  <span className="text-gray-600">{t.settings.statTotal}</span>
-                  <span className="font-semibold">{quoteStats.total}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b">
-                  <span className="text-yellow-600">{t.quotes.statusDraft}</span>
-                  <span className="font-semibold">{quoteStats.draft}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b">
-                  <span className="text-blue-600">{t.settings.statClosed}</span>
-                  <span className="font-semibold">{quoteStats.closed}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b">
-                  <span className="text-green-600">{t.settings.statStarted}</span>
-                  <span className="font-semibold">{quoteStats.started}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b">
-                  <span className="text-gray-600">{t.settings.statCompleted}</span>
-                  <span className="font-semibold">{quoteStats.completed}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b">
-                  <span className="text-red-600">{t.settings.statRejected}</span>
-                  <span className="font-semibold">{quoteStats.rejected}</span>
-                </div>
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-gray-400">{t.settings.statDeleted}</span>
-                  <span className="font-semibold text-gray-400">{quoteStats.deleted}</span>
-                </div>
-              </div>
+        {/* Quotes section */}
+        {section === 'quotes' && (
+          <>
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  {t.settings.quoteSettings}
+                </h2>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <Select
+                  label={t.settings.quoteLang}
+                  value={formData.quote.quoteLang || 'hu'}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      quote: { ...formData.quote, quoteLang: e.target.value as 'hu' | 'en' | 'de' },
+                    })
+                  }
+                  options={[
+                    { value: 'hu', label: 'Magyar' },
+                    { value: 'en', label: 'English' },
+                    { value: 'de', label: 'Deutsch' },
+                  ]}
+                />
 
-              {/* Pie Chart */}
-              <div className="flex items-center justify-center">
-                <div className="relative w-40 h-40">
-                  {quoteStats.total > 0 ? (
-                    <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-                      {(() => {
-                        const total = quoteStats.draft + quoteStats.closed +
-                                     quoteStats.started + quoteStats.completed + quoteStats.rejected;
-                        if (total === 0) return <circle cx="50" cy="50" r="40" fill="#e5e7eb" />;
+                <Input
+                  label={t.settings.defaultValidityDays}
+                  type="number"
+                  value={formData.defaultValidityDays}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      defaultValidityDays: parseInt(e.target.value) || 60,
+                    })
+                  }
+                  min={1}
+                  max={365}
+                  helperText={t.settings.defaultValidityDaysHelp}
+                />
 
-                        let currentAngle = 0;
-                        const segments = [
-                          { value: quoteStats.draft, color: '#fbbf24' },
-                          { value: quoteStats.closed, color: '#3b82f6' },
-                          { value: quoteStats.started, color: '#22c55e' },
-                          { value: quoteStats.completed, color: '#9ca3af' },
-                          { value: quoteStats.rejected, color: '#ef4444' },
-                        ].filter(s => s.value > 0);
+                <Select
+                  label={t.settings.pdfFont}
+                  value={formData.pdf.pdfFont || 'Roboto'}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      pdf: { ...formData.pdf, pdfFont: e.target.value as PdfFontFamily },
+                    })
+                  }
+                  options={[
+                    { value: 'Inter', label: 'Inter' },
+                    { value: 'JetBrains Mono', label: 'JetBrains Mono' },
+                    { value: 'Noto Sans', label: 'Noto Sans' },
+                    { value: 'Noto Serif', label: 'Noto Serif' },
+                    { value: 'Roboto', label: 'Roboto' },
+                    { value: 'Source Sans 3', label: 'Source Sans 3' },
+                    { value: 'Source Serif 4', label: 'Source Serif 4' },
+                  ]}
+                />
 
-                        return segments.map((segment, idx) => {
-                          const percentage = (segment.value / total) * 100;
-                          const strokeDasharray = `${percentage * 2.51327} ${251.327 - percentage * 2.51327}`;
-                          const strokeDashoffset = -currentAngle * 2.51327;
-                          currentAngle += percentage;
-
-                          return (
-                            <circle
-                              key={idx}
-                              cx="50"
-                              cy="50"
-                              r="40"
-                              fill="none"
-                              stroke={segment.color}
-                              strokeWidth="20"
-                              strokeDasharray={strokeDasharray}
-                              strokeDashoffset={strokeDashoffset}
-                            />
-                          );
-                        });
-                      })()}
-                    </svg>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400">
-                      {t.settings.noQuotesYet}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Invoice Settings */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold">{t.settings.invoiceSettings}</h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Select
-            label={t.settings.invoiceType}
-            value={formData.invoice.invoiceType}
-            onChange={(e) => handleInvoiceChange('invoiceType', e.target.value)}
-            options={[
-              { value: 'paper', label: t.settings.invoiceTypePaper },
-              { value: 'electronic', label: t.settings.invoiceTypeElectronic },
-            ]}
-          />
-          <TextArea
-            label={t.settings.invoiceComment}
-            value={formData.invoice.defaultComment}
-            onChange={(e) => handleInvoiceChange('defaultComment', e.target.value)}
-            rows={3}
-            helperText={t.settings.invoiceCommentHelp}
-          />
-          <Select
-            label={t.settings.defaultPaymentMethod}
-            value={formData.invoice.defaultPaymentMethod || 'bankkártya'}
-            onChange={(e) => handleInvoiceChange('defaultPaymentMethod', e.target.value)}
-            options={[
-              { value: 'átutalás', label: t.invoices.paymentTransfer },
-              { value: 'készpénz', label: t.invoices.paymentCash },
-              { value: 'bankkártya', label: t.invoices.paymentCard },
-            ]}
-          />
-          <Select
-            label={t.settings.defaultVatRate}
-            value={String(formData.invoice.defaultVatRate)}
-            onChange={(e) => {
-              const v = e.target.value;
-              handleInvoiceChange('defaultVatRate', v === 'TAM' ? 'TAM' : Number(v));
-            }}
-            options={[
-              { value: 'TAM', label: 'TAM (tárgyi adómentes)' },
-              { value: '0', label: '0%' },
-              { value: '27', label: '27%' },
-            ]}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Patient Settings */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold">{t.settings.patientSettings}</h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Input
-            label={t.settings.defaultCountry}
-            value={formData.patient.defaultCountry}
-            onChange={(e) => handlePatientChange('defaultCountry', e.target.value)}
-          />
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {t.settings.patientTypes}
-            </label>
-            <div className="space-y-2">
-              {formData.patient.patientTypes.map((pt, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <Input
-                    value={pt}
-                    onChange={(e) => {
-                      const newTypes = [...formData.patient.patientTypes];
-                      newTypes[index] = e.target.value;
-                      setFormData({
-                        ...formData,
-                        patient: { ...formData.patient, patientTypes: newTypes },
-                      });
-                    }}
-                  />
-                  <button
-                    type="button"
-                    disabled={index === 0}
-                    onClick={() => {
-                      if (index === 0) return;
-                      const newTypes = [...formData.patient.patientTypes];
-                      const [item] = newTypes.splice(index, 1);
-                      newTypes.unshift(item);
-                      setFormData({
-                        ...formData,
-                        patient: { ...formData.patient, patientTypes: newTypes },
-                      });
-                    }}
-                    className={`p-2 rounded-lg transition-colors ${
-                      index === 0
-                        ? 'text-amber-500 cursor-default'
-                        : 'text-gray-300 hover:text-amber-400 hover:bg-amber-50'
-                    }`}
-                    title={index === 0 ? t.settings.defaultPatientType : t.settings.setDefaultPatientType}
-                  >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill={index === 0 ? 'currentColor' : 'none'}>
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                  </button>
-                  {formData.patient.patientTypes.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newTypes = formData.patient.patientTypes.filter((_, i) => i !== index);
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Input
+                      label={t.settings.quotePrefix}
+                      value={formData.quote.prefix}
+                      onChange={(e) => {
+                        const value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
                         setFormData({
                           ...formData,
-                          patient: { ...formData.patient, patientTypes: newTypes },
+                          quote: { ...formData.quote, prefix: value },
                         });
                       }}
-                      className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                      title={t.settings.removePatientType}
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  )}
+                      maxLength={4}
+                      placeholder="ABCD"
+                      helperText={t.settings.quotePrefixHelp}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t.settings.quoteCounter}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-bold text-gray-900">{formData.quote.counter}</span>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => setResetCounterConfirm(true)}
+                      >
+                        {t.settings.resetCounter}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">{t.settings.quoteCounterHelp}</p>
+                  </div>
                 </div>
-              ))}
-            </div>
-            <Button
-              variant="secondary"
-              className="mt-2"
-              onClick={() => {
-                setFormData({
-                  ...formData,
-                  patient: {
-                    ...formData.patient,
-                    patientTypes: [...formData.patient.patientTypes, ''],
-                  },
-                });
-              }}
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              {t.settings.addPatientType}
-            </Button>
-          </div>
 
-          {/* Per Page */}
-          <Select
-            label={t.settings.patientsPerPageLabel}
-            value={String(formData.patient.perPage || 50)}
-            onChange={(e) =>
-              setFormData({
-                ...formData,
-                patient: { ...formData.patient, perPage: Number(e.target.value) },
-              })
-            }
-            options={[
-              { value: '20', label: '20' },
-              { value: '50', label: '50' },
-              { value: '100', label: '100' },
-            ]}
-          />
-        </CardContent>
-      </Card>
+                <Select
+                  label={t.settings.quotesPerPageLabel}
+                  value={String(formData.quote.perPage || 50)}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      quote: { ...formData.quote, perPage: Number(e.target.value) },
+                    })
+                  }
+                  options={[
+                    { value: '20', label: '20' },
+                    { value: '50', label: '50' },
+                    { value: '100', label: '100' },
+                  ]}
+                />
 
-      {/* General Settings */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold">{t.settings.generalSettings}</h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Select
-            label={t.settings.language}
-            value={appLanguage}
-            onChange={(e) => setAppLanguage(e.target.value as 'hu' | 'en' | 'de')}
-            options={[
-              { value: 'hu', label: t.settings.hungarian },
-              { value: 'en', label: t.settings.english },
-              { value: 'de', label: t.settings.german },
-            ]}
-          />
-          <Input
-            label={t.settings.defaultValidityDays}
-            type="number"
-            value={formData.defaultValidityDays}
-            onChange={(e) =>
-              setFormData({
-                ...formData,
-                defaultValidityDays: parseInt(e.target.value) || 60,
-              })
-            }
-            min={1}
-            max={365}
-            helperText={t.settings.defaultValidityDaysHelp}
-          />
-          <Select
-            label={t.settings.dateFormat}
-            value={formData.dateFormat}
-            onChange={(e) =>
-              setFormData({
-                ...formData,
-                dateFormat: e.target.value as DateFormat,
-              })
-            }
-            options={DATE_FORMAT_OPTIONS.map((format) => ({
-              value: format,
-              label: `${formatDateTimeWithPattern(today, format)}`,
-            }))}
-          />
-        </CardContent>
-      </Card>
+                {/* Statistics */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">{t.settings.quoteStatistics}</h3>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center py-1 border-b">
+                        <span className="text-gray-600">{t.settings.statTotal}</span>
+                        <span className="font-semibold">{quoteStats.total}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1 border-b">
+                        <span className="text-yellow-600">{t.quotes.statusDraft}</span>
+                        <span className="font-semibold">{quoteStats.draft}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1 border-b">
+                        <span className="text-blue-600">{t.settings.statClosed}</span>
+                        <span className="font-semibold">{quoteStats.closed}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1 border-b">
+                        <span className="text-green-600">{t.settings.statStarted}</span>
+                        <span className="font-semibold">{quoteStats.started}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1 border-b">
+                        <span className="text-gray-600">{t.settings.statCompleted}</span>
+                        <span className="font-semibold">{quoteStats.completed}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1 border-b">
+                        <span className="text-red-600">{t.settings.statRejected}</span>
+                        <span className="font-semibold">{quoteStats.rejected}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-gray-400">{t.settings.statDeleted}</span>
+                        <span className="font-semibold text-gray-400">{quoteStats.deleted}</span>
+                      </div>
+                    </div>
 
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold">{t.settings.odontogramSettings}</h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Select
-            label={t.settings.odontogramNumbering}
-            value={odontogramNumbering}
-            onChange={(e) =>
-              setOdontogramNumbering(e.target.value as 'FDI' | 'UNIVERSAL' | 'PALMER')
-            }
-            options={[
-              { value: 'FDI', label: t.settings.odontogramNumberingFdi },
-              { value: 'UNIVERSAL', label: t.settings.odontogramNumberingUniversal },
-              { value: 'PALMER', label: t.settings.odontogramNumberingPalmer },
-            ]}
-          />
-        </CardContent>
-      </Card>
+                    <div className="flex items-center justify-center">
+                      <div className="relative w-40 h-40">
+                        {quoteStats.total > 0 ? (
+                          <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                            {(() => {
+                              const total = quoteStats.draft + quoteStats.closed +
+                                           quoteStats.started + quoteStats.completed + quoteStats.rejected;
+                              if (total === 0) return <circle cx="50" cy="50" r="40" fill="#e5e7eb" />;
+
+                              let currentAngle = 0;
+                              const segments = [
+                                { value: quoteStats.draft, color: '#fbbf24' },
+                                { value: quoteStats.closed, color: '#3b82f6' },
+                                { value: quoteStats.started, color: '#22c55e' },
+                                { value: quoteStats.completed, color: '#9ca3af' },
+                                { value: quoteStats.rejected, color: '#ef4444' },
+                              ].filter(s => s.value > 0);
+
+                              return segments.map((segment, idx) => {
+                                const percentage = (segment.value / total) * 100;
+                                const strokeDasharray = `${percentage * 2.51327} ${251.327 - percentage * 2.51327}`;
+                                const strokeDashoffset = -currentAngle * 2.51327;
+                                currentAngle += percentage;
+
+                                return (
+                                  <circle
+                                    key={idx}
+                                    cx="50"
+                                    cy="50"
+                                    r="40"
+                                    fill="none"
+                                    stroke={segment.color}
+                                    strokeWidth="20"
+                                    strokeDasharray={strokeDasharray}
+                                    strokeDashoffset={strokeDashoffset}
+                                  />
+                                );
+                              });
+                            })()}
+                          </svg>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400">
+                            {t.settings.noQuotesYet}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6">
+              <CardHeader>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  {t.settings.pdfSettings}
+                </h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex border-b border-gray-200">
+                  {(['hu', 'en', 'de'] as const).map((lang) => (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => setPdfLangTab(lang)}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                        pdfLangTab === lang
+                          ? 'border-dental-500 text-dental-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {lang === 'hu' ? 'Magyar' : lang === 'en' ? 'English' : 'Deutsch'}
+                    </button>
+                  ))}
+                </div>
+                <TextArea
+                  label={t.settings.footerText}
+                  value={formData.pdf[pdfLangTab]?.footerText || ''}
+                  onChange={(e) => handlePdfLangChange(pdfLangTab, 'footerText', e.target.value)}
+                  rows={3}
+                  helperText={t.settings.footerTextHelp}
+                />
+                <TextArea
+                  label={t.settings.warrantyText}
+                  value={formData.pdf[pdfLangTab]?.warrantyText || ''}
+                  onChange={(e) => handlePdfLangChange(pdfLangTab, 'warrantyText', e.target.value)}
+                  rows={20}
+                  helperText={t.settings.warrantyTextHelp}
+                  className="font-mono text-sm"
+                />
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {/* Invoicing section */}
+        {section === 'invoicing' && (
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                {t.settings.invoiceSettings}
+              </h2>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Select
+                label={t.settings.invoiceType}
+                value={formData.invoice.invoiceType}
+                onChange={(e) => handleInvoiceChange('invoiceType', e.target.value)}
+                options={[
+                  { value: 'paper', label: t.settings.invoiceTypePaper },
+                  { value: 'electronic', label: t.settings.invoiceTypeElectronic },
+                ]}
+              />
+              <TextArea
+                label={t.settings.invoiceComment}
+                value={formData.invoice.defaultComment}
+                onChange={(e) => handleInvoiceChange('defaultComment', e.target.value)}
+                rows={3}
+                helperText={t.settings.invoiceCommentHelp}
+              />
+              <Select
+                label={t.settings.defaultPaymentMethod}
+                value={formData.invoice.defaultPaymentMethod || 'bankkártya'}
+                onChange={(e) => handleInvoiceChange('defaultPaymentMethod', e.target.value)}
+                options={[
+                  { value: 'átutalás', label: t.invoices.paymentTransfer },
+                  { value: 'készpénz', label: t.invoices.paymentCash },
+                  { value: 'bankkártya', label: t.invoices.paymentCard },
+                ]}
+              />
+              <Select
+                label={t.settings.defaultVatRate}
+                value={String(formData.invoice.defaultVatRate)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  handleInvoiceChange('defaultVatRate', v === 'TAM' ? 'TAM' : Number(v));
+                }}
+                options={[
+                  { value: 'TAM', label: 'TAM (tárgyi adómentes)' },
+                  { value: '0', label: '0%' },
+                  { value: '27', label: '27%' },
+                ]}
+              />
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Reset Counter Confirmation */}
       <ConfirmModal
@@ -748,6 +1009,43 @@ export function SettingsPage() {
         cancelText={t.common.cancel}
         variant="danger"
       />
+
+      {/* Unsaved Changes Warning */}
+      <Modal
+        isOpen={pendingNavTarget !== null}
+        onClose={() => setPendingNavTarget(null)}
+        title={t.settings.unsavedChangesTitle}
+        size="sm"
+      >
+        <p className="text-gray-600 mb-6">{t.settings.unsavedChangesMessage}</p>
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setPendingNavTarget(null)}>
+            {t.common.cancel}
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              const target = pendingNavTarget;
+              setIsDirty(false);
+              setPendingNavTarget(null);
+              if (target) navigate(target);
+            }}
+          >
+            {t.settings.unsavedChangesDiscard}
+          </Button>
+          <Button
+            onClick={async () => {
+              const target = pendingNavTarget;
+              await handleSave();
+              setIsDirty(false);
+              setPendingNavTarget(null);
+              if (target) navigate(target);
+            }}
+          >
+            {t.settings.unsavedChangesSave}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

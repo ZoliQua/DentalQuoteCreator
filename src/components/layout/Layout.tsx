@@ -145,6 +145,14 @@ export function Layout({ children }: LayoutProps) {
           />
         </svg>
       ),
+      children: [
+        { to: '/settings', label: t.nav.settingsOverview },
+        { to: '/settings/general', label: t.nav.settingsGeneral },
+        { to: '/settings/clinic', label: t.nav.settingsClinic },
+        { to: '/settings/patient', label: t.nav.settingsPatient },
+        { to: '/settings/quotes', label: t.nav.settingsQuotes },
+        { to: '/settings/invoicing', label: t.nav.settingsInvoicing },
+      ],
     },
     {
       key: 'data',
@@ -161,6 +169,15 @@ export function Layout({ children }: LayoutProps) {
           />
         </svg>
       ),
+      children: [
+        { to: '/data', label: t.nav.dataOverview },
+        { to: '/data/pricelist', label: t.nav.dataPricelist },
+        { to: '/data/patients', label: t.nav.dataPatients },
+        { to: '/data/database', label: t.nav.dataDatabase },
+        { to: '/data/storage', label: t.nav.dataStorage },
+        { to: '/data/report', label: t.nav.dataReport },
+        { to: '/data/browser', label: t.nav.dataBrowser, permission: 'data.browse' },
+      ],
     },
     {
       key: 'lab',
@@ -199,12 +216,6 @@ export function Layout({ children }: LayoutProps) {
   }
 
   const navItems = allNavItems.filter((item) => !item.permission || hasPermission(item.permission));
-
-  const languageLabel = appLanguage === 'hu'
-    ? t.settings.hungarian
-    : appLanguage === 'en'
-      ? t.settings.english
-      : t.settings.german;
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -329,33 +340,41 @@ export function Layout({ children }: LayoutProps) {
           </ul>
         </nav>
 
-        {/* Language Toggle */}
+        {/* Language Toggle + Logout */}
         <div className="p-4 border-t border-gray-200">
-          <div className="w-full">
-            <label className="sr-only" htmlFor="app-language-selector">
-              {t.settings.language}
-            </label>
-            <select
-              id="app-language-selector"
-              value={appLanguage}
-              onChange={(event) => setAppLanguage(event.target.value as 'hu' | 'en' | 'de')}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-dental-500"
-              title={!isSidebarOpen ? languageLabel : undefined}
-            >
-              <option value="hu">{t.settings.hungarian}</option>
-              <option value="en">{t.settings.english}</option>
-              <option value="de">{t.settings.german}</option>
-            </select>
-          </div>
-          {!isSidebarOpen && (
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-              />
-            </svg>
+          {isSidebarOpen ? (
+            <div className="w-full">
+              <label className="sr-only" htmlFor="app-language-selector">
+                {t.settings.language}
+              </label>
+              <select
+                id="app-language-selector"
+                value={appLanguage}
+                onChange={(event) => setAppLanguage(event.target.value as 'hu' | 'en' | 'de')}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-dental-500"
+              >
+                <option value="hu">🇭🇺 {t.settings.hungarian}</option>
+                <option value="en">🇬🇧 {t.settings.english}</option>
+                <option value="de">🇩🇪 {t.settings.german}</option>
+              </select>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-1">
+              {([['hu', '🇭🇺'], ['en', '🇬🇧'], ['de', '🇩🇪']] as const).map(([lang, flag]) => (
+                <button
+                  key={lang}
+                  onClick={() => setAppLanguage(lang)}
+                  className={`w-10 h-8 rounded-md text-lg leading-none transition-colors ${
+                    appLanguage === lang
+                      ? 'bg-dental-100 ring-2 ring-dental-500'
+                      : 'hover:bg-gray-100'
+                  }`}
+                  title={lang === 'hu' ? t.settings.hungarian : lang === 'en' ? t.settings.english : t.settings.german}
+                >
+                  {flag}
+                </button>
+              ))}
+            </div>
           )}
           <button
             onClick={() => logout()}

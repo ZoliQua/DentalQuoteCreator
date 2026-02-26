@@ -7,6 +7,7 @@ export const defaultSettings: Settings = {
     phone: '+36 94 123 456',
     email: 'info@mackodental.hu',
     website: 'www.mackodental.hu',
+    taxNumber: '',
   },
   doctors: [
     { id: 'DOC0001', name: 'Dr. Dul Zoltán', stampNumber: '' },

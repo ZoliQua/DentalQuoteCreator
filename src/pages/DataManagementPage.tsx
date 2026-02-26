@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { useApp } from '../context/AppContext';
-import { useCatalog, usePriceLists } from '../hooks';
+import { useCatalog, usePriceLists, usePriceListCategories } from '../hooks';
+import { useInvoices } from '../hooks/useInvoices';
 import { defaultSettings } from '../data/defaultSettings';
 import { defaultPriceLists, defaultPriceListCategories, defaultCatalogItems } from '../data/defaultPriceLists';
 import type { ExportData } from '../repositories/StorageRepository';
@@ -11,7 +12,8 @@ import type { CatalogItem, Patient, Quote, QuoteItem, QuoteStatus } from '../typ
 import { getAuthHeaders } from '../utils/auth';
 import type { OdontogramState, OdontogramToothState } from '../modules/odontogram/types';
 import { getBudapestDateKey, saveCurrent, saveDailySnapshot } from '../modules/odontogram/odontogramStorage';
-import { Button, Card, CardContent, CardHeader, ConfirmModal } from '../components/common';
+import { Button, Card, CardContent, CardHeader, ConfirmModal, PageTabBar } from '../components/common';
+import type { PageTab } from '../components/common/PageTabBar';
 import {
   allPatientsToJson,
   singlePatientToJson,
@@ -197,7 +199,9 @@ const createOdontogramStateFromQuotes = (quotes: Quote[]): OdontogramState => {
   };
 };
 
-export function DataManagementPage() {
+type DataSection = 'pricelist' | 'patients' | 'database' | 'storage' | 'report';
+
+export function DataManagementPage({ section }: { section?: DataSection }) {
   const { t, refreshSettings } = useSettings();
   const {
     patients: patientsFromContext,
@@ -828,35 +832,63 @@ export function DataManagementPage() {
     setTimeout(() => setMessage(null), 5000);
   };
 
+  const tabs: PageTab[] = [
+    { key: 'overview', to: '/data', label: t.dataManagement.tabOverview, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg> },
+    { key: 'pricelist', to: '/data/pricelist', label: t.dataManagement.tabPricelist, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg> },
+    { key: 'patients', to: '/data/patients', label: t.dataManagement.tabPatients, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg> },
+    { key: 'database', to: '/data/database', label: t.dataManagement.tabDatabase, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg> },
+    { key: 'storage', to: '/data/storage', label: t.dataManagement.tabStorage, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
+    { key: 'report', to: '/data/report', label: t.dataManagement.tabReport, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18M8 6v12M16 6v12" /></svg> },
+  ];
+
+  const overviewCards: Array<{ key: DataSection; to: string; title: string; description: string; icon: React.ReactNode }> = [
+    {
+      key: 'pricelist',
+      to: '/data/pricelist',
+      title: t.dataManagement.catalogOnly.title,
+      description: t.dataManagement.catalogOnly.description,
+      icon: <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>,
+    },
+    {
+      key: 'patients',
+      to: '/data/patients',
+      title: t.dataManagement.patientData.title,
+      description: t.dataManagement.patientData.exportAllDescription,
+      icon: <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
+    },
+    {
+      key: 'database',
+      to: '/data/database',
+      title: t.dataManagement.databaseOnly.title,
+      description: t.dataManagement.databaseOnly.exportDescription,
+      icon: <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>,
+    },
+    {
+      key: 'storage',
+      to: '/data/storage',
+      title: t.dataManagement.storageInfoTitle,
+      description: t.dataManagement.subtitle,
+      icon: <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
+    },
+    {
+      key: 'report',
+      to: '/data/report',
+      title: t.dataManagement.dbReportTitle,
+      description: t.dataManagement.dbReportDatabase,
+      icon: <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18M8 6v12M16 6v12" /></svg>,
+    },
+  ];
+
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">{t.dataManagement.title}</h1>
         <p className="text-gray-500 mt-1">{t.dataManagement.subtitle}</p>
       </div>
 
-      {/* Warning Banner */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <div className="flex gap-3">
-          <svg
-            className="w-6 h-6 text-yellow-600 flex-shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-          </svg>
-          <p className="text-sm text-yellow-800">
-            Az adatok PostgreSQL adatbazisban tarolodnak. Mentes/import tovabbra is ajanlott.
-          </p>
-        </div>
-      </div>
+      <PageTabBar tabs={tabs} />
 
+      <div className={section ? 'max-w-4xl' : ''}>
       {/* Message */}
       {message && (
         <div
@@ -891,10 +923,36 @@ export function DataManagementPage() {
         </div>
       )}
 
+      {/* Overview card grid */}
+      {!section && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {overviewCards.map((card) => (
+            <Link
+              key={card.key}
+              to={card.to}
+              className="block rounded-lg border border-gray-200 bg-white p-5 hover:border-dental-300 hover:shadow-md transition-all"
+            >
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0">{card.icon}</div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">{card.title}</h3>
+                  <p className="text-xs text-gray-500 mt-1">{card.description}</p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+
       {/* Catalog-only Card */}
-      <Card>
+      {section === 'pricelist' && <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold">{t.dataManagement.catalogOnly.title}</h2>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+            {t.dataManagement.catalogOnly.title}
+          </h2>
         </CardHeader>
         <CardContent>
           <p className="text-gray-600 mb-4">{t.dataManagement.catalogOnly.description}</p>
@@ -980,12 +1038,17 @@ export function DataManagementPage() {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Patient Data Card */}
-      <Card>
+      {section === 'patients' && <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold">{t.dataManagement.patientData.title}</h2>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            {t.dataManagement.patientData.title}
+          </h2>
         </CardHeader>
         <CardContent>
           <input
@@ -1102,12 +1165,17 @@ export function DataManagementPage() {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Full Database Card */}
-      <Card>
+      {section === 'database' && <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold">{t.dataManagement.databaseOnly.title}</h2>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+            </svg>
+            {t.dataManagement.databaseOnly.title}
+          </h2>
         </CardHeader>
         <CardContent>
           <input
@@ -1174,26 +1242,36 @@ export function DataManagementPage() {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Storage Info */}
-      <Card>
+      {section === 'storage' && <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold">{t.dataManagement.storageInfoTitle}</h2>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            {t.dataManagement.storageInfoTitle}
+          </h2>
         </CardHeader>
         <CardContent>
           <StorageInfo />
         </CardContent>
-      </Card>
+      </Card>}
 
-      <Card>
+      {section === 'report' && <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold">{t.dataManagement.dbReportTitle}</h2>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18M8 6v12M16 6v12" />
+            </svg>
+            {t.dataManagement.dbReportTitle}
+          </h2>
         </CardHeader>
         <CardContent>
           <DatabaseReport />
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* Import Confirmation */}
       <ConfirmModal
@@ -1271,6 +1349,7 @@ export function DataManagementPage() {
         cancelText={t.common.cancel}
         variant="danger"
       />
+      </div>
     </div>
   );
 }
@@ -1278,27 +1357,94 @@ export function DataManagementPage() {
 function StorageInfo() {
   const { t } = useSettings();
   const { patients, quotes, catalog } = useApp();
+  const { pricelists } = usePriceLists();
+  const { allCategories } = usePriceListCategories();
+  const { invoices } = useInvoices();
 
-  const storageUsed = 'DB';
+  const activePatients = patients.filter((p) => !p.isArchived);
+  const archivedPatients = patients.filter((p) => p.isArchived);
+
+  // Group patients by patientType
+  const patientsByType: Record<string, number> = {};
+  for (const p of activePatients) {
+    const type = p.patientType || '-';
+    patientsByType[type] = (patientsByType[type] || 0) + 1;
+  }
+
+  const activeQuotes = quotes.filter((q) => !q.isDeleted);
+  const deletedQuotes = quotes.filter((q) => q.isDeleted);
+
+  // Group quotes by status
+  const quotesByStatus: Record<string, number> = {};
+  for (const q of activeQuotes) {
+    quotesByStatus[q.quoteStatus] = (quotesByStatus[q.quoteStatus] || 0) + 1;
+  }
+
+  const quoteStatusLabel = (status: string) => {
+    const map: Record<string, string> = {
+      draft: t.quotes.statusDraft,
+      closed: t.quotes.statusClosed,
+      rejected: t.quotes.statusRejected,
+      started: t.quotes.statusStarted,
+      completed: t.quotes.statusCompleted,
+    };
+    return map[status] || status;
+  };
+
+  // Invoice counts by type
+  const normalInvoices = invoices.filter((inv) => !inv.invoiceType || inv.invoiceType === 'normal');
+  const advanceInvoices = invoices.filter((inv) => inv.invoiceType === 'advance');
+  const finalInvoices = invoices.filter((inv) => inv.invoiceType === 'final');
+  const stornoInvoices = invoices.filter((inv) => inv.status === 'storno');
+
+  const SectionHeader = ({ children }: { children: React.ReactNode }) => (
+    <div className="flex justify-between py-2 border-b border-gray-300">
+      <span className="text-sm font-semibold text-gray-800">{children}</span>
+    </div>
+  );
+
+  const Row = ({ label, value, indent }: { label: string; value: number; indent?: boolean }) => (
+    <div className={`flex justify-between py-1.5 border-b border-gray-100 ${indent ? 'pl-4' : ''}`}>
+      <span className="text-sm text-gray-600">{label}</span>
+      <span className="text-sm font-medium">{value}</span>
+    </div>
+  );
 
   return (
-    <div className="space-y-3">
-      <div className="flex justify-between py-2 border-b">
-        <span className="text-gray-600">{t.dataManagement.storagePatientsCount}</span>
-        <span className="font-medium">{patients.length}</span>
-      </div>
-      <div className="flex justify-between py-2 border-b">
-        <span className="text-gray-600">{t.dataManagement.storageQuotesCount}</span>
-        <span className="font-medium">{quotes.length}</span>
-      </div>
-      <div className="flex justify-between py-2 border-b">
-        <span className="text-gray-600">{t.dataManagement.storageCatalogItems}</span>
-        <span className="font-medium">{catalog.length}</span>
-      </div>
-      <div className="flex justify-between py-2">
-        <span className="text-gray-600">{t.dataManagement.storageUsage}</span>
-        <span className="font-medium">{storageUsed}</span>
-      </div>
+    <div className="space-y-1">
+      {/* Patients */}
+      <SectionHeader>{t.dataManagement.storageSectionPatients}</SectionHeader>
+      <Row label={t.dataManagement.storagePatientsCount} value={activePatients.length} />
+      {Object.entries(patientsByType)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([type, count]) => (
+          <Row key={type} label={`${type}${t.dataManagement.storagePatientsCountByType}`} value={count} indent />
+        ))}
+      <Row label={t.dataManagement.storageDeletedPatients} value={archivedPatients.length} indent />
+
+      {/* Quotes */}
+      <SectionHeader>{t.dataManagement.storageSectionQuotes}</SectionHeader>
+      <Row label={t.dataManagement.storageQuotesCount} value={activeQuotes.length} />
+      {(['draft', 'closed', 'started', 'completed', 'rejected'] as const)
+        .filter((status) => quotesByStatus[status])
+        .map((status) => (
+          <Row key={status} label={quoteStatusLabel(status)} value={quotesByStatus[status]} indent />
+        ))}
+      <Row label={t.dataManagement.storageDeletedQuotes} value={deletedQuotes.length} indent />
+
+      {/* Price List */}
+      <SectionHeader>{t.dataManagement.storageSectionPriceList}</SectionHeader>
+      <Row label={t.dataManagement.storagePriceListsCount} value={pricelists.length} indent />
+      <Row label={t.dataManagement.storagePriceListCategoriesCount} value={allCategories.length} indent />
+      <Row label={t.dataManagement.storagePriceListItemsCount} value={catalog.length} indent />
+
+      {/* Invoices */}
+      <SectionHeader>{t.dataManagement.storageSectionInvoices}</SectionHeader>
+      <Row label={t.dataManagement.storageSectionInvoices} value={invoices.length} />
+      <Row label={t.dataManagement.storageInvoicesCount} value={normalInvoices.length} indent />
+      <Row label={t.dataManagement.storageAdvanceInvoicesCount} value={advanceInvoices.length} indent />
+      <Row label={t.dataManagement.storageFinalInvoicesCount} value={finalInvoices.length} indent />
+      <Row label={t.dataManagement.storageStornoInvoicesCount} value={stornoInvoices.length} indent />
     </div>
   );
 }

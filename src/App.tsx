@@ -83,9 +83,19 @@ function App() {
         <Route path="/catalog/lists" element={<Guard permission="pricelist.view"><PriceListsPage /></Guard>} />
         <Route path="/catalog/categories" element={<Guard permission="pricelist.view"><PriceListCategoriesPage /></Guard>} />
         <Route path="/settings" element={<Guard permission="settings.view"><SettingsPage /></Guard>} />
+        <Route path="/settings/general" element={<Guard permission="settings.view"><SettingsPage key="general" section="general" /></Guard>} />
+        <Route path="/settings/clinic" element={<Guard permission="settings.view"><SettingsPage key="clinic" section="clinic" /></Guard>} />
+        <Route path="/settings/patient" element={<Guard permission="settings.view"><SettingsPage key="patient" section="patient" /></Guard>} />
+        <Route path="/settings/quotes" element={<Guard permission="settings.view"><SettingsPage key="quotes" section="quotes" /></Guard>} />
+        <Route path="/settings/invoicing" element={<Guard permission="settings.view"><SettingsPage key="invoicing" section="invoicing" /></Guard>} />
         <Route path="/invoices" element={<Guard permission="invoices.view"><InvoicesPage /></Guard>} />
         <Route path="/invoices/:invoiceId" element={<Guard permission="invoices.view.detail"><InvoiceDetailPage /></Guard>} />
-        <Route path="/data" element={<Guard permission="data.view"><DataManagementPage /></Guard>} />
+        <Route path="/data" element={<Guard permission="data.view"><DataManagementPage key="overview" /></Guard>} />
+        <Route path="/data/pricelist" element={<Guard permission="data.view"><DataManagementPage key="pricelist" section="pricelist" /></Guard>} />
+        <Route path="/data/patients" element={<Guard permission="data.view"><DataManagementPage key="patients" section="patients" /></Guard>} />
+        <Route path="/data/database" element={<Guard permission="data.view"><DataManagementPage key="database" section="database" /></Guard>} />
+        <Route path="/data/storage" element={<Guard permission="data.view"><DataManagementPage key="storage" section="storage" /></Guard>} />
+        <Route path="/data/report" element={<Guard permission="data.view"><DataManagementPage key="report" section="report" /></Guard>} />
         <Route path="/data/browser" element={<Guard permission="data.browse"><DatabaseBrowserPage /></Guard>} />
         <Route path="/odontogram-lab" element={<Guard permission="lab.view"><OdontogramLabPage /></Guard>} />
         <Route
