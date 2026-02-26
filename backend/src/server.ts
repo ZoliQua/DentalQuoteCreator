@@ -229,7 +229,13 @@ const toSafeUser = (user: {
   };
 };
 
-const server = Fastify({ logger: true });
+const server = Fastify({
+  logger: true,
+  rewriteUrl: (req) => {
+    const url = req.url || '/';
+    return url.startsWith('/backend') ? url.slice('/backend'.length) || '/' : url;
+  },
+});
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -239,7 +245,7 @@ declare module 'fastify' {
 }
 
 const SESSION_TTL_DAYS = Number(process.env.AUTH_SESSION_TTL_DAYS || 14);
-const PUBLIC_ROUTE_PATTERNS = new Set(['/health', '/db-health', '/auth/login', '/api/szamlazz/query-taxpayer']);
+const PUBLIC_ROUTE_PATTERNS = new Set(['/health', '/db-health', '/debug', '/auth/login', '/api/szamlazz/query-taxpayer']);
 
 const toClientPermissions = (permissions: PermissionMap) => {
   return ALL_PERMISSION_KEYS.map((key) => ({ key, isAllowed: permissions[key] }));
@@ -360,6 +366,40 @@ server.get('/health', async () => ({ status: 'ok' }));
 server.get('/db-health', async () => {
   await prisma.$queryRaw`SELECT 1`;
   return { status: 'ok' };
+});
+
+server.get('/debug', async () => {
+  try {
+    const [users, patients, quotes, invoices, pricelists, categories, catalogItems, sessions] =
+      await Promise.all([
+        prisma.user.count(),
+        prisma.patient.count(),
+        prisma.quote.count(),
+        prisma.invoice.count(),
+        prisma.priceList.count(),
+        prisma.priceListCategory.count(),
+        prisma.priceListCatalogItem.count(),
+        prisma.authSession.count(),
+      ]);
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      nodeVersion: process.version,
+      uptime: Math.round(process.uptime()) + 's',
+      memory: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
+      counts: { users, patients, quotes, invoices, pricelists, categories, catalogItems, sessions },
+      env: {
+        NODE_ENV: process.env.NODE_ENV || '(not set)',
+        DATABASE_URL: process.env.DATABASE_URL ? '***set***' : '***MISSING***',
+      },
+    };
+  } catch (err) {
+    return {
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 });
 
 // -- Sequential ID generators for Quote / Invoice ----------------
