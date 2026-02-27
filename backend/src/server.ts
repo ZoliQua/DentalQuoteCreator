@@ -446,16 +446,6 @@ server.post('/seed', async (request, reply) => {
   const toBool = (val: string) => val.toUpperCase() === 'TRUE' || val === '1';
 
   try {
-    // Apply pending schema fixes (safe to re-run)
-    const schemaSql = [
-      `ALTER TABLE "PriceList" ADD COLUMN IF NOT EXISTS "isNeak" BOOLEAN NOT NULL DEFAULT false`,
-      `ALTER TABLE "PriceListCatalogItem" ADD COLUMN IF NOT EXISTS "catalogCategory" TEXT NOT NULL DEFAULT ''`,
-    ];
-    for (const sql of schemaSql) {
-      try { await prisma.$executeRawUnsafe(sql); } catch { /* already applied */ }
-    }
-
-    // Seed pricelists (skip isNeak — DB default is false)
     const priceLists = readCsv('pricelists.csv');
     for (const row of priceLists) {
       const data = {
@@ -465,16 +455,11 @@ server.post('/seed', async (request, reply) => {
         isActive: toBool(row.isActive),
         isDeleted: toBool(row.isDeleted),
         isDefault: toBool(row.isDefault),
+        isNeak: toBool(row.isNeak || 'FALSE'),
         isUserLocked: toBool(row.isUserLocked),
         listOfUsers: row.listOfUsers === '{}' ? [] : JSON.parse(row.listOfUsers || '[]'),
       };
       await prisma.priceList.upsert({ where: { priceListId: row.priceListId }, update: data, create: { priceListId: row.priceListId, ...data } });
-    }
-    // Set isNeak via raw SQL for rows that have it
-    for (const row of priceLists) {
-      if (toBool(row.isNeak || 'FALSE')) {
-        await prisma.$executeRawUnsafe(`UPDATE "PriceList" SET "isNeak" = true WHERE "priceListId" = $1`, row.priceListId);
-      }
     }
 
     const categories = readCsv('pricelist-categories.csv');
@@ -491,8 +476,8 @@ server.post('/seed', async (request, reply) => {
       await prisma.priceListCategory.upsert({ where: { catalogCategoryId: row.catalogCategoryId }, update: data, create: { catalogCategoryId: row.catalogCategoryId, ...data } });
     }
 
-    const catLookup: Record<string, { priceListId: string; name: string }> = {};
-    for (const row of categories) catLookup[row.catalogCategoryId] = { priceListId: row.priceListId, name: row.catalogCategoryHu };
+    const catLookup: Record<string, string> = {};
+    for (const row of categories) catLookup[row.catalogCategoryId] = row.priceListId;
 
     const items = readCsv('pricelist-catalogitems.csv');
     for (const row of items) {
@@ -500,8 +485,7 @@ server.post('/seed', async (request, reply) => {
       const catInfo = catLookup[row.catalogCategoryId];
       const data = {
         catalogCategoryId: row.catalogCategoryId || '',
-        catalogCategory: catInfo?.name || '',
-        priceListId: catInfo?.priceListId || null,
+        priceListId: catInfo || null,
         catalogCode: row.catalogCode,
         catalogNameHu: row.catalogNameHu,
         catalogNameEn: row.catalogNameEn || '',
@@ -522,8 +506,7 @@ server.post('/seed', async (request, reply) => {
         milkToothOnly: toBool(row.milkToothOnly),
         isActive: toBool(row.isActive),
       };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- compat with old schema that has catalogCategory
-      await (prisma.priceListCatalogItem.upsert as any)({ where: { catalogItemId: row.catalogItemId }, update: data, create: { catalogItemId: row.catalogItemId, ...data } });
+      await prisma.priceListCatalogItem.upsert({ where: { catalogItemId: row.catalogItemId }, update: data, create: { catalogItemId: row.catalogItemId, ...data } });
     }
 
     return { status: 'ok', seeded: { pricelists: priceLists.length, categories: categories.length, catalogItems: items.length } };
