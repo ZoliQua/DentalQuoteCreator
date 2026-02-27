@@ -402,6 +402,136 @@ server.get('/debug', async () => {
   }
 });
 
+server.post('/seed', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.users.manage');
+  if (!user) return;
+
+  const { readFileSync } = await import('fs');
+  const { resolve, dirname } = await import('path');
+  const { fileURLToPath } = await import('url');
+
+  const __dir = dirname(fileURLToPath(import.meta.url));
+  const archiveDir = resolve(__dir, '../../archive');
+
+  function parseCsvLine(line: string): string[] {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+        else inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) { values.push(current); current = ''; }
+      else current += char;
+    }
+    values.push(current);
+    return values.map((v) => v.trim());
+  }
+
+  function readCsv(filename: string): Record<string, string>[] {
+    const filePath = resolve(archiveDir, filename);
+    const content = readFileSync(filePath, 'utf-8');
+    const lines = content.trim().split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) return [];
+    const headers = parseCsvLine(lines[0]);
+    return lines.slice(1).map((line) => {
+      const values = parseCsvLine(line);
+      const row: Record<string, string> = {};
+      headers.forEach((h, idx) => { row[h] = values[idx] ?? ''; });
+      return row;
+    });
+  }
+
+  const toBool = (val: string) => val.toUpperCase() === 'TRUE' || val === '1';
+
+  try {
+    // Apply pending schema fixes (safe to re-run)
+    const schemaSql = [
+      `ALTER TABLE "PriceList" ADD COLUMN IF NOT EXISTS "isNeak" BOOLEAN NOT NULL DEFAULT false`,
+      `ALTER TABLE "PriceListCatalogItem" ADD COLUMN IF NOT EXISTS "catalogCategory" TEXT NOT NULL DEFAULT ''`,
+    ];
+    for (const sql of schemaSql) {
+      try { await prisma.$executeRawUnsafe(sql); } catch { /* already applied */ }
+    }
+
+    // Seed pricelists (skip isNeak — DB default is false)
+    const priceLists = readCsv('pricelists.csv');
+    for (const row of priceLists) {
+      const data = {
+        priceListNameHu: row.priceListNameHu,
+        priceListNameEn: row.priceListNameEn || '',
+        priceListNameDe: row.priceListNameDe || '',
+        isActive: toBool(row.isActive),
+        isDeleted: toBool(row.isDeleted),
+        isDefault: toBool(row.isDefault),
+        isUserLocked: toBool(row.isUserLocked),
+        listOfUsers: row.listOfUsers === '{}' ? [] : JSON.parse(row.listOfUsers || '[]'),
+      };
+      await prisma.priceList.upsert({ where: { priceListId: row.priceListId }, update: data, create: { priceListId: row.priceListId, ...data } });
+    }
+    // Set isNeak via raw SQL for rows that have it
+    for (const row of priceLists) {
+      if (toBool(row.isNeak || 'FALSE')) {
+        await prisma.$executeRawUnsafe(`UPDATE "PriceList" SET "isNeak" = true WHERE "priceListId" = $1`, row.priceListId);
+      }
+    }
+
+    const categories = readCsv('pricelist-categories.csv');
+    for (const row of categories) {
+      const data = {
+        priceListId: row.priceListId,
+        catalogCategoryPrefix: row.catalogCategoryPrefix,
+        catalogCategoryHu: row.catalogCategoryHu,
+        catalogCategoryEn: row.catalogCategoryEn || '',
+        catalogCategoryDe: row.catalogCategoryDe || '',
+        isActive: toBool(row.isActive),
+        isDeleted: toBool(row.isDeleted),
+      };
+      await prisma.priceListCategory.upsert({ where: { catalogCategoryId: row.catalogCategoryId }, update: data, create: { catalogCategoryId: row.catalogCategoryId, ...data } });
+    }
+
+    const catLookup: Record<string, { priceListId: string; name: string }> = {};
+    for (const row of categories) catLookup[row.catalogCategoryId] = { priceListId: row.priceListId, name: row.catalogCategoryHu };
+
+    const items = readCsv('pricelist-catalogitems.csv');
+    for (const row of items) {
+      const allowedTeeth = row.allowedTeeth ? row.allowedTeeth.split('|').map(Number).filter((n) => Number.isFinite(n)) : [];
+      const catInfo = catLookup[row.catalogCategoryId];
+      const data = {
+        catalogCategoryId: row.catalogCategoryId || '',
+        catalogCategory: catInfo?.name || '',
+        priceListId: catInfo?.priceListId || null,
+        catalogCode: row.catalogCode,
+        catalogNameHu: row.catalogNameHu,
+        catalogNameEn: row.catalogNameEn || '',
+        catalogNameDe: row.catalogNameDe || '',
+        catalogUnit: row.catalogUnit,
+        catalogPrice: Number(row.catalogPrice) || 0,
+        catalogPriceCurrency: row.catalogPriceCurrency || 'HUF',
+        catalogVatRate: Number(row.catalogVatRate) || 0,
+        catalogTechnicalPrice: Number(row.catalogTechnicalPrice) || 0,
+        svgLayer: row.svgLayer || '',
+        hasLayer: toBool(row.hasLayer),
+        hasTechnicalPrice: toBool(row.hasTechnicalPrice),
+        isFullMouth: toBool(row.isFullMouth),
+        isArch: toBool(row.isArch),
+        isQuadrant: toBool(row.isQuadrant),
+        maxTeethPerArch: row.maxTeethPerArch ? Number(row.maxTeethPerArch) : null,
+        allowedTeeth,
+        milkToothOnly: toBool(row.milkToothOnly),
+        isActive: toBool(row.isActive),
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- compat with old schema that has catalogCategory
+      await (prisma.priceListCatalogItem.upsert as any)({ where: { catalogItemId: row.catalogItemId }, update: data, create: { catalogItemId: row.catalogItemId, ...data } });
+    }
+
+    return { status: 'ok', seeded: { pricelists: priceLists.length, categories: categories.length, catalogItems: items.length } };
+  } catch (err) {
+    return reply.code(500).send({ status: 'error', error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
 // -- Sequential ID generators for Quote / Invoice ----------------
 
 async function nextQuoteId(patientId: string): Promise<string> {
