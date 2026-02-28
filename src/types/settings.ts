@@ -5,6 +5,8 @@ export interface ClinicSettings {
   email: string;
   website: string;
   taxNumber: string;
+  logo?: string;
+  showLogoOnQuote?: boolean;
 }
 
 export interface Doctor {
@@ -56,6 +58,9 @@ export interface InvoiceSettings {
   defaultComment: string;
   defaultVatRate: 0 | 27 | 'TAM';
   defaultPaymentMethod: 'átutalás' | 'készpénz' | 'bankkártya';
+  invoiceMode: 'live' | 'test';
+  agentKeyLive: string;
+  agentKeyTest: string;
 }
 
 export interface PatientSettings {

@@ -5,6 +5,34 @@ import { promisify } from 'util';
 import { Prisma, UserRole } from '@prisma/client';
 import { prisma } from './db.js';
 
+function parseUserAgent(ua: string) {
+  let browser = '';
+  let os = '';
+  let device = 'desktop';
+
+  // Browser detection
+  if (/Edg\/(\S+)/i.test(ua)) browser = 'Edge ' + RegExp.$1;
+  else if (/OPR\/(\S+)/i.test(ua)) browser = 'Opera ' + RegExp.$1;
+  else if (/Chrome\/(\S+)/i.test(ua)) browser = 'Chrome ' + RegExp.$1;
+  else if (/Firefox\/(\S+)/i.test(ua)) browser = 'Firefox ' + RegExp.$1;
+  else if (/Version\/(\S+).*Safari/i.test(ua)) browser = 'Safari ' + RegExp.$1;
+  else if (/MSIE (\S+)/i.test(ua)) browser = 'IE ' + RegExp.$1;
+
+  // OS detection
+  if (/Windows NT 10/i.test(ua)) os = 'Windows 10+';
+  else if (/Windows NT/i.test(ua)) os = 'Windows';
+  else if (/Mac OS X (\d+[._]\d+)/i.test(ua)) os = 'macOS ' + RegExp.$1.replace(/_/g, '.');
+  else if (/Android (\S+)/i.test(ua)) os = 'Android ' + RegExp.$1;
+  else if (/iPhone|iPad/i.test(ua)) os = 'iOS';
+  else if (/Linux/i.test(ua)) os = 'Linux';
+
+  // Device detection
+  if (/Mobile|Android.*Mobile/i.test(ua)) device = 'mobile';
+  else if (/iPad|Tablet|Android(?!.*Mobile)/i.test(ua)) device = 'tablet';
+
+  return { browser: browser || null, os: os || null, device };
+}
+
 type JsonRecord = Record<string, unknown>;
 type PermissionMap = Record<PermissionKey, boolean>;
 
@@ -15,6 +43,7 @@ const createAuditId = (): string => 'PA' + randomBytes(4).toString('hex');
 const createActivityId = (): string => 'UA' + randomBytes(4).toString('hex');
 const createPermOverrideId = (): string => 'UP' + randomBytes(4).toString('hex');
 const createNeakCheckId = (): string => 'NC' + randomBytes(5).toString('hex');
+const createVisitorLogId = (): string => 'VL' + randomBytes(4).toString('hex');
 
 const MAX_ID_RETRIES = 5;
 async function createWithUniqueId<T>(
@@ -60,6 +89,7 @@ const ALL_PERMISSION_KEYS = [
   'patients.delete',
   'lab.view',
   'settings.view',
+  'settings.edit',
   'data.view',
   'data.browse',
   'admin.users.manage',
@@ -231,6 +261,7 @@ const toSafeUser = (user: {
 
 const server = Fastify({
   logger: true,
+  trustProxy: true,
   rewriteUrl: (req) => {
     const url = req.url || '/';
     return url.startsWith('/backend') ? url.slice('/backend'.length) || '/' : url;
@@ -245,7 +276,7 @@ declare module 'fastify' {
 }
 
 const SESSION_TTL_DAYS = Number(process.env.AUTH_SESSION_TTL_DAYS || 14);
-const PUBLIC_ROUTE_PATTERNS = new Set(['/health', '/db-health', '/debug', '/auth/login', '/api/szamlazz/query-taxpayer']);
+const PUBLIC_ROUTE_PATTERNS = new Set(['/health', '/db-health', '/debug', '/auth/login', '/api/szamlazz/query-taxpayer', '/visitor-log']);
 
 const toClientPermissions = (permissions: PermissionMap) => {
   return ALL_PERMISSION_KEYS.map((key) => ({ key, isAllowed: permissions[key] }));
@@ -571,6 +602,9 @@ const BROWSABLE_TABLES = [
   'PermissionAuditLog',
   'UserActivityLog',
   'Doctor',
+  'NeakDocumentType',
+  'VisitorLog',
+  'InvoiceSettings',
 ] as const;
 
 const TABLE_PK_MAP: Record<string, string[]> = {
@@ -592,6 +626,9 @@ const TABLE_PK_MAP: Record<string, string[]> = {
   PermissionAuditLog: ['id'],
   UserActivityLog: ['id'],
   Doctor: ['doctorId'],
+  NeakDocumentType: ['neakDocumentId'],
+  VisitorLog: ['id'],
+  InvoiceSettings: ['id'],
 };
 
 const serializeRow = (row: Record<string, unknown>): Record<string, unknown> => {
@@ -890,7 +927,7 @@ server.post('/auth/login', async (request, reply) => {
   const overrides = await prisma.userPermissionOverride.findMany({ where: { userId: user.id } });
   const permissions = buildPermissionMap(user.role, overrides);
 
-  await logActivity(user.id, 'login', { ipAddress: request.ip || undefined });
+  await logActivity(user.id, 'login', { page: 'login', ipAddress: request.ip || undefined });
 
   return {
     token,
@@ -911,7 +948,7 @@ server.post('/auth/logout', async (request, reply) => {
     });
   }
 
-  await logActivity(currentUser.id, 'logout', { ipAddress: request.ip || undefined });
+  await logActivity(currentUser.id, 'logout', { page: 'logout', ipAddress: request.ip || undefined });
 
   return { status: 'ok' };
 });
@@ -1189,6 +1226,139 @@ server.get('/admin/audit-log/:userId', async (request, reply) => {
   }));
 });
 
+// ── Visitor Log ──────────────────────────────────────────────────────
+server.post('/visitor-log', async (request) => {
+  const uaString = (request.headers['user-agent'] as string) || '';
+  const { browser: browserName, os: osName, device: deviceType } = parseUserAgent(uaString);
+
+  const ip =
+    (request.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    request.ip;
+
+  const id = createVisitorLogId();
+  await prisma.visitorLog.create({
+    data: {
+      id,
+      userId: request.currentUser?.id ?? null,
+      sessionId: request.sessionId ?? null,
+      ipAddress: ip,
+      userAgent: uaString || null,
+      browser: browserName,
+      os: osName,
+      device: deviceType,
+    },
+  });
+
+  return { status: 'ok', id };
+});
+
+server.patch('/visitor-log/:id', async (request) => {
+  const { id } = request.params as { id: string };
+  if (!request.currentUser) return { status: 'ok' };
+
+  try {
+    await prisma.visitorLog.update({
+      where: { id },
+      data: {
+        userId: request.currentUser.id,
+        sessionId: request.sessionId ?? null,
+      },
+    });
+  } catch {
+    // Entry may have been deleted or doesn't exist — ignore
+  }
+  return { status: 'ok' };
+});
+
+server.get('/visitor-log', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'admin.users.manage');
+  if (!currentUser) return;
+
+  const { year, month, day, period, userId } = request.query as {
+    year?: string;
+    month?: string;
+    day?: string;
+    period?: string;
+    userId?: string;
+  };
+
+  const where: Prisma.VisitorLogWhereInput = {};
+
+  if (period === 'last30days') {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    where.createdAt = { gte: d };
+  } else if (period === 'last365days') {
+    const d = new Date();
+    d.setDate(d.getDate() - 365);
+    where.createdAt = { gte: d };
+  } else if (year) {
+    const y = parseInt(year, 10);
+    const m = month ? parseInt(month, 10) - 1 : 0;
+    const d = day ? parseInt(day, 10) : 1;
+    const start = new Date(y, month ? m : 0, day ? d : 1);
+    const end = day
+      ? new Date(y, m, d + 1)
+      : month
+      ? new Date(y, m + 1, 1)
+      : new Date(y + 1, 0, 1);
+    where.createdAt = { gte: start, lt: end };
+  }
+
+  if (userId) {
+    where.userId = userId;
+  }
+
+  const entries = await prisma.visitorLog.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: 5000,
+    include: { user: { select: { fullName: true } } },
+  });
+
+  return entries.map((e) => ({
+    id: e.id,
+    userId: e.userId,
+    userName: e.user?.fullName ?? null,
+    sessionId: e.sessionId,
+    ipAddress: e.ipAddress,
+    userAgent: e.userAgent,
+    browser: e.browser,
+    os: e.os,
+    device: e.device,
+    createdAt: e.createdAt.toISOString(),
+  }));
+});
+
+server.get('/visitor-log/stats', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'admin.users.manage');
+  if (!currentUser) return;
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Monday of this week
+  const dayOfWeek = now.getDay();
+  const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayOffset);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const [todayTotal, weekTotal, monthTotal, todayUnique, weekUnique, monthUnique] =
+    await Promise.all([
+      prisma.visitorLog.count({ where: { createdAt: { gte: todayStart } } }),
+      prisma.visitorLog.count({ where: { createdAt: { gte: weekStart } } }),
+      prisma.visitorLog.count({ where: { createdAt: { gte: monthStart } } }),
+      prisma.visitorLog.groupBy({ by: ['userId'], where: { createdAt: { gte: todayStart }, userId: { not: null } } }).then((r) => r.length),
+      prisma.visitorLog.groupBy({ by: ['userId'], where: { createdAt: { gte: weekStart }, userId: { not: null } } }).then((r) => r.length),
+      prisma.visitorLog.groupBy({ by: ['userId'], where: { createdAt: { gte: monthStart }, userId: { not: null } } }).then((r) => r.length),
+    ]);
+
+  return {
+    today: { total: todayTotal, unique: todayUnique },
+    week: { total: weekTotal, unique: weekUnique },
+    month: { total: monthTotal, unique: monthUnique },
+  };
+});
+
 server.get('/admin/activity-log/:userId', async (request, reply) => {
   const currentUser = await requirePermission(request, reply, 'admin.users.manage');
   if (!currentUser) return;
@@ -1307,9 +1477,11 @@ server.post('/patients', async (request, reply) => {
   });
 
   await logActivity(user.id, 'patient.create', {
+    page: `patients/${patient.patientId}`,
     entityType: 'Patient',
     entityId: patient.patientId,
     details: { patientName: `${patient.lastName} ${patient.firstName}` },
+    ipAddress: request.ip || undefined,
   });
 
   return reply.code(201).send(patient);
@@ -1353,7 +1525,17 @@ server.patch('/patients/:patientId', async (request, reply) => {
   }
 
   try {
-    return await prisma.patient.update({ where: { patientId }, data });
+    const updated = await prisma.patient.update({ where: { patientId }, data });
+
+    await logActivity(user.id, 'patient.update', {
+      page: `patients/${patientId}`,
+      entityType: 'Patient',
+      entityId: patientId,
+      details: { patientName: `${updated.lastName} ${updated.firstName}` },
+      ipAddress: request.ip || undefined,
+    });
+
+    return updated;
   } catch {
     return reply.code(404).send({ message: 'Patient not found' });
   }
@@ -1371,9 +1553,11 @@ server.delete('/patients/:patientId', async (request, reply) => {
     });
 
     await logActivity(user.id, 'patient.delete', {
+      page: `patients/${patientId}`,
       entityType: 'Patient',
       entityId: patientId,
       details: { patientName: `${patient.lastName} ${patient.firstName}` },
+      ipAddress: request.ip || undefined,
     });
 
     return patient;
@@ -1994,9 +2178,11 @@ server.post('/quotes', async (request, reply) => {
   });
 
   await logActivity(user.id, 'quote.create', {
+    page: `patients/${patientId}/quotes/${quoteId}`,
     entityType: 'Quote',
     entityId: quoteId,
-    details: { patientId },
+    details: { patientId, quoteStatus: String(body.quoteStatus || 'draft') },
+    ipAddress: request.ip || undefined,
   });
 
   return reply.code(201).send(row.data);
@@ -2005,7 +2191,9 @@ server.post('/quotes', async (request, reply) => {
 server.patch('/quotes/:quoteId', async (request, reply) => {
   const { quoteId } = request.params as { quoteId: string };
   const body = request.body as JsonRecord;
+  const user = request.currentUser;
   try {
+    const oldRow = await prisma.quote.findUnique({ where: { quoteId }, select: { quoteStatus: true } });
     const row = await prisma.quote.update({
       where: { quoteId },
       data: {
@@ -2024,6 +2212,23 @@ server.patch('/quotes/:quoteId', async (request, reply) => {
         doctorId: body.doctorId === undefined ? undefined : (body.doctorId ? String(body.doctorId) : null),
       },
     });
+
+    if (user) {
+      const details: Record<string, unknown> = { patientId: row.patientId };
+      if (body.quoteStatus !== undefined && oldRow && String(body.quoteStatus) !== oldRow.quoteStatus) {
+        details.statusChange = `${oldRow.quoteStatus} → ${body.quoteStatus}`;
+        details.oldStatus = oldRow.quoteStatus;
+        details.newStatus = String(body.quoteStatus);
+      }
+      await logActivity(user.id, 'quote.update', {
+        page: `patients/${row.patientId}/quotes/${quoteId}`,
+        entityType: 'Quote',
+        entityId: quoteId,
+        details,
+        ipAddress: request.ip || undefined,
+      });
+    }
+
     return row.data;
   } catch {
     return reply.code(404).send({ message: 'Quote not found' });
@@ -2042,8 +2247,11 @@ server.delete('/quotes/:quoteId', async (request, reply) => {
     });
 
     await logActivity(user.id, 'quote.delete', {
+      page: `patients/${row.patientId}/quotes/${quoteId}`,
       entityType: 'Quote',
       entityId: quoteId,
+      details: { patientId: row.patientId },
+      ipAddress: request.ip || undefined,
     });
 
     return row.data;
@@ -2099,10 +2307,52 @@ server.get('/settings', async () => {
 
 server.put('/settings', async (request) => {
   const body = request.body as JsonRecord;
+  // Strip invoice settings and doctors — they live in dedicated tables
+  const { invoice: _invoice, doctors: _doctors, ...cleanBody } = body;
   await prisma.appSettings.upsert({
     where: { id: 'default' },
-    update: { data: toInputJson(body) },
-    create: { id: 'default', data: toInputJson(body) },
+    update: { data: toInputJson(cleanBody) },
+    create: { id: 'default', data: toInputJson(cleanBody) },
+  });
+  return { status: 'ok' };
+});
+
+// Invoice Settings
+server.get('/invoice-settings', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+  const row = await prisma.invoiceSettings.findUnique({ where: { id: 'default' } });
+  if (!row) {
+    return {
+      invoiceType: 'paper',
+      defaultComment: '',
+      defaultVatRate: 'TAM',
+      defaultPaymentMethod: 'bankkártya',
+      invoiceMode: 'test',
+      agentKeyLive: '',
+      agentKeyTest: '',
+    };
+  }
+  return row;
+});
+
+server.put('/invoice-settings', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.edit');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const data = {
+    invoiceType: String(body.invoiceType || 'paper'),
+    defaultComment: String(body.defaultComment || ''),
+    defaultVatRate: String(body.defaultVatRate || 'TAM'),
+    defaultPaymentMethod: String(body.defaultPaymentMethod || 'bankkártya'),
+    invoiceMode: String(body.invoiceMode || 'test'),
+    agentKeyLive: String(body.agentKeyLive || ''),
+    agentKeyTest: String(body.agentKeyTest || ''),
+  };
+  await prisma.invoiceSettings.upsert({
+    where: { id: 'default' },
+    update: data,
+    create: { id: 'default', ...data },
   });
   return { status: 'ok' };
 });
@@ -2201,8 +2451,11 @@ server.put('/invoices/:invoiceId', async (request, reply) => {
   });
 
   await logActivity(user.id, 'invoice.create', {
+    page: `patients/${String(body.patientId || '')}/quotes/${String(body.quoteId || '')}`,
     entityType: 'Invoice',
     entityId: invoiceId,
+    details: { patientId: String(body.patientId || ''), quoteId: String(body.quoteId || ''), status: String(body.status || 'draft'), invoiceType: body.invoiceType ? String(body.invoiceType) : undefined },
+    ipAddress: request.ip || undefined,
   });
 
   return { status: 'ok', id: invoiceId };
@@ -2781,7 +3034,14 @@ server.delete('/patients/:patientId/snapshots/:snapshotId', async (request, repl
 // ---- Integrated Szamlazz + NEAK API (moved from server/) ----
 const INVOICE_MODE = process.env.INVOICE_MODE || 'preview';
 const SZAMLAZZ_ENDPOINT = 'https://www.szamlazz.hu/szamla/';
-const AGENT_KEY = process.env.SZAMLAZZ_AGENT_KEY || '';
+const AGENT_KEY_ENV = process.env.SZAMLAZZ_AGENT_KEY || '';
+
+async function getActiveAgentKey(): Promise<string> {
+  const row = await prisma.invoiceSettings.findUnique({ where: { id: 'default' } });
+  if (!row) return AGENT_KEY_ENV;
+  const key = row.invoiceMode === 'live' ? row.agentKeyLive : row.agentKeyTest;
+  return key || AGENT_KEY_ENV;
+}
 
 const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const escapeXml = (value: unknown) =>
@@ -2902,8 +3162,9 @@ const buildInvoiceXml = (params: {
     gross: number;
     comment: unknown;
   }>;
+  agentKey?: string;
 }) => {
-  const { seller, buyer, invoice, items } = params;
+  const { seller, buyer, invoice, items, agentKey = '' } = params;
   const tetelXml = items
     .map(
       (item) => `
@@ -2924,7 +3185,7 @@ const buildInvoiceXml = (params: {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <xmlszamla xmlns="http://www.szamlazz.hu/xmlszamla" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamla https://www.szamlazz.hu/szamla/docs/xsds/agent/xmlszamla.xsd">
   <beallitasok>
-    <szamlaagentkulcs>${escapeXml(AGENT_KEY)}</szamlaagentkulcs>
+    <szamlaagentkulcs>${escapeXml(agentKey)}</szamlaagentkulcs>
     <eszamla>${invoice.eInvoice ? 'true' : 'false'}</eszamla>
     <szamlaLetoltes>true</szamlaLetoltes>
     <valaszVerzio>2</valaszVerzio>
@@ -3077,7 +3338,8 @@ server.post('/api/szamlazz/create-invoice', async (request, reply) => {
       return reply.code(400).send({ success: false, message: 'Érvénytelen adatok', errors });
     }
 
-    const xml = buildInvoiceXml(payload as never);
+    const activeAgentKey = await getActiveAgentKey();
+    const xml = buildInvoiceXml({ ...(payload as Record<string, unknown>), agentKey: activeAgentKey } as never);
 
     if (INVOICE_MODE !== 'live') {
       return {
@@ -3088,7 +3350,7 @@ server.post('/api/szamlazz/create-invoice', async (request, reply) => {
       };
     }
 
-    if (!AGENT_KEY) {
+    if (!activeAgentKey) {
       return reply.code(500).send({ success: false, message: 'Hiányzik a SZAMLAZZ_AGENT_KEY' });
     }
 
@@ -3097,6 +3359,17 @@ server.post('/api/szamlazz/create-invoice', async (request, reply) => {
 
     const response = await fetch(SZAMLAZZ_ENDPOINT, { method: 'POST', body: form });
     const parsed = await parseSzamlazzResponse(response);
+
+    if (parsed.success) {
+      const invoiceBody = request.body as JsonRecord;
+      await logActivity(user.id, 'invoice.szamlazz', {
+        page: invoiceBody.patientId ? `patients/${String(invoiceBody.patientId)}/quotes/${String(invoiceBody.quoteId || '')}` : undefined,
+        entityType: 'Invoice',
+        details: { szamlazzInvoiceNumber: parsed.invoiceNumber || undefined, mode: 'live' },
+        ipAddress: request.ip || undefined,
+      });
+    }
+
     return reply.code(response.ok ? 200 : 502).send({ mode: 'live', ...parsed });
   } catch (error) {
     request.log.error(error);
@@ -3127,7 +3400,8 @@ server.post('/api/szamlazz/storno-invoice', async (request, reply) => {
       };
     }
 
-    if (!AGENT_KEY) {
+    const stornoAgentKey = await getActiveAgentKey();
+    if (!stornoAgentKey) {
       return reply.code(500).send({ success: false, message: 'Hiányzik a SZAMLAZZ_AGENT_KEY' });
     }
 
@@ -3135,7 +3409,7 @@ server.post('/api/szamlazz/storno-invoice', async (request, reply) => {
     const stornoXml = `<?xml version="1.0" encoding="UTF-8"?>
 <xmlszamlast xmlns="http://www.szamlazz.hu/xmlszamlast" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmlszamlast https://www.szamlazz.hu/szamla/docs/xsds/agentst/xmlszamlast.xsd">
   <beallitasok>
-    <szamlaagentkulcs>${escapeXml(AGENT_KEY)}</szamlaagentkulcs>
+    <szamlaagentkulcs>${escapeXml(stornoAgentKey)}</szamlaagentkulcs>
     <eszamla>false</eszamla>
     <szamlaLetoltes>true</szamlaLetoltes>
     <szamlaLetoltesPld>1</szamlaLetoltesPld>
@@ -3164,8 +3438,10 @@ server.post('/api/szamlazz/storno-invoice', async (request, reply) => {
 
     if (parsed.success) {
       await logActivity(user.id, 'invoice.storno', {
+        page: 'invoices',
         entityType: 'Invoice',
         details: { invoiceNumber },
+        ipAddress: request.ip || undefined,
       });
     }
 
@@ -3190,14 +3466,15 @@ server.post('/api/szamlazz/query-taxpayer', async (request, reply) => {
   if (torzsszam.length !== 8) {
     return reply.code(400).send({ success: false, message: 'Az adószám törzsszáma 8 számjegyből kell álljon.' });
   }
-  if (!AGENT_KEY) {
+  const taxpayerAgentKey = await getActiveAgentKey();
+  if (!taxpayerAgentKey) {
     return reply.code(500).send({ success: false, message: 'Hiányzik a SZAMLAZZ_AGENT_KEY' });
   }
   try {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <xmltaxpayer xmlns="http://www.szamlazz.hu/xmltaxpayer" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.szamlazz.hu/xmltaxpayer http://www.szamlazz.hu/docs/xsds/agent/xmltaxpayer.xsd">
     <beallitasok>
-        <szamlaagentkulcs>${escapeXml(AGENT_KEY)}</szamlaagentkulcs>
+        <szamlaagentkulcs>${escapeXml(taxpayerAgentKey)}</szamlaagentkulcs>
     </beallitasok>
     <torzsszam>${escapeXml(torzsszam)}</torzsszam>
 </xmltaxpayer>`;
@@ -3365,9 +3642,73 @@ const ensureBootstrapAdmin = async () => {
   server.log.info(`Bootstrap admin created: ${ADMIN_EMAIL}`);
 };
 
+const runPendingMigrations = async () => {
+  // Auto-create VisitorLog table if it doesn't exist (for deployments without prisma migrate)
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "VisitorLog" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT,
+        "sessionId" TEXT,
+        "ipAddress" TEXT,
+        "userAgent" TEXT,
+        "browser" TEXT,
+        "os" TEXT,
+        "device" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "VisitorLog_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "VisitorLog_createdAt_idx" ON "VisitorLog"("createdAt")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "VisitorLog_userId_idx" ON "VisitorLog"("userId")`);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'VisitorLog_userId_fkey') THEN
+          ALTER TABLE "VisitorLog" ADD CONSTRAINT "VisitorLog_userId_fkey"
+            FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+        END IF;
+      END $$
+    `);
+  } catch (e) {
+    server.log.warn('VisitorLog migration skipped (may already exist): ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create InvoiceSettings table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "InvoiceSettings" (
+        "id" TEXT NOT NULL DEFAULT 'default',
+        "invoiceType" TEXT NOT NULL DEFAULT 'paper',
+        "defaultComment" TEXT NOT NULL DEFAULT '',
+        "defaultVatRate" TEXT NOT NULL DEFAULT 'TAM',
+        "defaultPaymentMethod" TEXT NOT NULL DEFAULT 'bankkártya',
+        "invoiceMode" TEXT NOT NULL DEFAULT 'test',
+        "agentKeyLive" TEXT NOT NULL DEFAULT '',
+        "agentKeyTest" TEXT NOT NULL DEFAULT '',
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "InvoiceSettings_pkey" PRIMARY KEY ("id")
+      )
+    `);
+  } catch (e) {
+    server.log.warn('InvoiceSettings migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Ensure default InvoiceSettings row exists
+  try {
+    await prisma.invoiceSettings.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    });
+  } catch (e) {
+    server.log.warn('InvoiceSettings seed skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+};
+
 const start = async () => {
   try {
     await prisma.$connect();
+    await runPendingMigrations();
     await ensureBootstrapAdmin();
     await server.listen({ port, host: '0.0.0.0' });
   } catch (error) {

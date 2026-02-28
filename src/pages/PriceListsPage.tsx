@@ -109,12 +109,9 @@ export function PriceListsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.priceList.title}</h1>
-          <p className="text-gray-500 mt-1">
-            {activePriceLists.length} {t.common.active}{deletedCount > 0 ? `, ${deletedCount} ${t.common.deleted}` : ''}
-          </p>
-        </div>
+        <p className="text-gray-500">
+          {activePriceLists.length} {t.common.active}{deletedCount > 0 ? `, ${deletedCount} ${t.common.deleted}` : ''}
+        </p>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2">
             <button

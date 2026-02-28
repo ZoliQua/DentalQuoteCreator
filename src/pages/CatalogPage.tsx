@@ -338,9 +338,20 @@ export function CatalogPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.catalog.title}</h1>
-          <p className="text-gray-500 mt-1">
+        <div className="flex items-center gap-4">
+          <Select
+            value={selectedPriceListId}
+            onChange={(e) => { setSelectedPriceListId(e.target.value); setSelectedCategory('all'); }}
+            options={[
+              { value: '', label: t.priceList.selectPriceList },
+              ...activePriceLists.map((pl) => ({
+                value: pl.priceListId,
+                label: getPriceListDisplayName(pl, appLanguage),
+              })),
+            ]}
+            className="w-64"
+          />
+          <p className="text-gray-500">
             {selectedPriceListId && priceListCategoryIds.size > 0
               ? activeItems.filter((i) => i.priceListId === selectedPriceListId || priceListCategoryIds.has(i.catalogCategoryId)).length
               : activeItems.length} {t.common.active}, {selectedPriceListId && priceListCategoryIds.size > 0
@@ -363,22 +374,6 @@ export function CatalogPage() {
           </Button>
           )}
         </div>
-      </div>
-
-      {/* Price List Selector */}
-      <div className="flex items-center gap-4">
-        <Select
-          value={selectedPriceListId}
-          onChange={(e) => { setSelectedPriceListId(e.target.value); setSelectedCategory('all'); }}
-          options={[
-            { value: '', label: t.priceList.selectPriceList },
-            ...activePriceLists.map((pl) => ({
-              value: pl.priceListId,
-              label: getPriceListDisplayName(pl, appLanguage),
-            })),
-          ]}
-          className="w-64"
-        />
       </div>
 
       <div className="flex flex-wrap items-center gap-4">

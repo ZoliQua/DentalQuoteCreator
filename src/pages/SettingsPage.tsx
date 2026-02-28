@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
 import { useQuotes } from '../hooks';
@@ -75,6 +75,82 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
   const today = new Date();
 
   const [pdfLangTab, setPdfLangTab] = useState<'hu' | 'en' | 'de'>('hu');
+  const [showAgentKeyLive, setShowAgentKeyLive] = useState(false);
+  const [showAgentKeyTest, setShowAgentKeyTest] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const loadInvoiceSettings = useCallback(async () => {
+    try {
+      const res = await fetch('/backend/invoice-settings', { headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        // Sync into formData.invoice
+        setFormDataRaw((prev) => ({
+          ...prev,
+          invoice: {
+            ...prev.invoice,
+            invoiceType: data.invoiceType || 'paper',
+            defaultComment: data.defaultComment || 'A számla a [árajánlat-sorszám] - [árajánlat-neve] árajánlat alapján készült\nA nyújtott szolgáltatás a 2007. évi CXXVII. törvény (Áfa tv.) 85. § (1) bekezdés e) pontja értelmében mentes az adó alól.',
+            defaultVatRate: data.defaultVatRate === '0' ? 0 : data.defaultVatRate === '27' ? 27 : 'TAM',
+            defaultPaymentMethod: data.defaultPaymentMethod || 'bankkártya',
+            invoiceMode: data.invoiceMode || 'test',
+            agentKeyLive: data.agentKeyLive || '',
+            agentKeyTest: data.agentKeyTest || '',
+          },
+        }));
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    loadInvoiceSettings();
+  }, [loadInvoiceSettings]);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoError(null);
+    if (file.size > 200 * 1024) {
+      setLogoError(t.settings.clinicLogoTooLarge);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width;
+        let h = img.height;
+        if (w > 400 || h > 200) {
+          const ratio = Math.min(400 / w, 200 / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.9);
+          setFormData({
+            ...formData,
+            clinic: { ...formData.clinic, logo: dataUrl },
+          });
+        }
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+    if (logoInputRef.current) logoInputRef.current.value = '';
+  };
+
+  const handleLogoDelete = () => {
+    setFormData({
+      ...formData,
+      clinic: { ...formData.clinic, logo: undefined },
+    });
+  };
 
   const loadDoctors = useCallback(async () => {
     try {
@@ -98,13 +174,29 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
 
   const handleSave = async () => {
     await handleSaveDoctors();
+    // Save invoice settings to backend
+    try {
+      await fetch('/backend/invoice-settings', {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceType: formData.invoice.invoiceType,
+          defaultComment: formData.invoice.defaultComment,
+          defaultVatRate: String(formData.invoice.defaultVatRate),
+          defaultPaymentMethod: formData.invoice.defaultPaymentMethod,
+          invoiceMode: formData.invoice.invoiceMode || 'test',
+          agentKeyLive: formData.invoice.agentKeyLive || '',
+          agentKeyTest: formData.invoice.agentKeyTest || '',
+        }),
+      });
+    } catch { /* ignore */ }
     updateSettings({ ...formData, language: appLanguage });
     setIsDirty(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
 
-  const handleClinicChange = (field: keyof Settings['clinic'], value: string) => {
+  const handleClinicChange = (field: keyof Settings['clinic'], value: string | boolean) => {
     setFormData({
       ...formData,
       clinic: {
@@ -205,7 +297,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
     setTaxChecking(true);
     setTaxResult(null);
     try {
-      const resp = await fetch('/api/szamlazz/query-taxpayer', {
+      const resp = await fetch('/backend/api/szamlazz/query-taxpayer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taxNumber: taxNum }),
@@ -338,18 +430,18 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
       <div className={section ? 'max-w-4xl' : ''}>
         {/* Overview card grid */}
         {!section && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="max-w-4xl grid grid-cols-1 sm:grid-cols-2 gap-4">
             {overviewCards.map((card) => (
               <Link
                 key={card.key}
                 to={card.to}
                 className="block rounded-lg border border-gray-200 bg-white p-5 hover:border-dental-300 hover:shadow-md transition-all"
               >
-                <div className="flex items-start gap-3">
-                  {card.icon}
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0">{card.icon}</div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">{card.title}</h3>
-                    <p className="text-sm text-gray-500 mt-1">{card.description}</p>
+                    <h3 className="text-sm font-semibold text-gray-900">{card.title}</h3>
+                    <p className="text-xs text-gray-500 mt-1">{card.description}</p>
                   </div>
                 </div>
               </Link>
@@ -507,6 +599,51 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                   value={formData.clinic.website}
                   onChange={(e) => handleClinicChange('website', e.target.value)}
                 />
+
+                {/* Logo section */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{t.settings.clinicLogo}</label>
+                  <div className="flex items-center gap-4">
+                    <div className="w-32 h-16 border border-gray-200 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden">
+                      {formData.clinic.logo ? (
+                        <img src={formData.clinic.logo} alt="Logo" className="max-w-full max-h-full object-contain" />
+                      ) : (
+                        <span className="text-xs text-gray-400">{t.settings.clinicLogoNone}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <input
+                        ref={logoInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/svg+xml"
+                        className="hidden"
+                        onChange={handleLogoUpload}
+                      />
+                      <Button variant="secondary" size="sm" onClick={() => logoInputRef.current?.click()}>
+                        <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        {t.settings.clinicLogoUpload}
+                      </Button>
+                      {formData.clinic.logo && (
+                        <Button variant="danger" size="sm" onClick={handleLogoDelete}>
+                          {t.settings.clinicLogoDelete}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {logoError && <p className="text-xs text-red-600 mt-1">{logoError}</p>}
+                  {formData.clinic.logo && (
+                    <label className="flex items-center gap-2 mt-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.clinic.showLogoOnQuote ?? false}
+                        onChange={(e) => handleClinicChange('showLogoOnQuote', e.target.checked)}
+                      />
+                      <span className="text-sm text-gray-700">{t.settings.showLogoOnQuote}</span>
+                    </label>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -938,57 +1075,125 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
 
         {/* Invoicing section */}
         {section === 'invoicing' && (
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                {t.settings.invoiceSettings}
-              </h2>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Select
-                label={t.settings.invoiceType}
-                value={formData.invoice.invoiceType}
-                onChange={(e) => handleInvoiceChange('invoiceType', e.target.value)}
-                options={[
-                  { value: 'paper', label: t.settings.invoiceTypePaper },
-                  { value: 'electronic', label: t.settings.invoiceTypeElectronic },
-                ]}
-              />
-              <TextArea
-                label={t.settings.invoiceComment}
-                value={formData.invoice.defaultComment}
-                onChange={(e) => handleInvoiceChange('defaultComment', e.target.value)}
-                rows={3}
-                helperText={t.settings.invoiceCommentHelp}
-              />
-              <Select
-                label={t.settings.defaultPaymentMethod}
-                value={formData.invoice.defaultPaymentMethod || 'bankkártya'}
-                onChange={(e) => handleInvoiceChange('defaultPaymentMethod', e.target.value)}
-                options={[
-                  { value: 'átutalás', label: t.invoices.paymentTransfer },
-                  { value: 'készpénz', label: t.invoices.paymentCash },
-                  { value: 'bankkártya', label: t.invoices.paymentCard },
-                ]}
-              />
-              <Select
-                label={t.settings.defaultVatRate}
-                value={String(formData.invoice.defaultVatRate)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  handleInvoiceChange('defaultVatRate', v === 'TAM' ? 'TAM' : Number(v));
-                }}
-                options={[
-                  { value: 'TAM', label: 'TAM (tárgyi adómentes)' },
-                  { value: '0', label: '0%' },
-                  { value: '27', label: '27%' },
-                ]}
-              />
-            </CardContent>
-          </Card>
+          <>
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  {t.settings.invoiceSettings}
+                </h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Select
+                  label={t.settings.invoiceType}
+                  value={formData.invoice.invoiceType}
+                  onChange={(e) => handleInvoiceChange('invoiceType', e.target.value)}
+                  options={[
+                    { value: 'paper', label: t.settings.invoiceTypePaper },
+                    { value: 'electronic', label: t.settings.invoiceTypeElectronic },
+                  ]}
+                />
+                <TextArea
+                  label={t.settings.invoiceComment}
+                  value={formData.invoice.defaultComment}
+                  onChange={(e) => handleInvoiceChange('defaultComment', e.target.value)}
+                  rows={3}
+                  helperText={t.settings.invoiceCommentHelp}
+                />
+                <Select
+                  label={t.settings.defaultPaymentMethod}
+                  value={formData.invoice.defaultPaymentMethod || 'bankkártya'}
+                  onChange={(e) => handleInvoiceChange('defaultPaymentMethod', e.target.value)}
+                  options={[
+                    { value: 'átutalás', label: t.invoices.paymentTransfer },
+                    { value: 'készpénz', label: t.invoices.paymentCash },
+                    { value: 'bankkártya', label: t.invoices.paymentCard },
+                  ]}
+                />
+                <Select
+                  label={t.settings.defaultVatRate}
+                  value={String(formData.invoice.defaultVatRate)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    handleInvoiceChange('defaultVatRate', v === 'TAM' ? 'TAM' : Number(v));
+                  }}
+                  options={[
+                    { value: 'TAM', label: 'TAM (tárgyi adómentes)' },
+                    { value: '0', label: '0%' },
+                    { value: '27', label: '27%' },
+                  ]}
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6">
+              <CardHeader>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  {t.settings.szamlazzSettings}
+                </h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Select
+                  label={t.settings.invoiceMode}
+                  value={formData.invoice.invoiceMode || 'test'}
+                  onChange={(e) => handleInvoiceChange('invoiceMode', e.target.value)}
+                  options={[
+                    { value: 'live', label: t.settings.invoiceModeLive },
+                    { value: 'test', label: t.settings.invoiceModeTest },
+                  ]}
+                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.settings.agentKeyLive}</label>
+                  <div className="flex gap-1">
+                    <input
+                      type={showAgentKeyLive ? 'text' : 'password'}
+                      value={formData.invoice.agentKeyLive || ''}
+                      onChange={(e) => handleInvoiceChange('agentKeyLive', e.target.value)}
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAgentKeyLive(!showAgentKeyLive)}
+                      className="px-3 py-2 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
+                    >
+                      {showAgentKeyLive ? (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.settings.agentKeyTest}</label>
+                  <div className="flex gap-1">
+                    <input
+                      type={showAgentKeyTest ? 'text' : 'password'}
+                      value={formData.invoice.agentKeyTest || ''}
+                      onChange={(e) => handleInvoiceChange('agentKeyTest', e.target.value)}
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAgentKeyTest(!showAgentKeyTest)}
+                      className="px-3 py-2 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
+                    >
+                      {showAgentKeyTest ? (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </>
         )}
       </div>
 

@@ -1,8 +1,9 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout';
 import { useAuth } from './context/AuthContext';
 import { useSettings } from './context/SettingsContext';
+import { getAuthHeaders } from './utils/auth';
 import { DashboardPage } from './pages/DashboardPage';
 import { PatientsPage } from './pages/PatientsPage';
 import { PatientDetailPage } from './pages/PatientDetailPage';
@@ -20,6 +21,7 @@ import { LoginPage } from './pages/LoginPage';
 import { AdminPage } from './pages/AdminPage';
 import { VisualQuoteEditorPage } from './pages/VisualQuoteEditorPage';
 import { DatabaseBrowserPage } from './pages/DatabaseBrowserPage';
+import { CatalogLayout } from './pages/CatalogLayout';
 import { Card, CardContent } from './components/common';
 
 function NoPermissionPage() {
@@ -56,6 +58,22 @@ function Guard({ permission, children }: { permission: string; children: ReactNo
 function App() {
   const { isAuthenticated, hasPermission } = useAuth();
 
+  // Daily visitor beacon — logs once per calendar day minimum
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (localStorage.getItem('visitor-log-date') === today) return;
+    fetch('/backend/visitor-log', {
+      method: 'POST',
+      headers: { ...getAuthHeaders() },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.id) sessionStorage.setItem('visitor-log-id', data.id);
+      })
+      .catch(() => {});
+    localStorage.setItem('visitor-log-date', today);
+  }, []);
+
   if (!isAuthenticated) {
     return (
       <Routes>
@@ -78,10 +96,10 @@ function App() {
         <Route path="/patients/:patientId/visual-quotes/:quoteId" element={<Guard permission="quotes.view"><VisualQuoteEditorPage /></Guard>} />
         <Route path="/quotes" element={<Guard permission="quotes.view"><QuotesPage /></Guard>} />
         <Route path="/quotes/deleted" element={<Guard permission="quotes.view"><QuotesPage showDeleted /></Guard>} />
-        <Route path="/catalog" element={<Navigate to="/catalog/items" replace />} />
-        <Route path="/catalog/items" element={<Guard permission="pricelist.view"><CatalogPage /></Guard>} />
-        <Route path="/catalog/lists" element={<Guard permission="pricelist.view"><PriceListsPage /></Guard>} />
-        <Route path="/catalog/categories" element={<Guard permission="pricelist.view"><PriceListCategoriesPage /></Guard>} />
+        <Route path="/catalog" element={<Guard permission="pricelist.view"><CatalogLayout /></Guard>} />
+        <Route path="/catalog/items" element={<Guard permission="pricelist.view"><CatalogLayout section="items"><CatalogPage /></CatalogLayout></Guard>} />
+        <Route path="/catalog/lists" element={<Guard permission="pricelist.view"><CatalogLayout section="lists"><PriceListsPage /></CatalogLayout></Guard>} />
+        <Route path="/catalog/categories" element={<Guard permission="pricelist.view"><CatalogLayout section="categories"><PriceListCategoriesPage /></CatalogLayout></Guard>} />
         <Route path="/settings" element={<Guard permission="settings.view"><SettingsPage /></Guard>} />
         <Route path="/settings/general" element={<Guard permission="settings.view"><SettingsPage key="general" section="general" /></Guard>} />
         <Route path="/settings/clinic" element={<Guard permission="settings.view"><SettingsPage key="clinic" section="clinic" /></Guard>} />
@@ -95,7 +113,7 @@ function App() {
         <Route path="/data/patients" element={<Guard permission="data.view"><DataManagementPage key="patients" section="patients" /></Guard>} />
         <Route path="/data/database" element={<Guard permission="data.view"><DataManagementPage key="database" section="database" /></Guard>} />
         <Route path="/data/storage" element={<Guard permission="data.view"><DataManagementPage key="storage" section="storage" /></Guard>} />
-        <Route path="/data/report" element={<Guard permission="data.view"><DataManagementPage key="report" section="report" /></Guard>} />
+        <Route path="/data/usage" element={<Guard permission="data.view"><DataManagementPage key="usage" section="usage" /></Guard>} />
         <Route path="/data/browser" element={<Guard permission="data.browse"><DatabaseBrowserPage /></Guard>} />
         <Route path="/odontogram-lab" element={<Guard permission="lab.view"><OdontogramLabPage /></Guard>} />
         <Route

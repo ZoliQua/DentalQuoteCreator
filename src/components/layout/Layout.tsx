@@ -119,6 +119,7 @@ export function Layout({ children }: LayoutProps) {
         </svg>
       ),
       children: [
+        { to: '/catalog', label: t.nav.catalogOverview },
         { to: '/catalog/lists', label: t.nav.catalogLists, permission: 'pricelist.view' },
         { to: '/catalog/categories', label: t.nav.catalogCategories, permission: 'pricelist.view' },
         { to: '/catalog/items', label: t.nav.catalogItems },
@@ -173,9 +174,9 @@ export function Layout({ children }: LayoutProps) {
         { to: '/data', label: t.nav.dataOverview },
         { to: '/data/pricelist', label: t.nav.dataPricelist },
         { to: '/data/patients', label: t.nav.dataPatients },
-        { to: '/data/database', label: t.nav.dataDatabase },
         { to: '/data/storage', label: t.nav.dataStorage },
-        { to: '/data/report', label: t.nav.dataReport },
+        { to: '/data/database', label: t.nav.dataDatabase },
+        { to: '/data/usage', label: t.nav.dataUsage },
         { to: '/data/browser', label: t.nav.dataBrowser, permission: 'data.browse' },
       ],
     },
@@ -294,14 +295,15 @@ export function Layout({ children }: LayoutProps) {
                     </button>
                     {isExpanded && (
                       <ul className="mt-1 space-y-1">
-                        {item.children!.filter(c => !c.permission || hasPermission(c.permission)).map((child) => (
+                        {item.children!.filter(c => !c.permission || hasPermission(c.permission)).map((child) => {
+                          const isChildActive = location.pathname === child.to;
+                          return (
                           <li key={child.to}>
                             <NavLink
                               to={child.to}
-                              end
-                              className={({ isActive }) =>
+                              className={() =>
                                 `flex items-center pl-12 pr-4 py-2 rounded-lg text-sm transition-colors ${
-                                  isActive
+                                  isChildActive
                                     ? 'bg-dental-100 text-dental-700 font-medium'
                                     : 'text-gray-600 hover:bg-dental-50 hover:text-dental-700'
                                 }`
@@ -310,7 +312,8 @@ export function Layout({ children }: LayoutProps) {
                               {child.label}
                             </NavLink>
                           </li>
-                        ))}
+                          );
+                        })}
                       </ul>
                     )}
                   </li>

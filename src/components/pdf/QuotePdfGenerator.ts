@@ -72,6 +72,21 @@ export async function generateQuotePdf(quote: Quote, patient: Patient, settings:
 
   let yPos = margin;
 
+  // Pre-process logo: validate data URI works with jsPDF before using in header
+  let logoImageData: string | null = null;
+  let logoImageFormat: 'PNG' | 'JPEG' = 'PNG';
+  const clinicLogo = settings.clinic.logo;
+  if (clinicLogo && clinicLogo.startsWith('data:image/') && !clinicLogo.startsWith('data:image/svg') && settings.clinic.showLogoOnQuote) {
+    try {
+      logoImageFormat = clinicLogo.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+      // Validate jsPDF can parse the image before using it in headers
+      doc.getImageProperties(clinicLogo);
+      logoImageData = clinicLogo;
+    } catch {
+      // Image invalid for jsPDF — skip logo
+    }
+  }
+
   // Helper function to add a new page if needed
   const checkNewPage = (neededHeight: number): void => {
     if (yPos + neededHeight > pageHeight - 30) {
@@ -83,22 +98,33 @@ export async function generateQuotePdf(quote: Quote, patient: Patient, settings:
 
   // Add header to each page
   const addHeader = (): void => {
+    // Logo (if available)
+    let logoEndX = margin;
+    if (logoImageData) {
+      try {
+        const logoW = 25;
+        const logoH = 12;
+        doc.addImage(logoImageData, logoImageFormat, margin, yPos - 3, logoW, logoH);
+        logoEndX = margin + logoW + 3;
+      } catch { /* skip logo if addImage fails */ }
+    }
+
     // Left side - Clinic info
     doc.setFontSize(14);
     doc.setFont(font, 'bold');
-    doc.text(toPdfText(settings.clinic.name), margin, yPos);
+    doc.text(toPdfText(settings.clinic.name), logoEndX, yPos);
     yPos += 5;
 
     doc.setFontSize(9);
     doc.setFont(font, 'normal');
-    doc.text(toPdfText(settings.clinic.address), margin, yPos);
+    doc.text(toPdfText(settings.clinic.address), logoEndX, yPos);
     yPos += 4;
-    doc.text(toPdfText(`Tel: ${settings.clinic.phone}`), margin, yPos);
+    doc.text(toPdfText(`Tel: ${settings.clinic.phone}`), logoEndX, yPos);
     yPos += 4;
-    doc.text(toPdfText(`Email: ${settings.clinic.email}`), margin, yPos);
+    doc.text(toPdfText(`Email: ${settings.clinic.email}`), logoEndX, yPos);
     yPos += 4;
     if (settings.clinic.website) {
-      doc.text(toPdfText(settings.clinic.website), margin, yPos);
+      doc.text(toPdfText(settings.clinic.website), logoEndX, yPos);
       yPos += 4;
     }
 
