@@ -206,6 +206,66 @@ export function PatientDetailPage() {
   const patient = patientId ? getPatient(patientId) : undefined;
   const quotes = patientId ? getQuotesByPatient(patientId) : [];
 
+  // All hooks must be before any early return (React Rules of Hooks)
+  const [patientInvoices, setPatientInvoices] = useState<InvoiceRecord[]>(() =>
+    patient ? getInvoicesByPatient(patient.patientId) : []
+  );
+  const refreshPatientInvoices = () => {
+    if (patient) setPatientInvoices(getInvoicesByPatient(patient.patientId));
+  };
+  useEffect(() => { if (patient?.patientId) refreshPatientInvoices(); }, [patient?.patientId]);
+
+  const neakChecks = useMemo(() => {
+    if (!patient?.patientType?.toLowerCase().includes('neak')) return [];
+    return getChecksByPatient(patient.patientId);
+  }, [patient?.patientId, patient?.patientType]);
+
+  useEffect(() => {
+    if (!patient?.patientId) return;
+    const entries = ensureTimelineInitialized(patient.patientId);
+    setTimelineEntries(entries);
+    const latest = entries[0];
+    if (latest?.snapshotId) {
+      const latestSnapshot = loadTimelineSnapshot(patient.patientId, latest.snapshotId);
+      if (latestSnapshot?.state) {
+        setInitialOdontogramState(latestSnapshot.state);
+        setActiveSnapshotId(latest.snapshotId);
+        return;
+      }
+    }
+    const stored = loadCurrent(patient.patientId);
+    setInitialOdontogramState(stored?.state ?? null);
+  }, [patient?.patientId]);
+
+  useEffect(() => {
+    if (!initialOdontogramState) return;
+    const frame = window.requestAnimationFrame(() => {
+      hostRef.current?.syncViewMode();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialOdontogramState]);
+
+  const timelineRows = useMemo(() => {
+    return timelineEntries.map((entry) => ({
+      ...entry,
+      formatted: formatDateTime(entry.updatedAt),
+    }));
+  }, [timelineEntries]);
+
+  const patientAge = useMemo(() => {
+    if (!patient?.birthDate) return null;
+    const birth = new Date(patient.birthDate);
+    if (Number.isNaN(birth.getTime())) return null;
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const monthDiff = now.getMonth() - birth.getMonth();
+    const dayDiff = now.getDate() - birth.getDate();
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+      age -= 1;
+    }
+    return age < 0 ? null : age;
+  }, [patient?.birthDate]);
+
   if (!patient) {
     return (
       <div className="text-center py-12">
@@ -273,9 +333,6 @@ export function PatientDetailPage() {
   };
 
   const activeQuotes = quotes.filter((q) => !q.isDeleted);
-  const [patientInvoices, setPatientInvoices] = useState(() => getInvoicesByPatient(patient.patientId));
-  const refreshPatientInvoices = () => setPatientInvoices(getInvoicesByPatient(patient.patientId));
-  useEffect(() => { refreshPatientInvoices(); }, [patient.patientId]);
 
   const openInvoicePdf = (base64?: string) => {
     if (!base64) return;
@@ -332,10 +389,6 @@ export function PatientDetailPage() {
     }
   };
 
-  const neakChecks = useMemo(() => {
-    if (!patient.patientType?.toLowerCase().includes('neak')) return [];
-    return getChecksByPatient(patient.patientId);
-  }, [patient.patientId, patient.patientType]);
   const sortedQuotes = [...activeQuotes].sort(
     (a, b) => new Date(b.lastStatusChangeAt).getTime() - new Date(a.lastStatusChangeAt).getTime()
   );
@@ -413,52 +466,6 @@ export function PatientDetailPage() {
       }
     }
   };
-
-  useEffect(() => {
-    if (!patient?.patientId) return;
-    const entries = ensureTimelineInitialized(patient.patientId);
-    setTimelineEntries(entries);
-    const latest = entries[0];
-    if (latest?.snapshotId) {
-      const latestSnapshot = loadTimelineSnapshot(patient.patientId, latest.snapshotId);
-      if (latestSnapshot?.state) {
-        setInitialOdontogramState(latestSnapshot.state);
-        setActiveSnapshotId(latest.snapshotId);
-        return;
-      }
-    }
-    const stored = loadCurrent(patient.patientId);
-    setInitialOdontogramState(stored?.state ?? null);
-  }, [patient?.patientId]);
-
-  useEffect(() => {
-    if (!initialOdontogramState) return;
-    const frame = window.requestAnimationFrame(() => {
-      hostRef.current?.syncViewMode();
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [initialOdontogramState]);
-
-  const timelineRows = useMemo(() => {
-    return timelineEntries.map((entry) => ({
-      ...entry,
-      formatted: formatDateTime(entry.updatedAt),
-    }));
-  }, [timelineEntries]);
-
-  const patientAge = useMemo(() => {
-    if (!patient?.birthDate) return null;
-    const birth = new Date(patient.birthDate);
-    if (Number.isNaN(birth.getTime())) return null;
-    const now = new Date();
-    let age = now.getFullYear() - birth.getFullYear();
-    const monthDiff = now.getMonth() - birth.getMonth();
-    const dayDiff = now.getDate() - birth.getDate();
-    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-      age -= 1;
-    }
-    return age < 0 ? null : age;
-  }, [patient?.birthDate]);
 
   return (
     <div id="patientDetailPage" className="space-y-6">
@@ -1182,7 +1189,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
     setVatChecking(true);
     setVatResult(null);
     try {
-      const resp = await fetch('/api/szamlazz/query-taxpayer', {
+      const resp = await fetch('/backend/api/szamlazz/query-taxpayer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taxNumber: taxNum }),

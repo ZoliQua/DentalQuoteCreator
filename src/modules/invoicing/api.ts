@@ -70,7 +70,7 @@ export const previewInvoice = async (payload: InvoiceRequestPayload) => {
     success: boolean;
     xml: string;
     totals: { net: number; vat: number; gross: number };
-  }>('/api/szamlazz/preview-invoice', payload);
+  }>('/backend/api/szamlazz/preview-invoice', payload);
 };
 
 export const createInvoice = async (payload: InvoiceRequestPayload) => {
@@ -83,7 +83,7 @@ export const createInvoice = async (payload: InvoiceRequestPayload) => {
     rawResponse?: string | null;
     xml?: string;
     totals?: { net: number; vat: number; gross: number };
-  }>('/api/szamlazz/create-invoice', payload);
+  }>('/backend/api/szamlazz/create-invoice', payload);
 };
 
 export type StornoResponse = {
@@ -96,7 +96,7 @@ export type StornoResponse = {
 };
 
 export const stornoInvoice = async (invoiceNumber: string): Promise<StornoResponse> => {
-  const response = await fetch('/api/szamlazz/storno-invoice', {
+  const response = await fetch('/backend/api/szamlazz/storno-invoice', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ invoiceNumber }),

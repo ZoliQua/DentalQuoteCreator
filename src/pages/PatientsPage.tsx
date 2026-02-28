@@ -441,7 +441,7 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
     setVatChecking(true);
     setVatResult(null);
     try {
-      const resp = await fetch('/api/szamlazz/query-taxpayer', {
+      const resp = await fetch('/backend/api/szamlazz/query-taxpayer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taxNumber: taxNum }),

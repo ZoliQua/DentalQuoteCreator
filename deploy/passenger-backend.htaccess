@@ -1,0 +1,5 @@
+PassengerAppRoot /home/fogorvosa/backend2
+PassengerBaseURI /backend
+PassengerNodejs /home/fogorvosa/nodevenv/backend2/24/bin/node
+PassengerAppType node
+PassengerStartupFile dist/server.js

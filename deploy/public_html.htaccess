@@ -1,0 +1,12 @@
+RewriteEngine On
+
+# Force HTTPS
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# SPA fallback — serve index.html for any non-file, non-directory request
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/backend
+RewriteCond %{REQUEST_URI} !^/pdf
+RewriteRule ^ /index.html [L]

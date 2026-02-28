@@ -508,11 +508,15 @@ export function QuoteEditorPage() {
       setInvoiceItems(items);
       invoiceItemsRef.current = items;
     }
-    // Pre-fill comment from settings + quote number
-    const defaultComment = settings.invoice?.defaultComment || '';
+    // Pre-fill comment from settings with dynamic token replacement
+    const rawComment = settings.invoice?.defaultComment || '';
     const quoteRef = `${quote.quoteNumber} - ${quote.quoteName}`;
-    const line1 = defaultComment
-      ? `${defaultComment}\nA számla a "${quoteRef}" árajánlat alapján készült`
+    const resolvedComment = rawComment
+      .replace(/\[orvos-neve\]/g, doctorName || '')
+      .replace(/\[árajánlat-sorszám\]/g, quote.quoteNumber || '')
+      .replace(/\[árajánlat-neve\]/g, quote.quoteName || '');
+    const line1 = resolvedComment
+      ? resolvedComment
       : `A számla a "${quoteRef}" árajánlat alapján készült`;
     const line2 = 'A nyújtott szolgáltatás a 2007. évi CXXVII. törvény (Áfa tv.) 85. § (1) bekezdés e) pontja értelmében mentes az adó alól.';
     setInvoiceComment(`${line1}\n${line2}`);

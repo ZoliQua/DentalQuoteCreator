@@ -5,7 +5,7 @@ export const checkJogviszony = async (
   taj: string,
   date?: string,
 ): Promise<NeakCheckResult> => {
-  const response = await fetch('/api/neak/jogviszony', {
+  const response = await fetch('/backend/api/neak/jogviszony', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ taj, date }),
@@ -29,6 +29,6 @@ export const checkJogviszony = async (
 };
 
 export const pingNeak = async (): Promise<{ ok: boolean; response: string }> => {
-  const response = await fetch('/api/neak/ping', { headers: getAuthHeaders() });
+  const response = await fetch('/backend/api/neak/ping', { headers: getAuthHeaders() });
   return response.json();
 };

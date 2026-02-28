@@ -33,6 +33,15 @@
 - Seed script: backend/prisma/seed.ts reads these CSVs
 - Run seed: `cd backend && npx tsx prisma/seed.ts`
 
+## Deployment (Production FTP)
+- FTP credentials are stored in `backend/.env` (FTP_SERVER, FTP_USERNAME, FTP_PASSWORD)
+- NEVER use `mirror -R --delete` on public_html — it deletes .htaccess files and other apps (e.g. /pdf)
+- NEVER delete or overwrite files/directories on the server that are not part of this project
+- NEVER delete or overwrite .htaccess files on the server — they contain critical Passenger and rewrite config
+- Upload frontend files individually: `put dist/index.html`, `mirror -R dist/assets public_html/assets` (without --delete)
+- Local .htaccess backups: `deploy/public_html.htaccess` and `deploy/passenger-backend.htaccess`
+- See `deploy/README.txt` for full deployment guide
+
 ## Conventions
 - Hungarian language is primary (hu.ts is the source of truth for i18n keys)
 - IDs use prefixes: plistXXX (pricelists), pcatXXXX (categories), catXXXXX (catalog items)

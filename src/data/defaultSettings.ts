@@ -148,6 +148,9 @@ Bitte lesen Sie sorgfältig und kontaktieren Sie uns bei Fragen, dann bestätige
     defaultComment: '',
     defaultVatRate: 'TAM',
     defaultPaymentMethod: 'bankkártya',
+    invoiceMode: 'test',
+    agentKeyLive: '',
+    agentKeyTest: '',
   },
   patient: {
     defaultCountry: 'Magyarország',

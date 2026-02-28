@@ -38,6 +38,7 @@ model User {
   auditTargets        PermissionAuditLog[] @relation("AuditTarget")
   auditChangers       PermissionAuditLog[] @relation("AuditChanger")
   activityLogs        UserActivityLog[]
+  visitorLogs         VisitorLog[]
 }
 
 model AuthSession {
@@ -307,6 +308,35 @@ model OdontogramTimeline {
 
   @@index([patientId])
   @@index([updatedAt])
+}
+
+model VisitorLog {
+  id        String   @id
+  userId    String?
+  sessionId String?
+  ipAddress String?
+  userAgent String?
+  browser   String?
+  os        String?
+  device    String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model InvoiceSettings {
+  id                   String   @id @default("default")
+  invoiceType          String   @default("paper")
+  defaultComment       String   @default("")
+  defaultVatRate       String   @default("TAM")
+  defaultPaymentMethod String   @default("bankkártya")
+  invoiceMode          String   @default("test")
+  agentKeyLive         String   @default("")
+  agentKeyTest         String   @default("")
+  updatedAt            DateTime @updatedAt
 }
 
 model NeakDocumentType {

@@ -96,6 +96,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     setAuthSession(next);
     setSession(next);
+
+    // Visitor log: create login entry + update earlier anonymous daily entry
+    const authH = { Authorization: `Bearer ${data.token}` };
+    fetch('/backend/visitor-log', { method: 'POST', headers: authH }).catch(() => {});
+    const pendingId = sessionStorage.getItem('visitor-log-id');
+    if (pendingId) {
+      fetch(`/backend/visitor-log/${pendingId}`, { method: 'PATCH', headers: authH }).catch(() => {});
+      sessionStorage.removeItem('visitor-log-id');
+    }
   }, []);
 
   const logout = useCallback(async () => {

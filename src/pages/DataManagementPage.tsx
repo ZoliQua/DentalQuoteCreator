@@ -14,6 +14,7 @@ import type { OdontogramState, OdontogramToothState } from '../modules/odontogra
 import { getBudapestDateKey, saveCurrent, saveDailySnapshot } from '../modules/odontogram/odontogramStorage';
 import { Button, Card, CardContent, CardHeader, ConfirmModal, PageTabBar } from '../components/common';
 import type { PageTab } from '../components/common/PageTabBar';
+import { UsageSection } from './UsageSection';
 import {
   allPatientsToJson,
   singlePatientToJson,
@@ -199,7 +200,7 @@ const createOdontogramStateFromQuotes = (quotes: Quote[]): OdontogramState => {
   };
 };
 
-type DataSection = 'pricelist' | 'patients' | 'database' | 'storage' | 'report';
+type DataSection = 'pricelist' | 'patients' | 'storage' | 'database' | 'usage';
 
 export function DataManagementPage({ section }: { section?: DataSection }) {
   const { t, refreshSettings } = useSettings();
@@ -214,6 +215,8 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
     importData,
     refreshData,
     resetPriceLists,
+    pricelistCategories,
+    catalog,
   } = useApp();
   const { exportCatalog, importCatalog, exportCatalogCSV, importCatalogCSV } = useCatalog();
   const { pricelists: activePriceLists } = usePriceLists();
@@ -492,6 +495,22 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
         saveCurrent(patientId, state);
         saveDailySnapshot(patientId, state, dateKey);
       });
+      // Seed InvoiceSettings with defaults
+      try {
+        fetch('/backend/invoice-settings', {
+          method: 'PUT',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            invoiceType: 'paper',
+            defaultComment: '',
+            defaultVatRate: 'TAM',
+            defaultPaymentMethod: 'bankkártya',
+            invoiceMode: 'test',
+            agentKeyLive: '',
+            agentKeyTest: '',
+          }),
+        });
+      } catch { /* ignore */ }
       refreshData();
       refreshSettings();
       setMessage({ type: 'success', text: t.dataManagement.databaseOnly.mockLoadSuccess });
@@ -836,9 +855,10 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
     { key: 'overview', to: '/data', label: t.dataManagement.tabOverview, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg> },
     { key: 'pricelist', to: '/data/pricelist', label: t.dataManagement.tabPricelist, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg> },
     { key: 'patients', to: '/data/patients', label: t.dataManagement.tabPatients, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg> },
-    { key: 'database', to: '/data/database', label: t.dataManagement.tabDatabase, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg> },
     { key: 'storage', to: '/data/storage', label: t.dataManagement.tabStorage, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
-    { key: 'report', to: '/data/report', label: t.dataManagement.tabReport, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18M8 6v12M16 6v12" /></svg> },
+    { key: 'database', to: '/data/database', label: t.dataManagement.tabDatabase, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg> },
+    { key: 'usage', to: '/data/usage', label: t.dataManagement.tabUsage, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> },
+    { key: 'browser', to: '/data/browser', label: t.nav.dataBrowser, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg> },
   ];
 
   const overviewCards: Array<{ key: DataSection; to: string; title: string; description: string; icon: React.ReactNode }> = [
@@ -853,31 +873,38 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
       key: 'patients',
       to: '/data/patients',
       title: t.dataManagement.patientData.title,
-      description: t.dataManagement.patientData.exportAllDescription,
+      description: t.dataManagement.overviewPatientDescription,
       icon: <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
-    },
-    {
-      key: 'database',
-      to: '/data/database',
-      title: t.dataManagement.databaseOnly.title,
-      description: t.dataManagement.databaseOnly.exportDescription,
-      icon: <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>,
     },
     {
       key: 'storage',
       to: '/data/storage',
       title: t.dataManagement.storageInfoTitle,
-      description: t.dataManagement.subtitle,
+      description: t.dataManagement.overviewStorageDescription,
       icon: <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
     },
     {
-      key: 'report',
-      to: '/data/report',
-      title: t.dataManagement.dbReportTitle,
-      description: t.dataManagement.dbReportDatabase,
-      icon: <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18M8 6v12M16 6v12" /></svg>,
+      key: 'database',
+      to: '/data/database',
+      title: t.dataManagement.tabDatabase,
+      description: t.dataManagement.overviewDatabaseDescription,
+      icon: <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>,
+    },
+    {
+      key: 'usage',
+      to: '/data/usage',
+      title: t.dataManagement.usageTitle,
+      description: t.dataManagement.usageDescription,
+      icon: <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>,
     },
   ];
+
+  const browserCard = {
+    to: '/data/browser',
+    title: t.dataManagement.overviewBrowserTitle,
+    description: t.dataManagement.overviewBrowserDescription,
+    icon: <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
+  };
 
   return (
     <div className="space-y-6">
@@ -888,7 +915,7 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
 
       <PageTabBar tabs={tabs} />
 
-      <div className={section ? 'max-w-4xl' : ''}>
+      <div className={section ? 'max-w-4xl space-y-6' : ''}>
       {/* Message */}
       {message && (
         <div
@@ -925,7 +952,7 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
 
       {/* Overview card grid */}
       {!section && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="max-w-4xl grid grid-cols-1 sm:grid-cols-2 gap-4">
           {overviewCards.map((card) => (
             <Link
               key={card.key}
@@ -941,8 +968,86 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
               </div>
             </Link>
           ))}
+          <Link
+            to={browserCard.to}
+            className="block rounded-lg border border-gray-200 bg-white p-5 hover:border-dental-300 hover:shadow-md transition-all"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">{browserCard.icon}</div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">{browserCard.title}</h3>
+                <p className="text-xs text-gray-500 mt-1">{browserCard.description}</p>
+              </div>
+            </div>
+          </Link>
         </div>
       )}
+
+      {/* Pricelist Stats Card */}
+      {section === 'pricelist' && (() => {
+        const categoryStats = activePriceLists.map((pl) => {
+          const cats = pricelistCategories.filter((c) => c.priceListId === pl.priceListId && c.isActive && !c.isDeleted);
+          const itemCount = catalog.filter((i) => i.priceListId === pl.priceListId && !i.isDeleted).length;
+          return { name: pl.priceListNameHu, categories: cats.length, items: itemCount };
+        });
+        const PIE_COLORS = ['#0d9488', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#3b82f6', '#ec4899', '#10b981'];
+        const total = categoryStats.reduce((s, c) => s + c.items, 0) || 1;
+        return (
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                {t.dataManagement.pricelistStatsTitle}
+              </h2>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col md:flex-row gap-6">
+                <div className="flex-1 space-y-3">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                    <span className="text-sm text-gray-600">{t.dataManagement.pricelistStatsCount}</span>
+                    <span className="text-lg font-bold text-gray-900">{activePriceLists.length}</span>
+                  </div>
+                  {categoryStats.map((pl, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                        <span className="text-sm text-gray-700">{pl.name}</span>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">{pl.items} {t.dataManagement.pricelistStatsItems}</span>
+                    </div>
+                  ))}
+                </div>
+                {categoryStats.length > 0 && (
+                  <div className="flex flex-col items-center justify-center">
+                    <p className="text-xs text-gray-500 mb-2">{t.dataManagement.pricelistStatsCategoryDistribution}</p>
+                    <svg viewBox="0 0 120 120" className="w-36 h-36">
+                      {(() => {
+                        let offset = 0;
+                        return categoryStats.map((pl, i) => {
+                          const pct = pl.items / total;
+                          const startAngle = offset * 2 * Math.PI;
+                          offset += pct;
+                          const endAngle = offset * 2 * Math.PI;
+                          const largeArc = pct > 0.5 ? 1 : 0;
+                          const x1 = 60 + 50 * Math.cos(startAngle - Math.PI / 2);
+                          const y1 = 60 + 50 * Math.sin(startAngle - Math.PI / 2);
+                          const x2 = 60 + 50 * Math.cos(endAngle - Math.PI / 2);
+                          const y2 = 60 + 50 * Math.sin(endAngle - Math.PI / 2);
+                          if (pct === 0) return null;
+                          if (pct >= 0.999) return <circle key={i} cx="60" cy="60" r="50" fill={PIE_COLORS[i % PIE_COLORS.length]} />;
+                          return <path key={i} d={`M60,60 L${x1},${y1} A50,50 0 ${largeArc},1 ${x2},${y2} Z`} fill={PIE_COLORS[i % PIE_COLORS.length]} />;
+                        });
+                      })()}
+                    </svg>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Catalog-only Card */}
       {section === 'pricelist' && <Card>
@@ -1040,6 +1145,60 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
         </CardContent>
       </Card>}
 
+      {/* Patient Stats Card */}
+      {section === 'patients' && (() => {
+        const allPatients = patientsFromContext;
+        const active = allPatients.filter((p) => !p.isArchived);
+        const deleted = allPatients.filter((p) => p.isArchived);
+        const typeMap = new Map<string, number>();
+        active.forEach((p) => {
+          const type = p.patientType || t.dataManagement.patientStatsNoType;
+          typeMap.set(type, (typeMap.get(type) || 0) + 1);
+        });
+        const typeEntries = [...typeMap.entries()].sort((a, b) => b[1] - a[1]);
+        return (
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                {t.dataManagement.patientStatsTitle}
+              </h2>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                <div className="p-3 rounded-lg bg-gray-50 text-center">
+                  <p className="text-2xl font-bold text-gray-900">{allPatients.length}</p>
+                  <p className="text-xs text-gray-500">{t.dataManagement.patientStatsTotal}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-green-50 text-center">
+                  <p className="text-2xl font-bold text-green-700">{active.length}</p>
+                  <p className="text-xs text-green-600">{t.dataManagement.patientStatsActive}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-red-50 text-center">
+                  <p className="text-2xl font-bold text-red-700">{deleted.length}</p>
+                  <p className="text-xs text-red-600">{t.dataManagement.patientStatsDeleted}</p>
+                </div>
+              </div>
+              {typeEntries.length > 0 && (
+                <>
+                  <p className="text-sm font-medium text-gray-700 mb-2">{t.dataManagement.patientStatsByType}</p>
+                  <div className="space-y-2">
+                    {typeEntries.map(([type, count]) => (
+                      <div key={type} className="flex items-center justify-between p-2 rounded bg-gray-50">
+                        <span className="text-sm text-gray-700">{type}</span>
+                        <span className="text-sm font-semibold text-gray-900">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* Patient Data Card */}
       {section === 'patients' && <Card>
         <CardHeader>
@@ -1083,9 +1242,15 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             {/* Row 1: Export all */}
             <div className="rounded-lg border border-gray-200 p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.exportAllTitle}</p>
-                  <p className="text-xs text-gray-500">{t.dataManagement.patientData.exportAllDescription}</p>
+                <div className="flex items-start gap-2">
+                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 text-gray-500">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.exportAllTitle}</p>
+                    <p className="text-xs text-gray-500">{t.dataManagement.patientData.exportAllDescription}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button size="sm" onClick={handlePatientExportAllJson}>
@@ -1101,9 +1266,15 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             {/* Row 2: Export single patient */}
             <div className="rounded-lg border border-gray-200 p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.exportSingleTitle}</p>
-                  <p className="text-xs text-gray-500">{t.dataManagement.patientData.exportSingleDescription}</p>
+                <div className="flex items-start gap-2">
+                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 text-gray-500">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.exportSingleTitle}</p>
+                    <p className="text-xs text-gray-500">{t.dataManagement.patientData.exportSingleDescription}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <select
@@ -1131,9 +1302,15 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             {/* Row 3: Import all */}
             <div className="rounded-lg border border-gray-200 p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.importAllTitle}</p>
-                  <p className="text-xs text-gray-500">{t.dataManagement.patientData.importAllDescription}</p>
+                <div className="flex items-start gap-2">
+                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 text-gray-500">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m4-8l-4-4m0 0L16 8m4-4v12" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.importAllTitle}</p>
+                    <p className="text-xs text-gray-500">{t.dataManagement.patientData.importAllDescription}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="secondary" onClick={() => patientAllJsonInputRef.current?.click()}>
@@ -1149,9 +1326,15 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             {/* Row 4: Import single patient */}
             <div className="rounded-lg border border-gray-200 p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.importSingleTitle}</p>
-                  <p className="text-xs text-gray-500">{t.dataManagement.patientData.importSingleDescription}</p>
+                <div className="flex items-start gap-2">
+                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 text-gray-500">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m4-8l-4-4m0 0L16 8m4-4v12" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.importSingleTitle}</p>
+                    <p className="text-xs text-gray-500">{t.dataManagement.patientData.importSingleDescription}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="secondary" onClick={() => patientSingleJsonInputRef.current?.click()}>
@@ -1168,7 +1351,22 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
       </Card>}
 
       {/* Full Database Card */}
-      {section === 'database' && <Card>
+      {section === 'database' && <>
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18M8 6v12M16 6v12" />
+            </svg>
+            {t.dataManagement.dbReportTitle}
+          </h2>
+        </CardHeader>
+        <CardContent>
+          <DatabaseReport />
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1242,7 +1440,8 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             </div>
           </div>
         </CardContent>
-      </Card>}
+      </Card>
+      </>}
 
       {/* Storage Info */}
       {section === 'storage' && <Card>
@@ -1259,19 +1458,7 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
         </CardContent>
       </Card>}
 
-      {section === 'report' && <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18M8 6v12M16 6v12" />
-            </svg>
-            {t.dataManagement.dbReportTitle}
-          </h2>
-        </CardHeader>
-        <CardContent>
-          <DatabaseReport />
-        </CardContent>
-      </Card>}
+      {section === 'usage' && <UsageSection />}
 
       {/* Import Confirmation */}
       <ConfirmModal

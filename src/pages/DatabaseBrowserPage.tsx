@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext';
 import { getAuthHeaders } from '../utils/auth';
-import { Button, Card, CardContent, CardHeader, Select } from '../components/common';
+import { Button, Card, CardContent, CardHeader, Select, PageTabBar } from '../components/common';
+import type { PageTab } from '../components/common/PageTabBar';
 import { Modal, ConfirmModal } from '../components/common/Modal';
 
 type ColumnInfo = {
@@ -30,8 +31,11 @@ const TABLES = [
   'AppSettings',
   'AuthSession',
   'DentalStatusSnapshot',
+  'Doctor',
   'Invoice',
+  'InvoiceSettings',
   'NeakCheck',
+  'NeakDocumentType',
   'OdontogramCurrent',
   'OdontogramDaily',
   'OdontogramTimeline',
@@ -44,6 +48,7 @@ const TABLES = [
   'User',
   'UserActivityLog',
   'UserPermissionOverride',
+  'VisitorLog',
 ];
 
 function formatCellValue(value: unknown): string {
@@ -240,16 +245,47 @@ export function DatabaseBrowserPage() {
     ...TABLES.map(name => ({ value: name, label: name })),
   ];
 
+  const tabs: PageTab[] = [
+    { key: 'overview', to: '/data', label: t.dataManagement.tabOverview, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg> },
+    { key: 'pricelist', to: '/data/pricelist', label: t.dataManagement.tabPricelist, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg> },
+    { key: 'patients', to: '/data/patients', label: t.dataManagement.tabPatients, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg> },
+    { key: 'database', to: '/data/database', label: t.dataManagement.tabDatabase, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg> },
+    { key: 'storage', to: '/data/storage', label: t.dataManagement.tabStorage, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
+    { key: 'usage', to: '/data/usage', label: t.dataManagement.tabUsage, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> },
+    { key: 'browser', to: '/data/browser', label: t.nav.dataBrowser, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg> },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <Link to="/data" className="text-sm text-dental-600 hover:text-dental-800 mb-2 inline-block">
-          &larr; {t.dataManagement.title}
-        </Link>
-        <h1 className="text-2xl font-bold text-gray-900">{t.dbBrowser.title}</h1>
-        <p className="text-sm text-gray-500 mt-1">{t.dbBrowser.subtitle}</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t.dataManagement.title}</h1>
+        <p className="text-gray-500 mt-1">{t.dataManagement.subtitle}</p>
       </div>
+
+      <PageTabBar tabs={tabs} />
+
+      {/* Browser title */}
+      <h2 className="text-lg font-semibold flex items-center gap-2">
+        <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        {t.dataManagement.browserTitle}
+      </h2>
+
+      {/* Warning card */}
+      <Card>
+        <CardContent>
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 text-amber-500 mt-0.5">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <p className="text-sm text-amber-800">{t.dataManagement.browserWarning}</p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Table selector */}
       <Card>
@@ -288,7 +324,7 @@ export function DatabaseBrowserPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">{data.table}</h2>
+              <h2 className="text-lg font-semibold"><span className="font-normal text-gray-500">{t.dataManagement.tablePrefix}</span> {data.table}</h2>
               <div className="flex items-center gap-2">
                 <Select
                   options={PAGE_SIZES.map(s => ({ value: String(s), label: String(s) }))}
