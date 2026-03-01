@@ -791,6 +791,45 @@ server.get('/db/browse/:table', async (request, reply) => {
   };
 });
 
+server.get('/db/export/:table', async (request, reply) => {
+  const currentUser = await requirePermission(request, reply, 'data.browse');
+  if (!currentUser) return;
+
+  const { table } = request.params as { table: string };
+  if (!BROWSABLE_TABLES.includes(table as (typeof BROWSABLE_TABLES)[number])) {
+    return reply.code(400).send({ message: 'Invalid table name' });
+  }
+
+  const columns = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
+    `SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
+    table
+  );
+  const colNames = columns.map(c => c.column_name);
+
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT * FROM "${table}" ORDER BY 1`
+  );
+
+  const escapeCsv = (val: unknown): string => {
+    if (val === null || val === undefined) return '';
+    const s = typeof val === 'object' ? JSON.stringify(val) : String(val);
+    if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  };
+
+  const headerLine = colNames.map(escapeCsv).join(',');
+  const dataLines = rows.map(row =>
+    colNames.map(col => escapeCsv(serializeRow(row)[col])).join(',')
+  );
+  const csv = [headerLine, ...dataLines].join('\r\n');
+
+  reply.header('Content-Type', 'text/csv; charset=utf-8');
+  reply.header('Content-Disposition', `attachment; filename="${table}.csv"`);
+  return csv;
+});
+
 server.put('/db/browse/:table/:id', async (request, reply) => {
   const currentUser = await requirePermission(request, reply, 'data.browse');
   if (!currentUser) return;

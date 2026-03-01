@@ -333,6 +333,29 @@ export function DatabaseBrowserPage() {
                   className="w-20"
                 />
                 <span className="text-sm text-gray-500">{t.common.perPage}</span>
+                <button
+                  title="CSV"
+                  className="ml-2 p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`/backend/db/export/${data.table}`, { headers: getAuthHeaders() });
+                      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                      const blob = await res.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${data.table}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : 'Export failed');
+                    }
+                  }}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                </button>
               </div>
             </div>
           </CardHeader>
