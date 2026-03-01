@@ -492,6 +492,11 @@ export const en: TranslationKeys = {
     invoiceModeTest: 'Test invoicing',
     agentKeyLive: 'Invoice Agent key - Live',
     agentKeyTest: 'Invoice Agent key - TEST',
+    szamlazzApiTest: 'Számlázz.hu API Test',
+    szamlazzApiTestButton: 'Run API test',
+    szamlazzApiTesting: 'Testing...',
+    szamlazzApiMode: 'Mode',
+    szamlazzApiStatus: 'Status',
   },
 
   lab: {

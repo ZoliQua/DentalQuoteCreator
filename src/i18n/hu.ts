@@ -491,6 +491,11 @@ export const hu = {
     invoiceModeTest: 'Teszt számlázás',
     agentKeyLive: 'Számla Agent kulcs - Éles számlázás',
     agentKeyTest: 'Számla Agent kulcs - TESZT számlázás',
+    szamlazzApiTest: 'Számlázz.hu API teszt',
+    szamlazzApiTestButton: 'API teszt hívása',
+    szamlazzApiTesting: 'Tesztelés...',
+    szamlazzApiMode: 'Mód',
+    szamlazzApiStatus: 'Státusz',
   },
 
   lab: {

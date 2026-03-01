@@ -473,6 +473,11 @@ export const de: TranslationKeys = {
     invoiceModeTest: 'Test-Rechnungsstellung',
     agentKeyLive: 'Rechnungs-Agent-Schlüssel - Live',
     agentKeyTest: 'Rechnungs-Agent-Schlüssel - TEST',
+    szamlazzApiTest: 'Számlázz.hu API-Test',
+    szamlazzApiTestButton: 'API-Test ausführen',
+    szamlazzApiTesting: 'Testen...',
+    szamlazzApiMode: 'Modus',
+    szamlazzApiStatus: 'Status',
   },
   lab: {
     subtitle: 'Odontogramm-Labor für schnelle Einbettungs- und JSON-Import/Export-Tests.',

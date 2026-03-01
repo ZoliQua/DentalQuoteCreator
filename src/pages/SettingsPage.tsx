@@ -45,6 +45,8 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
   const [taxResult, setTaxResult] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [pendingNavTarget, setPendingNavTarget] = useState<string | null>(null);
+  const [apiTestLoading, setApiTestLoading] = useState(false);
+  const [apiTestResult, setApiTestResult] = useState<{ success: boolean; mode: string; message: string; httpStatus?: number } | null>(null);
   const navigate = useNavigate();
 
   // Warn on browser tab close / refresh when dirty
@@ -1141,7 +1143,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                 <Select
                   label={t.settings.invoiceMode}
                   value={formData.invoice.invoiceMode || 'test'}
-                  onChange={(e) => handleInvoiceChange('invoiceMode', e.target.value)}
+                  onChange={(e) => { handleInvoiceChange('invoiceMode', e.target.value); setApiTestResult(null); }}
                   options={[
                     { value: 'live', label: t.settings.invoiceModeLive },
                     { value: 'test', label: t.settings.invoiceModeTest },
@@ -1191,6 +1193,86 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                     </button>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6">
+              <CardHeader>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  {t.settings.szamlazzApiTest}
+                </h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    setApiTestLoading(true);
+                    setApiTestResult(null);
+                    try {
+                      const currentMode = formData.invoice.invoiceMode || 'test';
+                      const currentKey = currentMode === 'live' ? formData.invoice.agentKeyLive : formData.invoice.agentKeyTest;
+                      const res = await fetch('/backend/api/szamlazz/test', {
+                        method: 'POST',
+                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mode: currentMode, agentKey: currentKey || '' }),
+                      });
+                      const data = await res.json();
+                      setApiTestResult(data);
+                    } catch (err) {
+                      setApiTestResult({ success: false, mode: '?', message: String(err) });
+                    } finally {
+                      setApiTestLoading(false);
+                    }
+                  }}
+                  disabled={apiTestLoading}
+                >
+                  {apiTestLoading ? (
+                    <>
+                      <svg className="w-4 h-4 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      {t.settings.szamlazzApiTesting}
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {t.settings.szamlazzApiTestButton}
+                    </>
+                  )}
+                </Button>
+                {apiTestResult && (
+                  <div className={`rounded-lg border p-4 text-sm ${apiTestResult.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      {apiTestResult.success ? (
+                        <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      ) : (
+                        <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      )}
+                      <span className={`font-semibold ${apiTestResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                        {apiTestResult.success ? 'OK' : 'HIBA'}
+                      </span>
+                    </div>
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                      <dt className="text-gray-500">{t.settings.szamlazzApiMode}:</dt>
+                      <dd className={apiTestResult.success ? 'text-green-800' : 'text-red-800'}>{apiTestResult.mode === 'live' ? t.settings.invoiceModeLive : t.settings.invoiceModeTest}</dd>
+                      {apiTestResult.httpStatus && (
+                        <>
+                          <dt className="text-gray-500">HTTP:</dt>
+                          <dd className={apiTestResult.success ? 'text-green-800' : 'text-red-800'}>{apiTestResult.httpStatus}</dd>
+                        </>
+                      )}
+                      <dt className="text-gray-500">{t.settings.szamlazzApiStatus}:</dt>
+                      <dd className={apiTestResult.success ? 'text-green-800' : 'text-red-800'}>{apiTestResult.message}</dd>
+                    </dl>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </>

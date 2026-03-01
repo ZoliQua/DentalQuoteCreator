@@ -2278,9 +2278,10 @@ server.patch('/quotes/:quoteId/restore', async (request, reply) => {
 
 // Settings
 server.get('/settings', async () => {
-  const [settingsRow, doctors] = await Promise.all([
+  const [settingsRow, doctors, invoiceRow] = await Promise.all([
     prisma.appSettings.findUnique({ where: { id: 'default' } }),
     prisma.doctor.findMany({ orderBy: { doctorId: 'asc' } }),
+    prisma.invoiceSettings.findUnique({ where: { id: 'default' } }),
   ]);
   const result = parseJsonObject(settingsRow?.data, defaultSettings);
   // Migrate old flat pdf format { footerText, warrantyText } to per-language { hu: {...}, en: {...}, de: {...} }
@@ -2301,6 +2302,20 @@ server.get('/settings', async () => {
   // Override doctors from Doctor table
   if (doctors.length > 0) {
     result.doctors = doctors.map((d) => ({ id: d.doctorId, name: d.doctorName, stampNumber: d.doctorNum }));
+  }
+  // Override invoice from InvoiceSettings table
+  if (invoiceRow) {
+    result.invoice = {
+      invoiceType: invoiceRow.invoiceType,
+      defaultComment: invoiceRow.defaultComment,
+      defaultVatRate: invoiceRow.defaultVatRate,
+      defaultPaymentMethod: invoiceRow.defaultPaymentMethod,
+      invoiceMode: invoiceRow.invoiceMode,
+      agentKeyLive: invoiceRow.agentKeyLive,
+      agentKeyTest: invoiceRow.agentKeyTest,
+    };
+  } else if (!result.invoice) {
+    result.invoice = defaultSettings.invoice;
   }
   return result;
 });
@@ -3458,6 +3473,48 @@ server.post('/api/szamlazz/storno-invoice', async (request, reply) => {
 
 server.get('/api/szamlazz/health', async () => ({ ok: true, mode: INVOICE_MODE }));
 
+server.post('/api/szamlazz/test', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+  const body = (request.body || {}) as JsonRecord;
+  const invoiceRow = await prisma.invoiceSettings.findUnique({ where: { id: 'default' } });
+  // Allow overriding mode/key from request body (for testing unsaved form values)
+  const mode = String(body.mode || invoiceRow?.invoiceMode || 'test');
+  const agentKey = String(body.agentKey || '') || (mode === 'live' ? invoiceRow?.agentKeyLive : invoiceRow?.agentKeyTest);
+  if (!agentKey) {
+    return { success: false, mode, message: `Nincs megadva ${mode === 'live' ? 'éles' : 'teszt'} Agent kulcs.` };
+  }
+  try {
+    // Use a known valid Hungarian tax number (NAV) to test API connectivity
+    const testTorzsszam = '15789934';
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<xmltaxpayer xmlns="http://www.szamlazz.hu/xmltaxpayer" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <beallitasok>
+        <szamlaagentkulcs>${escapeXml(agentKey)}</szamlaagentkulcs>
+    </beallitasok>
+    <torzsszam>${testTorzsszam}</torzsszam>
+</xmltaxpayer>`;
+    const form = new FormData();
+    form.append('action-szamla_agent_taxpayer', new Blob([xml], { type: 'application/xml' }), 'taxpayer.xml');
+    const response = await fetch(SZAMLAZZ_ENDPOINT, { method: 'POST', body: form });
+    const text = await response.text();
+    const errorMatch = text.match(/<hibakod>([^<]*)<\/hibakod>/);
+    const errorMsgMatch = text.match(/<hibauzenet>([^<]*)<\/hibauzenet>/);
+    if (errorMatch && errorMatch[1] !== '0') {
+      return { success: false, mode, message: errorMsgMatch?.[1] || `Hiba: ${errorMatch[1]}`, httpStatus: response.status };
+    }
+    const validityMatch = text.match(/<ns2:taxpayerValidity>(true|false)<\/ns2:taxpayerValidity>/);
+    return {
+      success: true,
+      mode,
+      message: `API kapcsolat sikeres. Adószám lekérdezés: ${validityMatch ? 'OK' : 'válasz érkezett'}`,
+      httpStatus: response.status,
+    };
+  } catch (err) {
+    return { success: false, mode, message: `Kapcsolódási hiba: ${err instanceof Error ? err.message : String(err)}` };
+  }
+});
+
 server.post('/api/szamlazz/query-taxpayer', async (request, reply) => {
   const body = request.body as JsonRecord;
   const taxNumber = String(body.taxNumber || '');
@@ -3693,15 +3750,59 @@ const runPendingMigrations = async () => {
     server.log.warn('InvoiceSettings migration skipped: ' + (e instanceof Error ? e.message : String(e)));
   }
 
-  // Ensure default InvoiceSettings row exists
+  // Migrate invoice data from AppSettings.data → InvoiceSettings (one-time)
   try {
-    await prisma.invoiceSettings.upsert({
-      where: { id: 'default' },
-      update: {},
-      create: { id: 'default' },
-    });
+    const existing = await prisma.invoiceSettings.findUnique({ where: { id: 'default' } });
+    // Check if AppSettings has invoice data to migrate
+    const appSettings = await prisma.appSettings.findUnique({ where: { id: 'default' } });
+    const data = appSettings?.data as Record<string, unknown> | null;
+    const inv = data?.invoice as Record<string, unknown> | undefined;
+
+    if (!existing && inv) {
+      // Row doesn't exist yet but AppSettings has data → create with migrated data
+      await prisma.invoiceSettings.create({
+        data: {
+          id: 'default',
+          invoiceType: String(inv.invoiceType || 'paper'),
+          defaultComment: String(inv.defaultComment || ''),
+          defaultVatRate: String(inv.defaultVatRate || 'TAM'),
+          defaultPaymentMethod: String(inv.defaultPaymentMethod || 'bankkártya'),
+          invoiceMode: String(inv.invoiceMode || 'test'),
+          agentKeyLive: String(inv.agentKeyLive || ''),
+          agentKeyTest: String(inv.agentKeyTest || ''),
+        },
+      });
+      server.log.info('Migrated invoice data from AppSettings → InvoiceSettings');
+    } else if (!existing) {
+      await prisma.invoiceSettings.create({ data: { id: 'default' } });
+    } else if (existing && inv && !existing.defaultComment && !existing.agentKeyLive && !existing.agentKeyTest) {
+      // Row exists with empty defaults but AppSettings has real data → update
+      await prisma.invoiceSettings.update({
+        where: { id: 'default' },
+        data: {
+          invoiceType: String(inv.invoiceType || existing.invoiceType),
+          defaultComment: String(inv.defaultComment || existing.defaultComment),
+          defaultVatRate: String(inv.defaultVatRate || existing.defaultVatRate),
+          defaultPaymentMethod: String(inv.defaultPaymentMethod || existing.defaultPaymentMethod),
+          invoiceMode: String(inv.invoiceMode || existing.invoiceMode),
+          agentKeyLive: String(inv.agentKeyLive || existing.agentKeyLive),
+          agentKeyTest: String(inv.agentKeyTest || existing.agentKeyTest),
+        },
+      });
+      server.log.info('Updated InvoiceSettings from AppSettings data');
+    }
+
+    // Strip invoice & doctors from AppSettings.data (they have dedicated tables)
+    if (data && (data.invoice || data.doctors)) {
+      const { invoice: _i, doctors: _d, ...cleanData } = data;
+      await prisma.appSettings.update({
+        where: { id: 'default' },
+        data: { data: cleanData as never },
+      });
+      server.log.info('Stripped invoice/doctors from AppSettings.data');
+    }
   } catch (e) {
-    server.log.warn('InvoiceSettings seed skipped: ' + (e instanceof Error ? e.message : String(e)));
+    server.log.warn('InvoiceSettings seed/migrate skipped: ' + (e instanceof Error ? e.message : String(e)));
   }
 };
 
