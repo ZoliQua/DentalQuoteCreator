@@ -28,10 +28,14 @@
 - Backend dev: `cd backend && npm run dev` (tsx watch)
 - Frontend dev: `npm run dev` (Vite)
 
-## Archive CSV Data
-- archive/pricelists.csv, archive/pricelist-categories.csv, archive/pricelist-catalogitems.csv
+## Source Data CSV Files
+- src/data/ directory contains authoritative CSV files for seeding reference data
+- Files: PriceList.csv, PriceListCategory.csv, PriceListCatalogItem.csv, NeakDocumentType.csv, NeakLevel.csv, NeakSpecial.csv, NeakTerkat.csv, NeakCatalogItem.csv
+- NEVER modify these CSV files unless explicitly instructed
+- Backend seed.ts and /seed endpoint both read from src/data/
 - Seed script: backend/prisma/seed.ts reads these CSVs
 - Run seed: `cd backend && npx tsx prisma/seed.ts`
+- Legacy archive/ directory still exists but is no longer used by seed
 
 ## Deployment (Production FTP)
 - FTP credentials are stored in `backend/.env` (FTP_SERVER, FTP_USERNAME, FTP_PASSWORD)

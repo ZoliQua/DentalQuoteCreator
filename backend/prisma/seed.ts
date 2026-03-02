@@ -32,7 +32,7 @@ function parseCsvLine(line: string): string[] {
 }
 
 function readCsv(filename: string): Record<string, string>[] {
-  const filePath = resolve(__dirname, '../../archive', filename);
+  const filePath = resolve(__dirname, '../../src/data', filename);
   const content = readFileSync(filePath, 'utf-8');
   const lines = content.trim().split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
@@ -55,9 +55,15 @@ function toBool(val: string): boolean {
   return val.toUpperCase() === 'TRUE' || val === '1';
 }
 
+function toIntOrNull(val: string): number | null {
+  if (!val || val === '') return null;
+  const n = parseInt(val, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
 async function main() {
   console.log('Seeding PriceLists...');
-  const priceLists = readCsv('pricelists.csv');
+  const priceLists = readCsv('PriceList.csv');
   for (const row of priceLists) {
     await prisma.priceList.upsert({
       where: { priceListId: row.priceListId },
@@ -89,7 +95,7 @@ async function main() {
   console.log(`  ${priceLists.length} price lists seeded.`);
 
   console.log('Seeding PriceListCategories...');
-  const categories = readCsv('pricelist-categories.csv');
+  const categories = readCsv('PriceListCategory.csv');
   for (const row of categories) {
     await prisma.priceListCategory.upsert({
       where: { catalogCategoryId: row.catalogCategoryId },
@@ -116,23 +122,19 @@ async function main() {
   }
   console.log(`  ${categories.length} categories seeded.`);
 
-  // Build a lookup: catalogCategoryId -> { catalogCategoryHu, priceListId }
-  const catLookup: Record<string, { hu: string; priceListId: string }> = {};
+  // Build a lookup: catalogCategoryId -> priceListId
+  const catLookup: Record<string, string> = {};
   for (const row of categories) {
-    catLookup[row.catalogCategoryId] = {
-      hu: row.catalogCategoryHu,
-      priceListId: row.priceListId,
-    };
+    catLookup[row.catalogCategoryId] = row.priceListId;
   }
 
   console.log('Seeding PriceListCatalogItems...');
-  const items = readCsv('pricelist-catalogitems.csv');
+  const items = readCsv('PriceListCatalogItem.csv');
   for (const row of items) {
     const allowedTeeth = row.allowedTeeth
       ? row.allowedTeeth.split('|').map(Number).filter((n) => Number.isFinite(n))
       : [];
-    const catInfo = catLookup[row.catalogCategoryId];
-    const priceListId = catInfo?.priceListId || null;
+    const priceListId = catLookup[row.catalogCategoryId] || null;
 
     await prisma.priceListCatalogItem.upsert({
       where: { catalogItemId: row.catalogItemId },
@@ -186,6 +188,156 @@ async function main() {
     });
   }
   console.log(`  ${items.length} catalog items seeded.`);
+
+  // Seed NeakDocumentType
+  console.log('Seeding NeakDocumentType...');
+  const neakDocs = readCsv('NeakDocumentType.csv');
+  for (const row of neakDocs) {
+    await prisma.neakDocumentType.upsert({
+      where: { neakDocumentId: row.neakDocumentId },
+      update: {
+        neakDocumentTypeCode: parseInt(row.neakDocumentTypeCode, 10) || 0,
+        neakDocumentDetails: row.neakDocumentDetails || '',
+      },
+      create: {
+        neakDocumentId: row.neakDocumentId,
+        neakDocumentTypeCode: parseInt(row.neakDocumentTypeCode, 10) || 0,
+        neakDocumentDetails: row.neakDocumentDetails || '',
+      },
+    });
+  }
+  console.log(`  ${neakDocs.length} NEAK document types seeded.`);
+
+  // Seed NeakLevel
+  console.log('Seeding NeakLevel...');
+  const neakLevels = readCsv('NeakLevel.csv');
+  for (const row of neakLevels) {
+    await prisma.neakLevel.upsert({
+      where: { neakLevelCode: row.NeakLevelCode },
+      update: {
+        neakLevelInfoHu: row.NekaLevelInfoHu || '',
+        neakLevelInfoEn: row.NekaLevelInfoEn || '',
+        neakLevelInfoDe: row.NekaLevelInfoDe || '',
+      },
+      create: {
+        neakLevelCode: row.NeakLevelCode,
+        neakLevelInfoHu: row.NekaLevelInfoHu || '',
+        neakLevelInfoEn: row.NekaLevelInfoEn || '',
+        neakLevelInfoDe: row.NekaLevelInfoDe || '',
+      },
+    });
+  }
+  console.log(`  ${neakLevels.length} NEAK levels seeded.`);
+
+  // Seed NeakSpecial
+  console.log('Seeding NeakSpecial...');
+  const neakSpecials = readCsv('NeakSpecial.csv');
+  for (const row of neakSpecials) {
+    await prisma.neakSpecial.upsert({
+      where: { neakSpecialMark: parseInt(row.neakSpecialMark, 10) },
+      update: {
+        neakSpecialMarkCode: row.neakSpecialMarkCode || '',
+        neakSpecialDescHu: row.neakSpecialDescHu || '',
+        neakSpecialDescEn: row.neakSpecialDescEn || '',
+        neakSpecialDescDe: row.neakSpecialDescDe || '',
+      },
+      create: {
+        neakSpecialMark: parseInt(row.neakSpecialMark, 10),
+        neakSpecialMarkCode: row.neakSpecialMarkCode || '',
+        neakSpecialDescHu: row.neakSpecialDescHu || '',
+        neakSpecialDescEn: row.neakSpecialDescEn || '',
+        neakSpecialDescDe: row.neakSpecialDescDe || '',
+      },
+    });
+  }
+  console.log(`  ${neakSpecials.length} NEAK specials seeded.`);
+
+  // Seed NeakTerkat
+  console.log('Seeding NeakTerkat...');
+  const neakTerkats = readCsv('NeakTerkat.csv');
+  for (const row of neakTerkats) {
+    await prisma.neakTerkat.upsert({
+      where: { neakTerKatCode: row.NeakTerKatCode },
+      update: {
+        neakTerKatInfoHu: row.NeakTerKatInfoHu || '',
+        neakTerKatInfoEn: row.NeakTerKatInfoEn || '',
+        neakTerKatInfoDe: row.NeakTerKatInfoDe || '',
+      },
+      create: {
+        neakTerKatCode: row.NeakTerKatCode,
+        neakTerKatInfoHu: row.NeakTerKatInfoHu || '',
+        neakTerKatInfoEn: row.NeakTerKatInfoEn || '',
+        neakTerKatInfoDe: row.NeakTerKatInfoDe || '',
+      },
+    });
+  }
+  console.log(`  ${neakTerkats.length} NEAK terkats seeded.`);
+
+  // Seed NeakCatalogItem
+  console.log('Seeding NeakCatalogItem...');
+  const neakItems = readCsv('NeakCatalogItem.csv');
+  for (const row of neakItems) {
+    const data = {
+      neakCode: row.neakCode,
+      neakNameHu: row.neakNameHu,
+      neakNameEn: row.neakNameEn || '',
+      neakNameDe: row.neakNameDe || '',
+      catalogCategoryId: row.catalogCategoryId,
+      neakPoints: parseInt(row.neakPoints, 10) || 0,
+      neakMinimumTimeMin: parseInt(row.neakMinimumTimeMin, 10) || 0,
+      isFullMouth: toBool(row.isFullMouth),
+      isTooth: toBool(row.isTooth),
+      isArch: toBool(row.isArch),
+      isQuadrant: toBool(row.isQuadrant),
+      isSurface: toBool(row.isSurface),
+      surfaceNum: row.surfaceNum || '',
+      neakMaxQtyPerDay: toIntOrNull(row.neakMaxQtyPerDay),
+      neakToothType: row.neakToothType || '',
+      neakTimeLimitMonths: toIntOrNull(row.neakTimeLimitMonths),
+      neakTimeLimitDays: toIntOrNull(row.neakTimeLimitDays),
+      neakTimeLimitQty: toIntOrNull(row.neakTimeLimitQty),
+      neakTimeLimitSchoolStart: row.neakTimeLimitSchoolStart || '',
+      neakTimeLimitSchoolEnd: row.neakTimeLimitSchoolEnd || '',
+      neakLevelA: toBool(row.neakLevelA),
+      neakLevelS: toBool(row.neakLevelS),
+      neakLevelT: toBool(row.neakLevelT),
+      neakLevelE: toBool(row.neakLevelE),
+      neakTerKatCodes: row.neakTerKatCodes || '',
+      neakNotBillableWithCodes: row.neakNotBillableWithCodes || '',
+      neakNotBillableIfRecentCodes: row.neakNotBillableIfRecentCodes || '',
+      neakBillableWithCodes: row.neakBillableWithCodes || '',
+      neakSpecialMark: parseInt(row.neakSpecialMark, 10) || 0,
+      isActive: toBool(row.isActive),
+      catalogUnit: row.catalogUnit || 'db',
+      milkToothOnly: toBool(row.milkToothOnly),
+      svgLayer: row.svgLayer || '',
+      hasLayer: toBool(row.hasLayer),
+      isDeleted: toBool(row.isDeleted || 'FALSE'),
+    };
+    await prisma.neakCatalogItem.upsert({
+      where: { neakCatalogItemId: row.neakCatalogItemId },
+      update: data,
+      create: { neakCatalogItemId: row.neakCatalogItemId, ...data },
+    });
+  }
+  console.log(`  ${neakItems.length} NEAK catalog items seeded.`);
+
+  // Seed Country
+  console.log('Seeding Countries...');
+  const countries = readCsv('Country.csv');
+  for (const row of countries) {
+    const data = {
+      countryNameHu: row.CountryNameHu || '',
+      countryNameEn: row.CountryNameEn || '',
+      countryNameDe: row.CountryNameDe || '',
+    };
+    await prisma.country.upsert({
+      where: { countryId: parseInt(row.countryId, 10) },
+      update: data,
+      create: { countryId: parseInt(row.countryId, 10), ...data },
+    });
+  }
+  console.log(`  ${countries.length} countries seeded.`);
 
   console.log('Seed complete!');
 }

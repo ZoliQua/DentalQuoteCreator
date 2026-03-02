@@ -1,0 +1,3 @@
+priceListId,priceListNameHu,priceListNameEn,priceListNameDe,isActive,isDeleted,isDefault,isUserLocked,listOfUsers,isNeak
+plist001,Alap Árlista,Basic Price List,Grundpreisliste,true,false,true,false,[],false
+plist002,NEAK Árlista,NEAK Price List,NEAK-Preisliste,true,false,false,false,[],true

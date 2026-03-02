@@ -88,6 +88,24 @@ export class LocalStorageRepository implements StorageRepository {
     requestJsonSync('PUT', `${API_PREFIX}/catalog/reset`, { items });
   }
 
+  // NEAK Catalog
+  getNeakCatalog(): CatalogItem[] {
+    if (!getAuthToken()) return [];
+    try {
+      return requestJsonSync<CatalogItem[]>('GET', `${API_PREFIX}/neak-catalog`) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  saveNeakCatalogItem(item: CatalogItem): void {
+    requestJsonSync('PATCH', `${API_PREFIX}/neak-catalog/${item.catalogItemId}`, {
+      svgLayer: item.svgLayer,
+      hasLayer: item.hasLayer,
+      isActive: item.isActive,
+    });
+  }
+
   // PriceLists
   getPriceLists(): PriceList[] {
     if (!getAuthToken()) return [];

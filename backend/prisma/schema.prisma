@@ -131,6 +131,8 @@ model Patient {
   patientVATNumber     String?
   patientVATAddress    String?
   patientDiscount      Int?
+  isHungarianPhone     Boolean  @default(true)
+  treatmentArchive     String?
 
   quotes    Quote[]
   snapshots DentalStatusSnapshot[]
@@ -343,4 +345,99 @@ model NeakDocumentType {
   neakDocumentId       String @id
   neakDocumentTypeCode Int
   neakDocumentDetails  String
+}
+
+model NeakLevel {
+  neakLevelCode   String @id
+  neakLevelInfoHu String
+  neakLevelInfoEn String @default("")
+  neakLevelInfoDe String @default("")
+}
+
+model NeakSpecial {
+  neakSpecialMark     Int    @id
+  neakSpecialMarkCode String @default("")
+  neakSpecialDescHu   String
+  neakSpecialDescEn   String @default("")
+  neakSpecialDescDe   String @default("")
+}
+
+model NeakTerkat {
+  neakTerKatCode   String @id
+  neakTerKatInfoHu String
+  neakTerKatInfoEn String @default("")
+  neakTerKatInfoDe String @default("")
+}
+
+model NeakCatalogItem {
+  neakCatalogItemId            String  @id
+  neakCode                     String
+  neakNameHu                   String
+  neakNameEn                   String  @default("")
+  neakNameDe                   String  @default("")
+  catalogCategoryId            String
+  neakPoints                   Int     @default(0)
+  neakMinimumTimeMin           Int     @default(0)
+  isFullMouth                  Boolean @default(false)
+  isTooth                      Boolean @default(false)
+  isArch                       Boolean @default(false)
+  isQuadrant                   Boolean @default(false)
+  isSurface                    Boolean @default(false)
+  surfaceNum                   String  @default("")
+  neakMaxQtyPerDay             Int?
+  neakToothType                String  @default("")
+  neakTimeLimitMonths          Int?
+  neakTimeLimitDays            Int?
+  neakTimeLimitQty             Int?
+  neakTimeLimitSchoolStart     String  @default("")
+  neakTimeLimitSchoolEnd       String  @default("")
+  neakLevelA                   Boolean @default(false)
+  neakLevelS                   Boolean @default(false)
+  neakLevelT                   Boolean @default(false)
+  neakLevelE                   Boolean @default(false)
+  neakTerKatCodes              String  @default("")
+  neakNotBillableWithCodes     String  @default("")
+  neakNotBillableIfRecentCodes String  @default("")
+  neakBillableWithCodes        String  @default("")
+  neakSpecialMark              Int     @default(0)
+  isActive                     Boolean @default(true)
+  catalogUnit                  String  @default("db")
+  milkToothOnly                Boolean @default(false)
+  svgLayer                     String  @default("")
+  hasLayer                     Boolean @default(false)
+  isDeleted                    Boolean @default(false)
+
+  @@index([neakCode])
+  @@index([catalogCategoryId])
+}
+
+model NeakSettings {
+  id                String   @id @default("default")
+  dentalPraxisId    String   @default("DP001")
+  neakOjoteKey      String   @default("")
+  neakWssUser       String   @default("")
+  neakWssPassword   String   @default("")
+  updatedAt         DateTime @updatedAt
+}
+
+model NeakDepartment {
+  id                        String   @id @default(cuid())
+  dentalPraxisId            String   @default("DP001")
+  neakDepartmentNameHu      String
+  neakDepartmentNameEn      String   @default("")
+  neakDepartmentNameDe      String   @default("")
+  neakDepartmentCode        String
+  neakDepartmentHours       Int
+  neakDepartmentMaxPoints   Int
+  neakDepartmentPrefix      String   @default("")
+  neakDepartmentLevel       String   @default("A")
+  neakDepartmentIndicator   String   @default("adult")
+  updatedAt                 DateTime @updatedAt
+}
+
+model Country {
+  countryId      Int    @id
+  countryNameHu  String
+  countryNameEn  String @default("")
+  countryNameDe  String @default("")
 }

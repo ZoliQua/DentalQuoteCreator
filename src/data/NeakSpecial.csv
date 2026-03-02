@@ -1,0 +1,6 @@
+﻿neakSpecialMark,neakSpecialMarkCode,neakSpecialDescHu,neakSpecialDescEn,neakSpecialDescDe
+0,,Nincs speciális jelölés,No special mark,Keine spezielle Kennzeichnung
+1,+,"Minimumidő nem számít, ha egyéb kód is elszámolásra kerül",Minimum time not counted if other codes are also billed,"Mindestzeit wird nicht berücksichtigt, wenn weitere Codes abgerechnet werden"
+2,++,"Minimumidő csoportra vonatkozik, nem biztosítottanként","Minimum time applies to group, not per insured","Mindestzeit gilt für die Gruppe, nicht pro Versicherten"
+3,+++,Több fogon történő elszámolásnál a minimumidő csak egyszer számít,Minimum time counted once for multiple teeth,Mindestzeit wird bei mehreren Zähnen nur einmal berücksichtigt
+4,**,Csak külön finanszírozási szerződés alapján számolható el,Only billable under separate financing contract,Nur auf Grundlage eines separaten Finanzierungsvertrags abrechenbar

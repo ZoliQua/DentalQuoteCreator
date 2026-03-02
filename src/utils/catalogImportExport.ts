@@ -43,7 +43,7 @@ function escapeCsvValue(value: unknown): string {
   return `"${stringValue.replace(/"/g, '""')}"`;
 }
 
-function parseCsvLine(line: string): string[] {
+export function parseCsvLine(line: string): string[] {
   const values: string[] = [];
   let current = '';
   let inQuotes = false;

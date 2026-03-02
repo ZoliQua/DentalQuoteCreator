@@ -153,7 +153,7 @@ Bitte lesen Sie sorgfältig und kontaktieren Sie uns bei Fragen, dann bestätige
     agentKeyTest: '',
   },
   patient: {
-    defaultCountry: 'Magyarország',
+    defaultCountry: '96',
     patientTypes: ['Privát páciens', 'NEAK páciens'],
   },
   language: 'hu',

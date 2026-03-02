@@ -20,6 +20,10 @@ interface AppContextType {
   getCatalogItem: (catalogItemId: string) => CatalogItem | undefined;
   resetCatalog: (items?: CatalogItem[]) => void;
 
+  // NEAK Catalog
+  neakCatalog: CatalogItem[];
+  updateNeakCatalogItem: (item: CatalogItem) => void;
+
   // Quotes
   quotes: Quote[];
   addQuote: (quote: Quote) => void;
@@ -67,6 +71,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [pricelists, setPricelists] = useState<PriceList[]>([]);
   const [pricelistCategories, setPricelistCategories] = useState<PriceListCategory[]>([]);
+  const [neakCatalog, setNeakCatalog] = useState<CatalogItem[]>([]);
   const [dentalStatusSnapshots, setDentalStatusSnapshots] = useState<DentalStatusSnapshot[]>([]);
 
   // Load data on mount
@@ -77,6 +82,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setQuotes([]);
       setPricelists([]);
       setPricelistCategories([]);
+      setNeakCatalog([]);
       setDentalStatusSnapshots([]);
       return;
     }
@@ -85,6 +91,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setQuotes(storage.getQuotes());
     setPricelists(storage.getPriceLists());
     setPricelistCategories(storage.getPriceListCategories());
+    setNeakCatalog(storage.getNeakCatalog());
     setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
   }, [isAuthenticated]);
 
@@ -98,6 +105,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setQuotes(storage.getQuotes());
       setPricelists(storage.getPriceLists());
       setPricelistCategories(storage.getPriceListCategories());
+      setNeakCatalog(storage.getNeakCatalog());
       setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
     };
 
@@ -163,6 +171,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const newCatalog = items ?? defaultCatalog;
     storage.resetCatalog(newCatalog);
     setCatalog(newCatalog);
+  }, []);
+
+  // NEAK Catalog
+  const updateNeakCatalogItem = useCallback((item: CatalogItem) => {
+    storage.saveNeakCatalogItem(item);
+    setNeakCatalog(storage.getNeakCatalog());
   }, []);
 
   // Quotes
@@ -295,6 +309,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setQuotes(storage.getQuotes());
       setPricelists(storage.getPriceLists());
       setPricelistCategories(storage.getPriceListCategories());
+      setNeakCatalog(storage.getNeakCatalog());
       setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
     }
     return success;
@@ -306,6 +321,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setQuotes(storage.getQuotes());
     setPricelists(storage.getPriceLists());
     setPricelistCategories(storage.getPriceListCategories());
+    setNeakCatalog(storage.getNeakCatalog());
     setDentalStatusSnapshots(storage.getDentalStatusSnapshots(''));
   }, []);
 
@@ -323,6 +339,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteCatalogItem,
         getCatalogItem,
         resetCatalog,
+        neakCatalog,
+        updateNeakCatalogItem,
         quotes,
         addQuote,
         updateQuote,

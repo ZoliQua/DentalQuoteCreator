@@ -214,9 +214,9 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
     exportData,
     importData,
     refreshData,
-    resetPriceLists,
     pricelistCategories,
     catalog,
+    neakCatalog,
   } = useApp();
   const { exportCatalog, importCatalog, exportCatalogCSV, importCatalogCSV } = useCatalog();
   const { pricelists: activePriceLists } = usePriceLists();
@@ -321,18 +321,14 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
       },
     ];
 
-    const usedIds = new Set<string>();
-    const generate8DigitId = (): string => {
-      let id: string;
-      do {
-        id = String(10000000 + Math.floor(Math.random() * 90000000));
-      } while (usedIds.has(id));
-      usedIds.add(id);
-      return id;
+    let nextIdNum = 10000000;
+    const generatePatientId = (): string => {
+      nextIdNum += 1;
+      return 'P' + String(nextIdNum);
     };
 
     return entries.map((entry) => ({
-      patientId: generate8DigitId(),
+      patientId: generatePatientId(),
       title: entry.title,
       firstName: entry.firstName,
       lastName: entry.lastName,
@@ -599,11 +595,22 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  const handleResetPriceLists = () => {
-    resetPriceLists(defaultPriceLists, defaultPriceListCategories, defaultCatalogItems);
-    refreshData();
+  const handleResetPriceLists = async () => {
+    try {
+      const res = await fetch('/backend/seed', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        refreshData();
+        setMessage({ type: 'success', text: t.dataManagement.catalogOnly.resetSuccess });
+      } else {
+        setMessage({ type: 'error', text: 'Seed failed' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Seed failed' });
+    }
     setResetPriceListConfirm(false);
-    setMessage({ type: 'success', text: t.dataManagement.catalogOnly.resetSuccess });
     setTimeout(() => setMessage(null), 5000);
   };
 
@@ -987,7 +994,10 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
       {section === 'pricelist' && (() => {
         const categoryStats = activePriceLists.map((pl) => {
           const cats = pricelistCategories.filter((c) => c.priceListId === pl.priceListId && c.isActive && !c.isDeleted);
-          const itemCount = catalog.filter((i) => i.priceListId === pl.priceListId && !i.isDeleted).length;
+          const catIds = new Set(cats.map(c => c.catalogCategoryId));
+          const itemCount = pl.isNeak
+            ? neakCatalog.filter((i) => catIds.has(i.catalogCategoryId) && !i.isDeleted).length
+            : catalog.filter((i) => i.priceListId === pl.priceListId && !i.isDeleted).length;
           return { name: pl.priceListNameHu, categories: cats.length, items: itemCount };
         });
         const PIE_COLORS = ['#0d9488', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#3b82f6', '#ec4899', '#10b981'];
@@ -1543,7 +1553,7 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
 
 function StorageInfo() {
   const { t } = useSettings();
-  const { patients, quotes, catalog } = useApp();
+  const { patients, quotes, catalog, neakCatalog } = useApp();
   const { pricelists } = usePriceLists();
   const { allCategories } = usePriceListCategories();
   const { invoices } = useInvoices();
@@ -1590,8 +1600,14 @@ function StorageInfo() {
     </div>
   );
 
-  const Row = ({ label, value, indent }: { label: string; value: number; indent?: boolean }) => (
-    <div className={`flex justify-between py-1.5 border-b border-gray-100 ${indent ? 'pl-4' : ''}`}>
+  const SubSectionHeader = ({ children }: { children: React.ReactNode }) => (
+    <div className="flex justify-between py-1.5 border-b border-gray-200 pl-4">
+      <span className="text-sm font-semibold text-gray-700">{children}</span>
+    </div>
+  );
+
+  const Row = ({ label, value, indent, indent2 }: { label: string; value: number; indent?: boolean; indent2?: boolean }) => (
+    <div className={`flex justify-between py-1.5 border-b border-gray-100 ${indent2 ? 'pl-8' : indent ? 'pl-4' : ''}`}>
       <span className="text-sm text-gray-600">{label}</span>
       <span className="text-sm font-medium">{value}</span>
     </div>
@@ -1619,11 +1635,20 @@ function StorageInfo() {
         ))}
       <Row label={t.dataManagement.storageDeletedQuotes} value={deletedQuotes.length} indent />
 
-      {/* Price List */}
+      {/* Price Lists */}
       <SectionHeader>{t.dataManagement.storageSectionPriceList}</SectionHeader>
-      <Row label={t.dataManagement.storagePriceListsCount} value={pricelists.length} indent />
-      <Row label={t.dataManagement.storagePriceListCategoriesCount} value={allCategories.length} indent />
-      <Row label={t.dataManagement.storagePriceListItemsCount} value={catalog.length} indent />
+
+      {/* Base Price List */}
+      <SubSectionHeader>{t.dataManagement.storageSectionBasePriceList}</SubSectionHeader>
+      <Row label={t.dataManagement.storagePriceListsCount} value={pricelists.filter(pl => !pl.isNeak).length} indent2 />
+      <Row label={t.dataManagement.storagePriceListCategoriesCount} value={allCategories.filter(c => pricelists.some(pl => !pl.isNeak && pl.priceListId === c.priceListId)).length} indent2 />
+      <Row label={t.dataManagement.storagePriceListItemsCount} value={catalog.length} indent2 />
+
+      {/* NEAK Price List */}
+      <SubSectionHeader>{t.dataManagement.storageSectionNeakPriceList}</SubSectionHeader>
+      <Row label={t.dataManagement.storagePriceListsCount} value={pricelists.filter(pl => pl.isNeak).length} indent2 />
+      <Row label={t.dataManagement.storagePriceListCategoriesCount} value={allCategories.filter(c => pricelists.some(pl => pl.isNeak && pl.priceListId === c.priceListId)).length} indent2 />
+      <Row label={t.dataManagement.storagePriceListItemsCount} value={neakCatalog.length} indent2 />
 
       {/* Invoices */}
       <SectionHeader>{t.dataManagement.storageSectionInvoices}</SectionHeader>

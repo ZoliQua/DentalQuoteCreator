@@ -23,6 +23,13 @@ import { VisualQuoteEditorPage } from './pages/VisualQuoteEditorPage';
 import { DatabaseBrowserPage } from './pages/DatabaseBrowserPage';
 import { CatalogLayout } from './pages/CatalogLayout';
 import { Card, CardContent } from './components/common';
+import { FlexiImporterPage } from '@flexi-importer';
+import { OdontogramHost } from './modules/odontogram/OdontogramHost';
+import type { OdontogramState } from './modules/odontogram/types';
+
+function FlexiOdontogramViewer({ initialState }: { initialState: unknown }) {
+  return <OdontogramHost patientId="" mode="view" initialState={initialState as OdontogramState | null} onChange={() => {}} hidePanel />;
+}
 
 function NoPermissionPage() {
   const { t } = useSettings();
@@ -106,6 +113,7 @@ function App() {
         <Route path="/settings/patient" element={<Guard permission="settings.view"><SettingsPage key="patient" section="patient" /></Guard>} />
         <Route path="/settings/quotes" element={<Guard permission="settings.view"><SettingsPage key="quotes" section="quotes" /></Guard>} />
         <Route path="/settings/invoicing" element={<Guard permission="settings.view"><SettingsPage key="invoicing" section="invoicing" /></Guard>} />
+        <Route path="/settings/neak" element={<Guard permission="settings.view"><SettingsPage key="neak" section="neak" /></Guard>} />
         <Route path="/invoices" element={<Guard permission="invoices.view"><InvoicesPage /></Guard>} />
         <Route path="/invoices/:invoiceId" element={<Guard permission="invoices.view.detail"><InvoiceDetailPage /></Guard>} />
         <Route path="/data" element={<Guard permission="data.view"><DataManagementPage key="overview" /></Guard>} />
@@ -116,6 +124,7 @@ function App() {
         <Route path="/data/usage" element={<Guard permission="data.view"><DataManagementPage key="usage" section="usage" /></Guard>} />
         <Route path="/data/browser" element={<Guard permission="data.browse"><DatabaseBrowserPage /></Guard>} />
         <Route path="/odontogram-lab" element={<Guard permission="lab.view"><OdontogramLabPage /></Guard>} />
+        <Route path="/flexi-import" element={<Guard permission="lab.view"><FlexiImporterPage OdontogramViewer={FlexiOdontogramViewer} /></Guard>} />
         <Route
           path="/admin"
           element={canOpenAdmin ? <AdminPage /> : <NoPermissionPage />}

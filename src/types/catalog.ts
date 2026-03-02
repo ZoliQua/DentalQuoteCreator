@@ -27,6 +27,11 @@ export interface CatalogItem {
   catalogNameDe?: string;
   isActive: boolean;
   isDeleted?: boolean;
+  isNeakItem?: boolean;
+  neakPoints?: number;
+  neakMinimumTimeMin?: number;
+  isTooth?: boolean;
+  isSurface?: boolean;
 }
 
 export type CatalogItemFormData = Omit<CatalogItem, 'catalogItemId'>;

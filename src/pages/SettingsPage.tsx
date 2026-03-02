@@ -8,7 +8,7 @@ import type { PageTab } from '../components/common/PageTabBar';
 import { formatDateTimeWithPattern } from '../utils';
 import { getAuthHeaders } from '../utils/auth';
 
-type SettingsSection = 'general' | 'clinic' | 'patient' | 'quotes' | 'invoicing';
+type SettingsSection = 'general' | 'clinic' | 'patient' | 'quotes' | 'invoicing' | 'neak';
 
 type DoctorRow = { doctorId: string; doctorName: string; doctorNum: string; doctorEESZTId: string };
 
@@ -47,7 +47,28 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
   const [pendingNavTarget, setPendingNavTarget] = useState<string | null>(null);
   const [apiTestLoading, setApiTestLoading] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<{ success: boolean; mode: string; message: string; httpStatus?: number } | null>(null);
+  // NEAK settings state
+  const [neakSettings, setNeakSettings] = useState({ neakOjoteKey: '', neakWssUser: '', neakWssPassword: '' });
+  const [neakDepartments, setNeakDepartments] = useState<Array<{ id: string; neakDepartmentNameHu: string; neakDepartmentNameEn: string; neakDepartmentNameDe: string; neakDepartmentCode: string; neakDepartmentHours: number; neakDepartmentMaxPoints: number; neakDepartmentPrefix: string; neakDepartmentLevel: string; neakDepartmentIndicator: string }>>([]);
+  const [neakLevels, setNeakLevels] = useState<Array<{ neakLevelCode: string; neakLevelInfoHu: string; neakLevelInfoEn: string; neakLevelInfoDe: string }>>([]);
+  const [neakApiTestLoading, setNeakApiTestLoading] = useState(false);
+  const [neakApiTestResult, setNeakApiTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [showAddDepartment, setShowAddDepartment] = useState(false);
+  const [deleteDeptConfirm, setDeleteDeptConfirm] = useState<string | null>(null);
+  const [neakSaved, setNeakSaved] = useState(false);
+  const [showNeakPassword, setShowNeakPassword] = useState(false);
+  const [deptSortColumn, setDeptSortColumn] = useState<string>('neakDepartmentNameHu');
+  const [deptSortDir, setDeptSortDir] = useState<'asc' | 'desc'>('asc');
+  const [newDept, setNewDept] = useState({ neakDepartmentNameHu: '', neakDepartmentNameEn: '', neakDepartmentNameDe: '', neakDepartmentCode: '', neakDepartmentHours: 20, neakDepartmentMaxPoints: 100000, neakDepartmentPrefix: '', neakDepartmentLevel: 'A', neakDepartmentIndicator: 'adult' });
+  const [countriesList, setCountriesList] = useState<Array<{ countryId: number; countryNameHu: string; countryNameEn: string; countryNameDe: string }>>([]);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetch('/backend/countries', { headers: getAuthHeaders() })
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setCountriesList(data); })
+      .catch(() => {});
+  }, []);
 
   // Warn on browser tab close / refresh when dirty
   useEffect(() => {
@@ -108,6 +129,27 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
   useEffect(() => {
     loadInvoiceSettings();
   }, [loadInvoiceSettings]);
+
+  // Load NEAK data when section is neak
+  const loadNeakData = useCallback(async () => {
+    try {
+      const [settingsRes, deptsRes, levelsRes] = await Promise.all([
+        fetch('/backend/neak-settings', { headers: getAuthHeaders() }),
+        fetch('/backend/neak-departments', { headers: getAuthHeaders() }),
+        fetch('/backend/neak-levels', { headers: getAuthHeaders() }),
+      ]);
+      if (settingsRes.ok) {
+        const data = await settingsRes.json();
+        setNeakSettings({ neakOjoteKey: data.neakOjoteKey || '', neakWssUser: data.neakWssUser || '', neakWssPassword: data.neakWssPassword || '' });
+      }
+      if (deptsRes.ok) setNeakDepartments(await deptsRes.json());
+      if (levelsRes.ok) setNeakLevels(await levelsRes.json());
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    if (section === 'neak') loadNeakData();
+  }, [section, loadNeakData]);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -337,6 +379,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
     { key: 'patient', to: '/settings/patient', label: t.settings.tabPatient, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
     { key: 'quotes', to: '/settings/quotes', label: t.settings.tabQuotes, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
     { key: 'invoicing', to: '/settings/invoicing', label: t.settings.tabInvoicing, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg> },
+    { key: 'neak', to: '/settings/neak', label: t.settings.tabNeak, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> },
   ];
 
   const overviewCards: Array<{ key: SettingsSection; to: string; title: string; description: string; icon: React.ReactNode }> = [
@@ -396,6 +439,17 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
         </svg>
       ),
     },
+    {
+      key: 'neak',
+      to: '/settings/neak',
+      title: t.settings.neakOjoteTitle,
+      description: t.settings.overviewNeakDesc,
+      icon: (
+        <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      ),
+    },
   ];
 
   const taxDigits = (formData.clinic.taxNumber || '').replace(/\D/g, '');
@@ -407,7 +461,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
           <h1 className="text-2xl font-bold text-gray-900">{t.settings.title}</h1>
           <p className="text-gray-500 mt-1">{t.settings.subtitle}</p>
         </div>
-        {section && (
+        {section && section !== 'neak' && (
           <div className="flex items-center gap-3">
             {saved && (
               <span className="text-green-600 flex items-center gap-2">
@@ -720,10 +774,14 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
               </h2>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Input
+              <Select
                 label={t.settings.defaultCountry}
                 value={formData.patient.defaultCountry}
                 onChange={(e) => handlePatientChange('defaultCountry', e.target.value)}
+                options={countriesList.map((c) => ({
+                  value: String(c.countryId),
+                  label: appLanguage === 'de' ? c.countryNameDe : appLanguage === 'en' ? c.countryNameEn : c.countryNameHu,
+                }))}
               />
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1275,6 +1333,365 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                 )}
               </CardContent>
             </Card>
+          </>
+        )}
+
+        {/* NEAK section */}
+        {section === 'neak' && (
+          <>
+            {/* Card 1: OJOTE Settings */}
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  {t.settings.neakOjoteTitle}
+                </h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Input
+                  label={t.settings.neakOjoteUsername}
+                  value={neakSettings.neakWssUser}
+                  onChange={(e) => setNeakSettings({ ...neakSettings, neakWssUser: e.target.value })}
+                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.settings.neakOjotePassword}</label>
+                  <div className="flex gap-1">
+                    <input
+                      type={showNeakPassword ? 'text' : 'password'}
+                      value={neakSettings.neakWssPassword}
+                      onChange={(e) => setNeakSettings({ ...neakSettings, neakWssPassword: e.target.value })}
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNeakPassword(!showNeakPassword)}
+                      className="px-3 py-2 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
+                    >
+                      {showNeakPassword ? (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <Input
+                  label={t.settings.neakProviderCode}
+                  value={neakSettings.neakOjoteKey}
+                  onChange={(e) => setNeakSettings({ ...neakSettings, neakOjoteKey: e.target.value })}
+                />
+                <div className="flex items-center gap-3">
+                  <Button onClick={async () => {
+                    try {
+                      await fetch('/backend/neak-settings', {
+                        method: 'PUT',
+                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify(neakSettings),
+                      });
+                      setNeakSaved(true);
+                      setTimeout(() => setNeakSaved(false), 3000);
+                    } catch { /* ignore */ }
+                  }}>{t.common.save}</Button>
+                  {neakSaved && (
+                    <span className="text-green-600 flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {t.settings.neakSettingsSaved}
+                    </span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Card 2: NEAK API Test */}
+            <Card className="mt-6">
+              <CardHeader>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  {t.settings.neakApiTestTitle}
+                </h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    setNeakApiTestLoading(true);
+                    setNeakApiTestResult(null);
+                    try {
+                      const res = await fetch('/backend/api/neak/test', {
+                        method: 'POST',
+                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                        body: '{}',
+                      });
+                      const data = await res.json();
+                      setNeakApiTestResult(data);
+                    } catch (err) {
+                      setNeakApiTestResult({ success: false, message: String(err) });
+                    } finally {
+                      setNeakApiTestLoading(false);
+                    }
+                  }}
+                  disabled={neakApiTestLoading}
+                >
+                  {neakApiTestLoading ? (
+                    <>
+                      <svg className="w-4 h-4 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      {t.settings.neakApiTesting}
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {t.settings.neakApiTestButton}
+                    </>
+                  )}
+                </Button>
+                {neakApiTestResult && (
+                  <div className={`rounded-lg border p-4 text-sm ${neakApiTestResult.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <div className="flex items-center gap-2">
+                      {neakApiTestResult.success ? (
+                        <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      ) : (
+                        <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      )}
+                      <span className={`font-semibold ${neakApiTestResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                        {neakApiTestResult.success ? 'OK' : 'HIBA'}
+                      </span>
+                      <span className={neakApiTestResult.success ? 'text-green-700' : 'text-red-700'}>{neakApiTestResult.message}</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Card 3: NEAK Departments */}
+            <Card className="mt-6">
+              <CardHeader>
+                <div className="flex items-center justify-between w-full">
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                    {t.settings.neakDepartmentsTitle}
+                  </h2>
+                  <Button size="sm" onClick={() => {
+                    setNewDept({ neakDepartmentNameHu: '', neakDepartmentNameEn: '', neakDepartmentNameDe: '', neakDepartmentCode: '', neakDepartmentHours: 20, neakDepartmentMaxPoints: 100000, neakDepartmentPrefix: '', neakDepartmentLevel: 'A', neakDepartmentIndicator: 'adult' });
+                    setShowAddDepartment(true);
+                  }}>{t.settings.neakDepartmentAdd}</Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {neakDepartments.length === 0 ? (
+                  <p className="text-sm text-gray-500 py-4 text-center">{t.common.noResults}</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          {[
+                            { col: 'neakDepartmentNameHu', label: t.settings.neakDepartmentNameHu },
+                            { col: 'neakDepartmentCode', label: t.settings.neakDepartmentCode },
+                            { col: 'neakDepartmentHours', label: t.settings.neakDepartmentHours },
+                            { col: 'neakDepartmentMaxPoints', label: t.settings.neakDepartmentMaxPoints },
+                            { col: 'neakDepartmentPrefix', label: t.settings.neakDepartmentPrefix },
+                          ].map(({ col, label }) => (
+                            <th
+                              key={col}
+                              className="text-left py-2 px-3 font-medium text-gray-600 cursor-pointer hover:text-dental-700 select-none"
+                              onClick={() => {
+                                if (deptSortColumn === col) setDeptSortDir(deptSortDir === 'asc' ? 'desc' : 'asc');
+                                else { setDeptSortColumn(col); setDeptSortDir('asc'); }
+                              }}
+                            >
+                              <span className="flex items-center gap-1">
+                                {label}
+                                {deptSortColumn === col && (
+                                  <svg className={`w-3 h-3 ${deptSortDir === 'desc' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                                )}
+                              </span>
+                            </th>
+                          ))}
+                          <th className="w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...neakDepartments]
+                          .sort((a, b) => {
+                            const aVal = (a as Record<string, unknown>)[deptSortColumn];
+                            const bVal = (b as Record<string, unknown>)[deptSortColumn];
+                            const cmp = typeof aVal === 'number' && typeof bVal === 'number'
+                              ? aVal - bVal
+                              : String(aVal ?? '').localeCompare(String(bVal ?? ''), 'hu');
+                            return deptSortDir === 'asc' ? cmp : -cmp;
+                          })
+                          .map((dept) => (
+                            <tr key={dept.id} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="py-2 px-3">{dept.neakDepartmentNameHu}</td>
+                              <td className="py-2 px-3 font-mono">{dept.neakDepartmentCode}</td>
+                              <td className="py-2 px-3">{dept.neakDepartmentHours}</td>
+                              <td className="py-2 px-3">{dept.neakDepartmentMaxPoints.toLocaleString('hu-HU')}</td>
+                              <td className="py-2 px-3 font-mono">{dept.neakDepartmentPrefix}</td>
+                              <td className="py-2 px-3">
+                                <button
+                                  onClick={() => setDeleteDeptConfirm(dept.id)}
+                                  className="text-red-400 hover:text-red-600"
+                                  title={t.common.delete}
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Add Department Modal */}
+            <Modal
+              isOpen={showAddDepartment}
+              onClose={() => setShowAddDepartment(false)}
+              title={t.settings.neakDepartmentAddTitle}
+              size="lg"
+            >
+              <div className="space-y-4">
+                <Input
+                  label={t.settings.neakDepartmentNameHu}
+                  value={newDept.neakDepartmentNameHu}
+                  onChange={(e) => setNewDept({ ...newDept, neakDepartmentNameHu: e.target.value })}
+                  required
+                />
+                <Input
+                  label={t.settings.neakDepartmentNameEn}
+                  value={newDept.neakDepartmentNameEn}
+                  onChange={(e) => setNewDept({ ...newDept, neakDepartmentNameEn: e.target.value })}
+                />
+                <Input
+                  label={t.settings.neakDepartmentNameDe}
+                  value={newDept.neakDepartmentNameDe}
+                  onChange={(e) => setNewDept({ ...newDept, neakDepartmentNameDe: e.target.value })}
+                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.settings.neakDepartmentCode}</label>
+                  <input
+                    type="text"
+                    value={newDept.neakDepartmentCode}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, '').slice(0, 9);
+                      setNewDept({ ...newDept, neakDepartmentCode: v });
+                    }}
+                    pattern="[0-9]{9}"
+                    maxLength={9}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500 font-mono"
+                    placeholder="000000000"
+                  />
+                </div>
+                <Select
+                  label={t.settings.neakDepartmentHours}
+                  value={String(newDept.neakDepartmentHours)}
+                  onChange={(e) => setNewDept({ ...newDept, neakDepartmentHours: Number(e.target.value) })}
+                  options={Array.from({ length: 36 }, (_, i) => ({ value: String(i + 5), label: String(i + 5) }))}
+                />
+                <Select
+                  label={t.settings.neakDepartmentMaxPoints}
+                  value={String(newDept.neakDepartmentMaxPoints)}
+                  onChange={(e) => setNewDept({ ...newDept, neakDepartmentMaxPoints: Number(e.target.value) })}
+                  options={Array.from({ length: 36 }, (_, i) => {
+                    const v = (i + 5) * 10000;
+                    return { value: String(v), label: v.toLocaleString('hu-HU') };
+                  })}
+                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.settings.neakDepartmentPrefix}</label>
+                  <input
+                    type="text"
+                    value={newDept.neakDepartmentPrefix}
+                    onChange={(e) => {
+                      const v = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2);
+                      setNewDept({ ...newDept, neakDepartmentPrefix: v });
+                    }}
+                    pattern="[A-Z]{0,2}"
+                    maxLength={2}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500 font-mono uppercase"
+                    placeholder="AB"
+                  />
+                </div>
+                <Select
+                  label={t.settings.neakDepartmentLevel}
+                  value={newDept.neakDepartmentLevel}
+                  onChange={(e) => setNewDept({ ...newDept, neakDepartmentLevel: e.target.value })}
+                  options={neakLevels.length > 0
+                    ? neakLevels.map((lv) => ({ value: lv.neakLevelCode, label: `${lv.neakLevelCode} - ${lv.neakLevelInfoHu}` }))
+                    : [{ value: 'A', label: 'A - Alapellátás' }, { value: 'S', label: 'S - Szakellátás' }, { value: 'T', label: 'T - Területi ellátás' }, { value: 'E', label: 'E - Egyéb' }]
+                  }
+                />
+                <Select
+                  label={t.settings.neakDepartmentIndicator}
+                  value={newDept.neakDepartmentIndicator}
+                  onChange={(e) => setNewDept({ ...newDept, neakDepartmentIndicator: e.target.value })}
+                  options={[
+                    { value: 'adult', label: t.settings.neakIndicatorAdult },
+                    { value: 'child', label: t.settings.neakIndicatorChild },
+                  ]}
+                />
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button variant="secondary" onClick={() => setShowAddDepartment(false)}>{t.common.cancel}</Button>
+                  <Button
+                    onClick={async () => {
+                      if (!newDept.neakDepartmentNameHu.trim()) return;
+                      try {
+                        const res = await fetch('/backend/neak-departments', {
+                          method: 'POST',
+                          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                          body: JSON.stringify(newDept),
+                        });
+                        if (res.ok) {
+                          setShowAddDepartment(false);
+                          loadNeakData();
+                        }
+                      } catch { /* ignore */ }
+                    }}
+                    disabled={!newDept.neakDepartmentNameHu.trim()}
+                  >
+                    {t.common.save}
+                  </Button>
+                </div>
+              </div>
+            </Modal>
+
+            {/* Delete Department Confirmation */}
+            <ConfirmModal
+              isOpen={deleteDeptConfirm !== null}
+              onClose={() => setDeleteDeptConfirm(null)}
+              onConfirm={async () => {
+                if (!deleteDeptConfirm) return;
+                try {
+                  await fetch(`/backend/neak-departments/${encodeURIComponent(deleteDeptConfirm)}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders(),
+                  });
+                  setDeleteDeptConfirm(null);
+                  loadNeakData();
+                } catch { /* ignore */ }
+              }}
+              title={t.common.confirm}
+              message={t.settings.neakDepartmentDeleteConfirm}
+              confirmText={t.common.delete}
+              cancelText={t.common.cancel}
+              variant="danger"
+            />
           </>
         )}
       </div>

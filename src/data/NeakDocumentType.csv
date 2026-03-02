@@ -1,0 +1,10 @@
+neakDocumentId,neakDocumentTypeCode,neakDocumentDetails
+10000001,0,a személyazonosító jel nincs kitöltve
+10000002,1,TAJ szám
+10000003,2,3 hónapnál fiatalabb gyermek képzett TAJ száma
+10000004,3,útlevélszám
+10000005,5,"menedékes, kérelmező, befogadó igazolvány száma"
+10000006,6,ismeretlen TAJ számú elhunyt személy
+10000007,7,ismeretlen beteg
+10000008,8,Európai egészségbiztosítási kártya
+10000009,9,személyazonosító a menekült státusz kérelmezését megelőzően

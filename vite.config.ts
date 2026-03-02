@@ -12,6 +12,10 @@ export default defineConfig({
         __dirname,
         './src/modules/odontogram/engine/src/App.tsx'
       ),
+      '@flexi-importer': path.resolve(
+        __dirname,
+        './submodules/dq-flexi-importer/src'
+      ),
     },
   },
   server: {
@@ -20,6 +24,10 @@ export default defineConfig({
         target: 'http://localhost:4000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/backend/, ''),
+      },
+      '/api/flexi': {
+        target: 'http://localhost:3334',
+        changeOrigin: true,
       },
       '/api': {
         target: 'http://localhost:4000',

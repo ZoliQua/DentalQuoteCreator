@@ -18,9 +18,11 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@odontogram-shell": ["src/modules/odontogram/odontogram-shell"]
+      "@odontogram-shell": ["src/modules/odontogram/odontogram-shell"],
+      "@flexi-importer": ["submodules/dq-flexi-importer/src"],
+      "@flexi-importer/*": ["submodules/dq-flexi-importer/src/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "submodules/dq-flexi-importer/src"],
   "exclude": ["src/modules/odontogram/engine"]
 }

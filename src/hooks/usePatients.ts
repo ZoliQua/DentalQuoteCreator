@@ -5,12 +5,12 @@ import { Patient, PatientFormData, DentalStatusSnapshot } from '../types';
 import { createHealthyTeethRecord, getCurrentDateString } from '../utils';
 
 function generatePatientId(existingPatients: Patient[]): string {
-  const existing = new Set(existingPatients.map((p) => p.patientId));
-  let id: string;
-  do {
-    id = String(10000000 + Math.floor(Math.random() * 90000000));
-  } while (existing.has(id));
-  return id;
+  let max = 10000000;
+  for (const p of existingPatients) {
+    const num = parseInt(p.patientId.replace(/^P/, ''), 10);
+    if (!isNaN(num) && num >= max) max = num;
+  }
+  return 'P' + String(max + 1);
 }
 
 export function usePatients() {

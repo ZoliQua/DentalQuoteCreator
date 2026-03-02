@@ -153,6 +153,7 @@ export function Layout({ children }: LayoutProps) {
         { to: '/settings/patient', label: t.nav.settingsPatient },
         { to: '/settings/quotes', label: t.nav.settingsQuotes },
         { to: '/settings/invoicing', label: t.nav.settingsInvoicing },
+        { to: '/settings/neak', label: t.nav.settingsNeak },
       ],
     },
     {
@@ -195,6 +196,10 @@ export function Layout({ children }: LayoutProps) {
           />
         </svg>
       ),
+      children: [
+        { to: '/odontogram-lab', label: t.nav.labOdontogram },
+        { to: '/flexi-import', label: t.nav.labFlexiImport },
+      ],
     },
   ];
 

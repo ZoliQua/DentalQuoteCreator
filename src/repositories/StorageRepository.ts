@@ -14,6 +14,10 @@ export interface StorageRepository {
   deleteCatalogItem(catalogItemId: string): void;
   resetCatalog(items: CatalogItem[]): void;
 
+  // NEAK Catalog
+  getNeakCatalog(): CatalogItem[];
+  saveNeakCatalogItem(item: CatalogItem): void;
+
   // PriceLists
   getPriceLists(): PriceList[];
   savePriceList(priceList: PriceList): void;

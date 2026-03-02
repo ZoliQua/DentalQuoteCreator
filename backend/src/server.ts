@@ -437,12 +437,15 @@ server.post('/seed', async (request, reply) => {
   const user = await requirePermission(request, reply, 'admin.users.manage');
   if (!user) return;
 
-  const { readFileSync } = await import('fs');
+  const { readFileSync, existsSync } = await import('fs');
   const { resolve, dirname } = await import('path');
   const { fileURLToPath } = await import('url');
 
   const __dir = dirname(fileURLToPath(import.meta.url));
-  const archiveDir = resolve(__dir, '../../archive');
+  // In dev: __dir = backend/dist -> ../../src/data = src/data (monorepo root)
+  // In prod: __dir = backend2/dist -> ../src/data = backend2/src/data
+  let dataDir = resolve(__dir, '../../src/data');
+  if (!existsSync(dataDir)) dataDir = resolve(__dir, '../src/data');
 
   function parseCsvLine(line: string): string[] {
     const values: string[] = [];
@@ -461,7 +464,7 @@ server.post('/seed', async (request, reply) => {
   }
 
   function readCsv(filename: string): Record<string, string>[] {
-    const filePath = resolve(archiveDir, filename);
+    const filePath = resolve(dataDir, filename);
     const content = readFileSync(filePath, 'utf-8');
     const lines = content.trim().split(/\r?\n/).filter((l) => l.trim());
     if (lines.length < 2) return [];
@@ -474,10 +477,15 @@ server.post('/seed', async (request, reply) => {
     });
   }
 
-  const toBool = (val: string) => val.toUpperCase() === 'TRUE' || val === '1';
+  const toBool = (val: string | undefined) => (val || '').toUpperCase() === 'TRUE' || val === '1';
+  const toIntOrNull = (val: string): number | null => {
+    if (!val || val === '') return null;
+    const n = parseInt(val, 10);
+    return Number.isFinite(n) ? n : null;
+  };
 
   try {
-    const priceLists = readCsv('pricelists.csv');
+    const priceLists = readCsv('PriceList.csv');
     for (const row of priceLists) {
       const data = {
         priceListNameHu: row.priceListNameHu,
@@ -493,7 +501,7 @@ server.post('/seed', async (request, reply) => {
       await prisma.priceList.upsert({ where: { priceListId: row.priceListId }, update: data, create: { priceListId: row.priceListId, ...data } });
     }
 
-    const categories = readCsv('pricelist-categories.csv');
+    const categories = readCsv('PriceListCategory.csv');
     for (const row of categories) {
       const data = {
         priceListId: row.priceListId,
@@ -510,7 +518,7 @@ server.post('/seed', async (request, reply) => {
     const catLookup: Record<string, string> = {};
     for (const row of categories) catLookup[row.catalogCategoryId] = row.priceListId;
 
-    const items = readCsv('pricelist-catalogitems.csv');
+    const items = readCsv('PriceListCatalogItem.csv');
     for (const row of items) {
       const allowedTeeth = row.allowedTeeth ? row.allowedTeeth.split('|').map(Number).filter((n) => Number.isFinite(n)) : [];
       const catInfo = catLookup[row.catalogCategoryId];
@@ -540,7 +548,118 @@ server.post('/seed', async (request, reply) => {
       await prisma.priceListCatalogItem.upsert({ where: { catalogItemId: row.catalogItemId }, update: data, create: { catalogItemId: row.catalogItemId, ...data } });
     }
 
-    return { status: 'ok', seeded: { pricelists: priceLists.length, categories: categories.length, catalogItems: items.length } };
+    // Seed NeakDocumentType
+    const neakDocs = readCsv('NeakDocumentType.csv');
+    for (const row of neakDocs) {
+      const data = {
+        neakDocumentTypeCode: parseInt(row.neakDocumentTypeCode, 10) || 0,
+        neakDocumentDetails: row.neakDocumentDetails || '',
+      };
+      await prisma.neakDocumentType.upsert({ where: { neakDocumentId: row.neakDocumentId }, update: data, create: { neakDocumentId: row.neakDocumentId, ...data } });
+    }
+
+    // Seed NeakLevel
+    const neakLevels = readCsv('NeakLevel.csv');
+    for (const row of neakLevels) {
+      const data = {
+        neakLevelInfoHu: row.NekaLevelInfoHu || '',
+        neakLevelInfoEn: row.NekaLevelInfoEn || '',
+        neakLevelInfoDe: row.NekaLevelInfoDe || '',
+      };
+      await prisma.neakLevel.upsert({ where: { neakLevelCode: row.NeakLevelCode }, update: data, create: { neakLevelCode: row.NeakLevelCode, ...data } });
+    }
+
+    // Seed NeakSpecial
+    const neakSpecials = readCsv('NeakSpecial.csv');
+    for (const row of neakSpecials) {
+      const data = {
+        neakSpecialMarkCode: row.neakSpecialMarkCode || '',
+        neakSpecialDescHu: row.neakSpecialDescHu || '',
+        neakSpecialDescEn: row.neakSpecialDescEn || '',
+        neakSpecialDescDe: row.neakSpecialDescDe || '',
+      };
+      await prisma.neakSpecial.upsert({ where: { neakSpecialMark: parseInt(row.neakSpecialMark, 10) }, update: data, create: { neakSpecialMark: parseInt(row.neakSpecialMark, 10), ...data } });
+    }
+
+    // Seed NeakTerkat
+    const neakTerkats = readCsv('NeakTerkat.csv');
+    for (const row of neakTerkats) {
+      const data = {
+        neakTerKatInfoHu: row.NeakTerKatInfoHu || '',
+        neakTerKatInfoEn: row.NeakTerKatInfoEn || '',
+        neakTerKatInfoDe: row.NeakTerKatInfoDe || '',
+      };
+      await prisma.neakTerkat.upsert({ where: { neakTerKatCode: row.NeakTerKatCode }, update: data, create: { neakTerKatCode: row.NeakTerKatCode, ...data } });
+    }
+
+    // Seed NeakCatalogItem
+    const neakItems = readCsv('NeakCatalogItem.csv');
+    for (const row of neakItems) {
+      const nData = {
+        neakCode: row.neakCode,
+        neakNameHu: row.neakNameHu,
+        neakNameEn: row.neakNameEn || '',
+        neakNameDe: row.neakNameDe || '',
+        catalogCategoryId: row.catalogCategoryId,
+        neakPoints: parseInt(row.neakPoints, 10) || 0,
+        neakMinimumTimeMin: parseInt(row.neakMinimumTimeMin, 10) || 0,
+        isFullMouth: toBool(row.isFullMouth),
+        isTooth: toBool(row.isTooth),
+        isArch: toBool(row.isArch),
+        isQuadrant: toBool(row.isQuadrant),
+        isSurface: toBool(row.isSurface),
+        surfaceNum: row.surfaceNum || '',
+        neakMaxQtyPerDay: toIntOrNull(row.neakMaxQtyPerDay),
+        neakToothType: row.neakToothType || '',
+        neakTimeLimitMonths: toIntOrNull(row.neakTimeLimitMonths),
+        neakTimeLimitDays: toIntOrNull(row.neakTimeLimitDays),
+        neakTimeLimitQty: toIntOrNull(row.neakTimeLimitQty),
+        neakTimeLimitSchoolStart: row.neakTimeLimitSchoolStart || '',
+        neakTimeLimitSchoolEnd: row.neakTimeLimitSchoolEnd || '',
+        neakLevelA: toBool(row.neakLevelA),
+        neakLevelS: toBool(row.neakLevelS),
+        neakLevelT: toBool(row.neakLevelT),
+        neakLevelE: toBool(row.neakLevelE),
+        neakTerKatCodes: row.neakTerKatCodes || '',
+        neakNotBillableWithCodes: row.neakNotBillableWithCodes || '',
+        neakNotBillableIfRecentCodes: row.neakNotBillableIfRecentCodes || '',
+        neakBillableWithCodes: row.neakBillableWithCodes || '',
+        neakSpecialMark: parseInt(row.neakSpecialMark, 10) || 0,
+        isActive: toBool(row.isActive),
+        catalogUnit: row.catalogUnit || 'db',
+        milkToothOnly: toBool(row.milkToothOnly),
+        svgLayer: row.svgLayer || '',
+        hasLayer: toBool(row.hasLayer),
+        isDeleted: toBool(row.isDeleted || 'FALSE'),
+      };
+      await prisma.neakCatalogItem.upsert({ where: { neakCatalogItemId: row.neakCatalogItemId }, update: nData, create: { neakCatalogItemId: row.neakCatalogItemId, ...nData } });
+    }
+
+    // Seed Country
+    const countries = readCsv('Country.csv');
+    for (const row of countries) {
+      const cData = {
+        countryNameHu: row.CountryNameHu || '',
+        countryNameEn: row.CountryNameEn || '',
+        countryNameDe: row.CountryNameDe || '',
+      };
+      await prisma.country.upsert({ where: { countryId: parseInt(row.countryId, 10) }, update: cData, create: { countryId: parseInt(row.countryId, 10), ...cData } });
+    }
+
+    return {
+      status: 'ok',
+      seeded: {
+        pricelists: priceLists.length,
+        categories: categories.length,
+        catalogItems: items.length,
+        neakDocumentTypes: neakDocs.length,
+        neakLevels: neakLevels.length,
+        neakSpecials: neakSpecials.length,
+        neakTerkats: neakTerkats.length,
+        neakCatalogItems: neakItems.length,
+        countries: countries.length,
+      },
+    };
   } catch (err) {
     return reply.code(500).send({ status: 'error', error: err instanceof Error ? err.message : String(err) });
   }
@@ -603,8 +722,13 @@ const BROWSABLE_TABLES = [
   'UserActivityLog',
   'Doctor',
   'NeakDocumentType',
+  'NeakLevel',
+  'NeakSpecial',
+  'NeakTerkat',
+  'NeakCatalogItem',
   'VisitorLog',
   'InvoiceSettings',
+  'Country',
 ] as const;
 
 const TABLE_PK_MAP: Record<string, string[]> = {
@@ -627,8 +751,13 @@ const TABLE_PK_MAP: Record<string, string[]> = {
   UserActivityLog: ['id'],
   Doctor: ['doctorId'],
   NeakDocumentType: ['neakDocumentId'],
+  NeakLevel: ['neakLevelCode'],
+  NeakSpecial: ['neakSpecialMark'],
+  NeakTerkat: ['neakTerKatCode'],
+  NeakCatalogItem: ['neakCatalogItemId'],
   VisitorLog: ['id'],
   InvoiceSettings: ['id'],
+  Country: ['countryId'],
 };
 
 const serializeRow = (row: Record<string, unknown>): Record<string, unknown> => {
@@ -648,6 +777,24 @@ const serializeRow = (row: Record<string, unknown>): Record<string, unknown> => 
 const decodePkId = (encoded: string, pkColumns: string[]): string[] => {
   if (pkColumns.length === 1) return [encoded];
   return encoded.split('--');
+};
+
+const coercePkValues = async (table: string, pkColumns: string[], rawValues: string[]): Promise<unknown[]> => {
+  const columns = await prisma.$queryRawUnsafe<Array<{ column_name: string; data_type: string }>>(
+    `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1`,
+    table
+  );
+  const typeMap = new Map(columns.map(c => [c.column_name, c.data_type]));
+  return rawValues.map((val, i) => {
+    const dataType = typeMap.get(pkColumns[i]) || 'text';
+    if (dataType === 'integer' || dataType === 'bigint' || dataType === 'smallint') {
+      return parseInt(val, 10);
+    }
+    if (dataType === 'double precision' || dataType === 'real' || dataType === 'numeric') {
+      return parseFloat(val);
+    }
+    return val;
+  });
 };
 
 const prepareValue = (value: unknown, dataType: string): unknown => {
@@ -883,10 +1030,11 @@ server.put('/db/browse/:table/:id', async (request, reply) => {
     paramIdx++;
   }
 
+  const coercedPkValues = await coercePkValues(table, pkColumns, pkValues);
   const whereClauses: string[] = [];
   for (let i = 0; i < pkColumns.length; i++) {
     whereClauses.push(`"${pkColumns[i]}" = $${paramIdx}`);
-    params.push(pkValues[i]);
+    params.push(coercedPkValues[i]);
     paramIdx++;
   }
 
@@ -895,6 +1043,17 @@ server.put('/db/browse/:table/:id', async (request, reply) => {
 
   return { success: true };
 });
+
+// FK dependency map: parent table -> [{ child table, FK column in child that references parent PK }]
+const FK_CASCADE_MAP: Record<string, { table: string; fkColumn: string }[]> = {
+  PriceList: [
+    { table: 'PriceListCatalogItem', fkColumn: 'priceListId' },
+    { table: 'PriceListCategory', fkColumn: 'priceListId' },
+  ],
+  PriceListCategory: [
+    { table: 'PriceListCatalogItem', fkColumn: 'catalogCategoryId' },
+  ],
+};
 
 server.delete('/db/browse/:table/:id', async (request, reply) => {
   const currentUser = await requirePermission(request, reply, 'data.browse');
@@ -911,15 +1070,32 @@ server.delete('/db/browse/:table/:id', async (request, reply) => {
     return reply.code(400).send({ message: 'Invalid primary key' });
   }
 
+  const coercedPkValues = await coercePkValues(table, pkColumns, pkValues);
   const whereClauses: string[] = [];
   const params: unknown[] = [];
   for (let i = 0; i < pkColumns.length; i++) {
     whereClauses.push(`"${pkColumns[i]}" = $${i + 1}`);
-    params.push(pkValues[i]);
+    params.push(coercedPkValues[i]);
   }
 
-  const sql = `DELETE FROM "${table}" WHERE ${whereClauses.join(' AND ')}`;
-  await prisma.$executeRawUnsafe(sql, ...params);
+  const cascadeDeps = FK_CASCADE_MAP[table];
+  if (cascadeDeps && pkColumns.length === 1) {
+    // Use a transaction to delete child rows first, then the parent
+    const pkValue = coercedPkValues[0];
+    await prisma.$transaction(async (tx) => {
+      for (const dep of cascadeDeps) {
+        await tx.$executeRawUnsafe(
+          `DELETE FROM "${dep.table}" WHERE "${dep.fkColumn}" = $1`,
+          pkValue
+        );
+      }
+      const sql = `DELETE FROM "${table}" WHERE ${whereClauses.join(' AND ')}`;
+      await tx.$executeRawUnsafe(sql, ...params);
+    });
+  } else {
+    const sql = `DELETE FROM "${table}" WHERE ${whereClauses.join(' AND ')}`;
+    await prisma.$executeRawUnsafe(sql, ...params);
+  }
 
   return { success: true };
 });
@@ -1423,7 +1599,7 @@ server.get('/admin/activity-log/:userId', async (request, reply) => {
 
 // Bootstrap endpoint for frontend startup
 server.get('/bootstrap', async () => {
-  const [patients, catalog, quotes, settingsRow, dentalStatusSnapshots, invoices, neakChecks, pricelists, pricelistCategories, doctors] =
+  const [patients, catalog, quotes, settingsRow, dentalStatusSnapshots, invoices, neakChecks, pricelists, pricelistCategories, doctors, neakCatalogItems] =
     await Promise.all([
       prisma.patient.findMany({ orderBy: { createdAt: 'desc' } }),
       prisma.priceListCatalogItem.findMany({ orderBy: { catalogCode: 'asc' } }),
@@ -1435,6 +1611,7 @@ server.get('/bootstrap', async () => {
       prisma.priceList.findMany({ orderBy: { priceListId: 'asc' } }),
       prisma.priceListCategory.findMany({ orderBy: { catalogCategoryPrefix: 'asc' } }),
       prisma.doctor.findMany({ orderBy: { doctorId: 'asc' } }),
+      prisma.neakCatalogItem.findMany({ orderBy: { neakCode: 'asc' } }),
     ]);
 
   return {
@@ -1448,6 +1625,7 @@ server.get('/bootstrap', async () => {
     pricelists,
     pricelistCategories,
     doctors,
+    neakCatalog: neakCatalogItems.map((i) => mapNeakCatalogItem(i as unknown as Record<string, unknown>)),
   };
 });
 
@@ -1508,6 +1686,8 @@ server.post('/patients', async (request, reply) => {
       patientVATNumber: body.patientVATNumber ? String(body.patientVATNumber) : null,
       patientVATAddress: body.patientVATAddress ? String(body.patientVATAddress) : null,
       patientDiscount: body.patientDiscount != null ? Number(body.patientDiscount) : null,
+      isHungarianPhone: body.isHungarianPhone !== undefined ? Boolean(body.isHungarianPhone) : true,
+      treatmentArchive: body.treatmentArchive ? String(body.treatmentArchive) : null,
       createdAt: body.createdAt ? toDate(String(body.createdAt)) : new Date(),
       updatedAt: body.updatedAt ? toDate(String(body.updatedAt)) : new Date(),
       isArchived: Boolean(body.isArchived),
@@ -1555,6 +1735,8 @@ server.patch('/patients/:patientId', async (request, reply) => {
     patientVATNumber: body.patientVATNumber === undefined ? undefined : (body.patientVATNumber ? String(body.patientVATNumber) : null),
     patientVATAddress: body.patientVATAddress === undefined ? undefined : (body.patientVATAddress ? String(body.patientVATAddress) : null),
     patientDiscount: body.patientDiscount === undefined ? undefined : (body.patientDiscount != null ? Number(body.patientDiscount) : null),
+    isHungarianPhone: body.isHungarianPhone === undefined ? undefined : Boolean(body.isHungarianPhone),
+    treatmentArchive: body.treatmentArchive === undefined ? undefined : (body.treatmentArchive ? String(body.treatmentArchive) : null),
     isArchived: body.isArchived === undefined ? undefined : Boolean(body.isArchived),
     updatedAt: body.updatedAt ? toDate(String(body.updatedAt)) : new Date(),
   };
@@ -1624,6 +1806,39 @@ server.patch('/patients/:patientId/restore', async (request, reply) => {
 // Helper: map Prisma's catalogNameHu back to catalogName for frontend backward compat
 function mapCatalogItem(item: Record<string, unknown>): Record<string, unknown> {
   return { ...item, catalogName: item.catalogNameHu ?? item.catalogName ?? '' };
+}
+
+// Helper: map NeakCatalogItem → CatalogItem-compatible object for frontend
+function mapNeakCatalogItem(item: Record<string, unknown>): Record<string, unknown> {
+  return {
+    catalogItemId: item.neakCatalogItemId,
+    catalogCode: item.neakCode,
+    catalogName: item.neakNameHu ?? '',
+    catalogNameHu: item.neakNameHu ?? '',
+    catalogNameEn: item.neakNameEn ?? '',
+    catalogNameDe: item.neakNameDe ?? '',
+    catalogCategoryId: item.catalogCategoryId,
+    catalogUnit: item.catalogUnit ?? 'db',
+    svgLayer: item.svgLayer ?? '',
+    hasLayer: Boolean(item.hasLayer),
+    isActive: Boolean(item.isActive),
+    isDeleted: Boolean(item.isDeleted),
+    isArch: Boolean(item.isArch),
+    isQuadrant: Boolean(item.isQuadrant),
+    milkToothOnly: Boolean(item.milkToothOnly),
+    neakPoints: item.neakPoints ?? 0,
+    neakMinimumTimeMin: item.neakMinimumTimeMin ?? 0,
+    isFullMouth: Boolean(item.isFullMouth),
+    isTooth: Boolean(item.isTooth),
+    isSurface: Boolean(item.isSurface),
+    isNeakItem: true,
+    catalogPrice: 0,
+    catalogVatRate: 0,
+    catalogTechnicalPrice: 0,
+    catalogPriceCurrency: 'HUF',
+    hasTechnicalPrice: false,
+    priceListId: null,
+  };
 }
 
 // Catalog
@@ -1824,6 +2039,34 @@ server.put('/catalog/reset', async (request, reply) => {
     ),
   ]);
   return { status: 'ok' };
+});
+
+// NEAK Catalog
+server.get('/neak-catalog', async () => {
+  const items = await prisma.neakCatalogItem.findMany({ orderBy: { neakCode: 'asc' } });
+  return items.map((i) => mapNeakCatalogItem(i as unknown as Record<string, unknown>));
+});
+
+server.patch('/neak-catalog/:neakCatalogItemId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'catalog.update');
+  if (!user) return;
+
+  const { neakCatalogItemId } = request.params as { neakCatalogItemId: string };
+  const body = request.body as JsonRecord;
+
+  try {
+    const updated = await prisma.neakCatalogItem.update({
+      where: { neakCatalogItemId },
+      data: {
+        svgLayer: body.svgLayer !== undefined ? String(body.svgLayer) : undefined,
+        hasLayer: body.hasLayer !== undefined ? Boolean(body.hasLayer) : undefined,
+        isActive: body.isActive !== undefined ? Boolean(body.isActive) : undefined,
+      },
+    });
+    return mapNeakCatalogItem(updated as unknown as Record<string, unknown>);
+  } catch {
+    return reply.code(404).send({ message: 'NEAK catalog item not found' });
+  }
 });
 
 // Reset pricelists, categories, and catalog items to defaults (hard delete + re-seed)
@@ -2409,6 +2652,104 @@ server.put('/invoice-settings', async (request, reply) => {
     create: { id: 'default', ...data },
   });
   return { status: 'ok' };
+});
+
+// ── NEAK Settings ──────────────────────────────────────────────
+server.get('/neak-settings', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+  const row = await prisma.neakSettings.findUnique({ where: { id: 'default' } });
+  if (!row) {
+    return {
+      neakOjoteKey: process.env.NEAK_OJOTE_KEY || '',
+      neakWssUser: process.env.NEAK_WSS_USER || '',
+      neakWssPassword: process.env.NEAK_WSS_PASS || '',
+    };
+  }
+  return {
+    neakOjoteKey: row.neakOjoteKey || process.env.NEAK_OJOTE_KEY || '',
+    neakWssUser: row.neakWssUser || process.env.NEAK_WSS_USER || '',
+    neakWssPassword: row.neakWssPassword || process.env.NEAK_WSS_PASS || '',
+  };
+});
+
+server.put('/neak-settings', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.edit');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const data = {
+    neakOjoteKey: String(body.neakOjoteKey || ''),
+    neakWssUser: String(body.neakWssUser || ''),
+    neakWssPassword: String(body.neakWssPassword || ''),
+  };
+  await prisma.neakSettings.upsert({
+    where: { id: 'default' },
+    update: data,
+    create: { id: 'default', ...data },
+  });
+  return { status: 'ok' };
+});
+
+// ── NEAK Departments ──────────────────────────────────────────
+server.get('/neak-departments', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+  return prisma.neakDepartment.findMany({ orderBy: { neakDepartmentNameHu: 'asc' } });
+});
+
+server.post('/neak-departments', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.edit');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const dept = await prisma.neakDepartment.create({
+    data: {
+      neakDepartmentNameHu: String(body.neakDepartmentNameHu || ''),
+      neakDepartmentNameEn: String(body.neakDepartmentNameEn || ''),
+      neakDepartmentNameDe: String(body.neakDepartmentNameDe || ''),
+      neakDepartmentCode: String(body.neakDepartmentCode || ''),
+      neakDepartmentHours: Number(body.neakDepartmentHours || 20),
+      neakDepartmentMaxPoints: Number(body.neakDepartmentMaxPoints || 100000),
+      neakDepartmentPrefix: String(body.neakDepartmentPrefix || ''),
+      neakDepartmentLevel: String(body.neakDepartmentLevel || 'A'),
+      neakDepartmentIndicator: String(body.neakDepartmentIndicator || 'adult'),
+    },
+  });
+  return reply.code(201).send(dept);
+});
+
+server.delete('/neak-departments/:id', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.edit');
+  if (!user) return;
+  const { id } = request.params as { id: string };
+  await prisma.neakDepartment.delete({ where: { id } });
+  return { status: 'ok' };
+});
+
+// ── NEAK Levels (for dropdown) ────────────────────────────────
+server.get('/neak-levels', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+  return prisma.neakLevel.findMany({ orderBy: { neakLevelCode: 'asc' } });
+});
+
+// ── Countries ─────────────────────────────────────────────────
+server.get('/countries', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.create');
+  if (!user) return;
+  return prisma.country.findMany({ orderBy: { countryNameHu: 'asc' } });
+});
+
+// ── NEAK API Test ─────────────────────────────────────────────
+server.post('/api/neak/test', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+  // Dummy connection test — actual OJOTE integration will come later
+  const row = await prisma.neakSettings.findUnique({ where: { id: 'default' } });
+  const hasCredentials = !!(row?.neakWssUser && row?.neakWssPassword);
+  if (!hasCredentials) {
+    return { success: false, message: 'Nincs megadva NEAK felhasználónév vagy jelszó.' };
+  }
+  return { success: true, message: 'NEAK kapcsolat beállítva. (Teszt mód — valós API hívás hamarosan.)' };
 });
 
 // Dental status snapshots
@@ -3843,6 +4184,239 @@ const runPendingMigrations = async () => {
   } catch (e) {
     server.log.warn('InvoiceSettings seed/migrate skipped: ' + (e instanceof Error ? e.message : String(e)));
   }
+
+  // Auto-create NeakLevel table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "NeakLevel" (
+        "neakLevelCode" TEXT NOT NULL,
+        "neakLevelInfoHu" TEXT NOT NULL,
+        "neakLevelInfoEn" TEXT NOT NULL DEFAULT '',
+        "neakLevelInfoDe" TEXT NOT NULL DEFAULT '',
+        CONSTRAINT "NeakLevel_pkey" PRIMARY KEY ("neakLevelCode")
+      )
+    `);
+  } catch (e) {
+    server.log.warn('NeakLevel migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create NeakSpecial table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "NeakSpecial" (
+        "neakSpecialMark" INTEGER NOT NULL,
+        "neakSpecialMarkCode" TEXT NOT NULL DEFAULT '',
+        "neakSpecialDescHu" TEXT NOT NULL,
+        "neakSpecialDescEn" TEXT NOT NULL DEFAULT '',
+        "neakSpecialDescDe" TEXT NOT NULL DEFAULT '',
+        CONSTRAINT "NeakSpecial_pkey" PRIMARY KEY ("neakSpecialMark")
+      )
+    `);
+  } catch (e) {
+    server.log.warn('NeakSpecial migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create NeakTerkat table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "NeakTerkat" (
+        "neakTerKatCode" TEXT NOT NULL,
+        "neakTerKatInfoHu" TEXT NOT NULL,
+        "neakTerKatInfoEn" TEXT NOT NULL DEFAULT '',
+        "neakTerKatInfoDe" TEXT NOT NULL DEFAULT '',
+        CONSTRAINT "NeakTerkat_pkey" PRIMARY KEY ("neakTerKatCode")
+      )
+    `);
+  } catch (e) {
+    server.log.warn('NeakTerkat migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create NeakCatalogItem table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "NeakCatalogItem" (
+        "neakCatalogItemId" TEXT NOT NULL,
+        "neakCode" TEXT NOT NULL,
+        "neakNameHu" TEXT NOT NULL,
+        "neakNameEn" TEXT NOT NULL DEFAULT '',
+        "neakNameDe" TEXT NOT NULL DEFAULT '',
+        "catalogCategoryId" TEXT NOT NULL,
+        "neakPoints" INTEGER NOT NULL DEFAULT 0,
+        "neakMinimumTimeMin" INTEGER NOT NULL DEFAULT 0,
+        "isFullMouth" BOOLEAN NOT NULL DEFAULT false,
+        "isTooth" BOOLEAN NOT NULL DEFAULT false,
+        "isArch" BOOLEAN NOT NULL DEFAULT false,
+        "isQuadrant" BOOLEAN NOT NULL DEFAULT false,
+        "isSurface" BOOLEAN NOT NULL DEFAULT false,
+        "surfaceNum" TEXT NOT NULL DEFAULT '',
+        "neakMaxQtyPerDay" INTEGER,
+        "neakToothType" TEXT NOT NULL DEFAULT '',
+        "neakTimeLimitMonths" INTEGER,
+        "neakTimeLimitDays" INTEGER,
+        "neakTimeLimitQty" INTEGER,
+        "neakTimeLimitSchoolStart" TEXT NOT NULL DEFAULT '',
+        "neakTimeLimitSchoolEnd" TEXT NOT NULL DEFAULT '',
+        "neakLevelA" BOOLEAN NOT NULL DEFAULT false,
+        "neakLevelS" BOOLEAN NOT NULL DEFAULT false,
+        "neakLevelT" BOOLEAN NOT NULL DEFAULT false,
+        "neakLevelE" BOOLEAN NOT NULL DEFAULT false,
+        "neakTerKatCodes" TEXT NOT NULL DEFAULT '',
+        "neakNotBillableWithCodes" TEXT NOT NULL DEFAULT '',
+        "neakNotBillableIfRecentCodes" TEXT NOT NULL DEFAULT '',
+        "neakBillableWithCodes" TEXT NOT NULL DEFAULT '',
+        "neakSpecialMark" INTEGER NOT NULL DEFAULT 0,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "catalogUnit" TEXT NOT NULL DEFAULT 'db',
+        "milkToothOnly" BOOLEAN NOT NULL DEFAULT false,
+        "svgLayer" TEXT NOT NULL DEFAULT '',
+        "hasLayer" BOOLEAN NOT NULL DEFAULT false,
+        "isDeleted" BOOLEAN NOT NULL DEFAULT false,
+        CONSTRAINT "NeakCatalogItem_pkey" PRIMARY KEY ("neakCatalogItemId")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "NeakCatalogItem_neakCode_idx" ON "NeakCatalogItem"("neakCode")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "NeakCatalogItem_catalogCategoryId_idx" ON "NeakCatalogItem"("catalogCategoryId")`);
+  } catch (e) {
+    server.log.warn('NeakCatalogItem migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Rename neakSectionId -> catalogCategoryId in NeakCatalogItem (if old column exists)
+  try {
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'NeakCatalogItem' AND column_name = 'neakSectionId') THEN
+          ALTER TABLE "NeakCatalogItem" RENAME COLUMN "neakSectionId" TO "catalogCategoryId";
+        END IF;
+      END $$
+    `);
+  } catch (e) {
+    server.log.warn('NeakCatalogItem rename neakSectionId skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Add isDeleted column to NeakCatalogItem if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'NeakCatalogItem' AND column_name = 'isDeleted') THEN
+          ALTER TABLE "NeakCatalogItem" ADD COLUMN "isDeleted" BOOLEAN NOT NULL DEFAULT false;
+        END IF;
+      END $$
+    `);
+  } catch (e) {
+    server.log.warn('NeakCatalogItem add isDeleted skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Add isFullMouth column to NeakCatalogItem if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'NeakCatalogItem' AND column_name = 'isFullMouth') THEN
+          ALTER TABLE "NeakCatalogItem" ADD COLUMN "isFullMouth" BOOLEAN NOT NULL DEFAULT false;
+        END IF;
+      END $$
+    `);
+  } catch (e) {
+    server.log.warn('NeakCatalogItem add isFullMouth skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create NeakSettings table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "NeakSettings" (
+        "id" TEXT NOT NULL DEFAULT 'default',
+        "dentalPraxisId" TEXT NOT NULL DEFAULT 'DP001',
+        "neakOjoteKey" TEXT NOT NULL DEFAULT '',
+        "neakWssUser" TEXT NOT NULL DEFAULT '',
+        "neakWssPassword" TEXT NOT NULL DEFAULT '',
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "NeakSettings_pkey" PRIMARY KEY ("id")
+      )
+    `);
+  } catch (e) {
+    server.log.warn('NeakSettings migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Seed default NeakSettings row from .env if missing
+  try {
+    const existing = await prisma.neakSettings.findUnique({ where: { id: 'default' } });
+    if (!existing) {
+      await prisma.neakSettings.create({
+        data: {
+          id: 'default',
+          neakOjoteKey: process.env.NEAK_OJOTE_KEY || '',
+          neakWssUser: process.env.NEAK_WSS_USER || '',
+          neakWssPassword: process.env.NEAK_WSS_PASS || '',
+        },
+      });
+      server.log.info('Created default NeakSettings row from .env');
+    }
+  } catch (e) {
+    server.log.warn('NeakSettings seed skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create NeakDepartment table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "NeakDepartment" (
+        "id" TEXT NOT NULL,
+        "dentalPraxisId" TEXT NOT NULL DEFAULT 'DP001',
+        "neakDepartmentNameHu" TEXT NOT NULL,
+        "neakDepartmentNameEn" TEXT NOT NULL DEFAULT '',
+        "neakDepartmentNameDe" TEXT NOT NULL DEFAULT '',
+        "neakDepartmentCode" TEXT NOT NULL,
+        "neakDepartmentHours" INTEGER NOT NULL,
+        "neakDepartmentMaxPoints" INTEGER NOT NULL,
+        "neakDepartmentPrefix" TEXT NOT NULL DEFAULT '',
+        "neakDepartmentLevel" TEXT NOT NULL DEFAULT 'A',
+        "neakDepartmentIndicator" TEXT NOT NULL DEFAULT 'adult',
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "NeakDepartment_pkey" PRIMARY KEY ("id")
+      )
+    `);
+  } catch (e) {
+    server.log.warn('NeakDepartment migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Add isHungarianPhone column to Patient if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Patient' AND column_name = 'isHungarianPhone') THEN
+          ALTER TABLE "Patient" ADD COLUMN "isHungarianPhone" BOOLEAN NOT NULL DEFAULT true;
+        END IF;
+      END $$
+    `);
+  } catch (e) {
+    server.log.warn('Patient add isHungarianPhone skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Add treatmentArchive column to Patient if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Patient' AND column_name = 'treatmentArchive') THEN
+          ALTER TABLE "Patient" ADD COLUMN "treatmentArchive" TEXT;
+        END IF;
+      END $$
+    `);
+  } catch (e) {
+    server.log.warn('Patient add treatmentArchive skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create Country table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Country" (
+        "countryId" INTEGER NOT NULL,
+        "countryNameHu" TEXT NOT NULL,
+        "countryNameEn" TEXT NOT NULL DEFAULT '',
+        "countryNameDe" TEXT NOT NULL DEFAULT '',
+        CONSTRAINT "Country_pkey" PRIMARY KEY ("countryId")
+      )
+    `);
+  } catch (e) {
+    server.log.warn('Country migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
 };
 
 const start = async () => {
@@ -3858,3 +4432,4 @@ const start = async () => {
 };
 
 start();
+

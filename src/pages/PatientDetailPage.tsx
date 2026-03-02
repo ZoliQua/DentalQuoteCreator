@@ -30,6 +30,7 @@ import {
   getDatePlaceholder,
 } from '../utils';
 import { postalCodes } from '../data/postalCodes';
+import { getAuthHeaders } from '../utils/auth';
 import { calculateQuoteTotals } from '../utils/calculations';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import iconFemale from '../assets/icon-svgs/symbol-female.svg';
@@ -54,7 +55,7 @@ import {
   updateTimelineSnapshot,
 } from '../modules/odontogram/odontogramTimelineStorage';
 import type { OdontogramState, OdontogramTimelineEntry } from '../modules/odontogram/types';
-import type { Patient, PatientFormData } from '../types';
+import type { Patient, PatientFormData, Country } from '../types';
 import { NeakCheckModal } from '../modules/neak/NeakCheckModal';
 import { checkJogviszony, saveCheck } from '../modules/neak';
 
@@ -181,8 +182,23 @@ function TimelinePlusButton({ onClick, title }: { onClick: () => void; title: st
 export function PatientDetailPage() {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
-  const { t } = useSettings();
+  const { t, appLanguage } = useSettings();
   const { hasPermission, user } = useAuth();
+  const [countries, setCountries] = useState<Country[]>([]);
+
+  useEffect(() => {
+    fetch('/backend/countries', { headers: getAuthHeaders() })
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setCountries(data); })
+      .catch(() => {});
+  }, []);
+
+  const resolveCountryName = (id: string | undefined) => {
+    if (!id) return '';
+    const c = countries.find((c) => String(c.countryId) === String(id));
+    if (!c) return id;
+    return appLanguage === 'de' ? c.countryNameDe : appLanguage === 'en' ? c.countryNameEn : c.countryNameHu;
+  };
   const hostRef = useRef<OdontogramHostHandle | null>(null);
   const { getPatient, editPatient, duplicatePatient, archivePatient, deletePatient } = usePatients();
   const { getQuotesByPatient, createQuote, deleteQuote, duplicateQuote, addEventToQuote, getQuote, reopenTreatment } = useQuotes();
@@ -625,7 +641,7 @@ export function PatientDetailPage() {
               <div>
                 <label className="text-sm text-gray-500">{t.patients.addressSection}</label>
                 <p className="font-medium">
-                  {patient.country && patient.isForeignAddress ? `${patient.country}, ` : ''}
+                  {patient.country && patient.isForeignAddress ? `${resolveCountryName(patient.country)}, ` : ''}
                   {[patient.zipCode, patient.city].filter(Boolean).join(' ')}
                   {(patient.zipCode || patient.city) && patient.street ? ', ' : ''}
                   {patient.street}
@@ -1142,6 +1158,14 @@ export function PatientDetailPage() {
   );
 }
 
+function formatHungarianPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  const local = digits.startsWith('36') ? digits.slice(2) : digits;
+  if (local.length <= 2) return local;
+  if (local.length <= 5) return local.slice(0, 2) + ' ' + local.slice(2);
+  return local.slice(0, 2) + ' ' + local.slice(2, 5) + ' ' + local.slice(5, 9);
+}
+
 type PatientEditModalProps = {
   isOpen: boolean;
   patient: Patient;
@@ -1150,8 +1174,24 @@ type PatientEditModalProps = {
 };
 
 function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditModalProps) {
-  const { t, settings } = useSettings();
+  const { t, settings, appLanguage } = useSettings();
   const [neakModalOpen, setNeakModalOpen] = useState(false);
+  const [countries, setCountries] = useState<Country[]>([]);
+
+  useEffect(() => {
+    fetch('/backend/countries', { headers: getAuthHeaders() })
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setCountries(data); })
+      .catch(() => {});
+  }, []);
+
+  const countryName = (id: string | undefined) => {
+    if (!id) return '';
+    const c = countries.find((c) => String(c.countryId) === String(id));
+    if (!c) return id;
+    return appLanguage === 'de' ? c.countryNameDe : appLanguage === 'en' ? c.countryNameEn : c.countryNameHu;
+  };
+
   const [formData, setFormData] = useState<PatientFormData>({
     title: '',
     lastName: '',
@@ -1160,7 +1200,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
     birthDate: '',
     birthPlace: '',
     insuranceNum: '',
-    phone: '',
+    phone: '+36 ',
     email: '',
     country: settings.patient.defaultCountry,
     isForeignAddress: false,
@@ -1175,6 +1215,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
     patientVATNumber: '',
     patientVATAddress: '',
     patientDiscount: null,
+    isHungarianPhone: true,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
@@ -1219,6 +1260,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
 
   useEffect(() => {
     if (!isOpen) return;
+    const isHu = patient.isHungarianPhone ?? true;
     setFormData({
       title: patient.title || '',
       lastName: patient.lastName,
@@ -1227,7 +1269,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
       birthDate: patient.birthDate,
       birthPlace: patient.birthPlace || '',
       insuranceNum: patient.insuranceNum || '',
-      phone: patient.phone || '',
+      phone: patient.phone || (isHu ? '+36 ' : '+'),
       email: patient.email || '',
       country: patient.country || settings.patient.defaultCountry,
       isForeignAddress: patient.isForeignAddress || false,
@@ -1242,6 +1284,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
       patientVATNumber: patient.patientVATNumber || '',
       patientVATAddress: patient.patientVATAddress || '',
       patientDiscount: patient.patientDiscount ?? null,
+      isHungarianPhone: isHu,
     });
     setBirthDateText(formatBirthDateForDisplay(patient.birthDate));
     setErrors({});
@@ -1511,14 +1554,44 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
         <div className="border-t pt-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.addressSection}</h3>
 
-          <div className="grid grid-cols-[1fr_8rem_1fr_auto] gap-4 items-end">
-            <Input
-              label={t.patients.country}
-              value={formData.country || ''}
-              onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-              readOnly={!formData.isForeignAddress}
-              className={!formData.isForeignAddress ? 'bg-gray-50' : ''}
-            />
+          <div className="grid grid-cols-[1fr_8rem_1fr] gap-4 items-end">
+            <div className="w-full">
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t.patients.country}</label>
+              <div className="flex items-center gap-2">
+                {formData.isForeignAddress ? (
+                  <select
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors"
+                    value={formData.country || ''}
+                    onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                  >
+                    <option value="">{t.common.select}...</option>
+                    {countries.map((c) => (
+                      <option key={c.countryId} value={String(c.countryId)}>
+                        {appLanguage === 'de' ? c.countryNameDe : appLanguage === 'en' ? c.countryNameEn : c.countryNameHu}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 transition-colors"
+                    value={countryName(formData.country)}
+                    readOnly
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleForeignToggle(!formData.isForeignAddress)}
+                  className={`px-2 py-2 rounded-lg border transition-colors text-lg leading-none ${
+                    formData.isForeignAddress
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-green-500 bg-green-50'
+                  }`}
+                  title={formData.isForeignAddress ? t.patients.foreignAddress : countryName(settings.patient.defaultCountry)}
+                >
+                  {formData.isForeignAddress ? '🇪🇺' : '🇭🇺'}
+                </button>
+              </div>
+            </div>
             <Input
               label={t.patients.zipCode}
               value={formData.zipCode || ''}
@@ -1551,15 +1624,6 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
                 />
               )}
             </div>
-            <label className="flex items-center gap-2 mb-1 cursor-pointer whitespace-nowrap">
-              <input
-                type="checkbox"
-                checked={formData.isForeignAddress || false}
-                onChange={(e) => handleForeignToggle(e.target.checked)}
-                className="rounded border-gray-300 text-dental-600 focus:ring-dental-500"
-              />
-              <span className="text-sm text-gray-700">{t.patients.foreignAddress}</span>
-            </label>
           </div>
 
           <div className="mt-3">
@@ -1579,11 +1643,47 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
           <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.contactInfo}</h3>
 
           <div className="grid grid-cols-2 gap-4">
-            <Input
-              label={t.patients.phone}
-              value={formData.phone || ''}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
+            <div className="w-full">
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t.patients.phone}</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="tel"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors"
+                  value={formData.phone || (formData.isHungarianPhone ? '+36 ' : '+')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (formData.isHungarianPhone) {
+                      const stripped = val.replace(/^\+?3?6?\s*/, '').replace(/\D/g, '');
+                      setFormData({ ...formData, phone: '+36 ' + formatHungarianPhone(stripped) });
+                    } else {
+                      const cleaned = val.startsWith('+') ? val : '+' + val.replace(/^\+*/g, '');
+                      setFormData({ ...formData, phone: cleaned });
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newFlag = !formData.isHungarianPhone;
+                    if (newFlag) {
+                      const digits = (formData.phone || '').replace(/\D/g, '');
+                      const local = digits.startsWith('36') ? digits.slice(2) : digits;
+                      setFormData({ ...formData, isHungarianPhone: true, phone: '+36 ' + formatHungarianPhone(local) });
+                    } else {
+                      setFormData({ ...formData, isHungarianPhone: false, phone: formData.phone || '+' });
+                    }
+                  }}
+                  className={`px-2 py-2 rounded-lg border transition-colors text-lg leading-none ${
+                    formData.isHungarianPhone
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-gray-300 bg-gray-100 grayscale opacity-50'
+                  }`}
+                  title="Magyar telefonszám"
+                >
+                  🇭🇺
+                </button>
+              </div>
+            </div>
             <Input
               type="email"
               label={t.patients.email}

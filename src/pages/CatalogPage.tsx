@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 import { useCatalog, usePriceListCategories, usePriceLists, useCatalogCodeFormatter } from '../hooks';
 import {
   CatalogItem,
@@ -38,9 +39,12 @@ export function CatalogPage() {
     resetCatalog,
   } = useCatalog();
   const { activePriceLists, defaultPriceList } = usePriceLists();
+  const { neakCatalog, updateNeakCatalogItem } = useApp();
   const [selectedPriceListId, setSelectedPriceListId] = useState<string>(
     defaultPriceList?.priceListId || activePriceLists[0]?.priceListId || ''
   );
+  const selectedPriceList = activePriceLists.find(pl => pl.priceListId === selectedPriceListId);
+  const isNeakPriceList = selectedPriceList?.isNeak ?? false;
 
   useEffect(() => {
     if (!selectedPriceListId && (defaultPriceList || activePriceLists.length > 0)) {
@@ -139,6 +143,32 @@ export function CatalogPage() {
   );
 
   const filteredItems = useMemo(() => {
+    // NEAK mode: source from neakCatalog filtered by price list categories
+    if (isNeakPriceList) {
+      let source: CatalogItem[];
+      if (showDeleted) {
+        source = neakCatalog.filter(item => item.isDeleted && priceListCategoryIds.has(item.catalogCategoryId));
+      } else if (showInactive) {
+        source = neakCatalog.filter(item => !item.isActive && !item.isDeleted && priceListCategoryIds.has(item.catalogCategoryId));
+      } else {
+        source = neakCatalog.filter(item => item.isActive && !item.isDeleted && priceListCategoryIds.has(item.catalogCategoryId));
+      }
+
+      if (selectedCategory !== 'all') {
+        source = source.filter((item) => item.catalogCategoryId === selectedCategory);
+      }
+
+      const q = searchQuery.toLowerCase().trim();
+      if (!q) return source;
+
+      return source.filter((item) => {
+        if (item.catalogName.toLowerCase().includes(q)) return true;
+        if (item.catalogCategoryId && getCategoryNameById(item.catalogCategoryId, appLanguage).toLowerCase().includes(q)) return true;
+        if (item.catalogCode.toLowerCase().includes(q)) return true;
+        return false;
+      });
+    }
+
     // 1. Start from active, inactive, or deleted catalog
     let source: CatalogItem[];
     if (showDeleted) {
@@ -191,7 +221,7 @@ export function CatalogPage() {
       }
       return false;
     });
-  }, [catalog, activeItems, inactiveItems, deletedItems, showInactive, showDeleted, selectedPriceListId, priceListCategoryIds, deletedCategoryIds, selectedCategory, searchQuery, formatCode, prefixToCategoryId, getCategoryNameById, appLanguage]);
+  }, [catalog, activeItems, inactiveItems, deletedItems, showInactive, showDeleted, selectedPriceListId, priceListCategoryIds, deletedCategoryIds, selectedCategory, searchQuery, formatCode, prefixToCategoryId, getCategoryNameById, appLanguage, isNeakPriceList, neakCatalog]);
 
   const handleCreateItem = (data: CatalogItemFormData) => {
     createCatalogItem(data);
@@ -200,7 +230,11 @@ export function CatalogPage() {
 
   const handleEditItem = (data: CatalogItemFormData) => {
     if (editingItem) {
-      editCatalogItem(editingItem.catalogItemId, data);
+      if (isNeakPriceList) {
+        updateNeakCatalogItem({ ...editingItem, svgLayer: data.svgLayer, hasLayer: data.hasLayer, isActive: data.isActive });
+      } else {
+        editCatalogItem(editingItem.catalogItemId, data);
+      }
       setEditingItem(null);
     }
   };
@@ -242,7 +276,12 @@ export function CatalogPage() {
         return sortDirection === 'asc' ? cmp : -cmp;
       });
     }
-    return groups;
+    // Sort categories by their ID so cards render in consistent order
+    const sorted: Record<string, CatalogItem[]> = {};
+    Object.keys(groups).sort().forEach((key) => {
+      sorted[key] = groups[key];
+    });
+    return sorted;
   }, [filteredItems, sortColumn, sortDirection]);
 
   const getNextCatalogCode = (_category: string, items: CatalogItem[] = []) => {
@@ -352,13 +391,22 @@ export function CatalogPage() {
             className="w-64"
           />
           <p className="text-gray-500">
-            {selectedPriceListId && priceListCategoryIds.size > 0
-              ? activeItems.filter((i) => i.priceListId === selectedPriceListId || priceListCategoryIds.has(i.catalogCategoryId)).length
-              : activeItems.length} {t.common.active}, {selectedPriceListId && priceListCategoryIds.size > 0
-              ? inactiveItems.filter((i) => i.priceListId === selectedPriceListId || priceListCategoryIds.has(i.catalogCategoryId)).length
-              : inactiveItems.length} {t.catalog.inactiveItems}{deletedItems.length > 0 ? `, ${deletedItems.length} ${t.common.deleted.toLowerCase()}` : ''}
+            {isNeakPriceList ? (
+              <>
+                {neakCatalog.filter(i => i.isActive && !i.isDeleted && priceListCategoryIds.has(i.catalogCategoryId)).length} {t.common.active}, {neakCatalog.filter(i => !i.isActive && !i.isDeleted && priceListCategoryIds.has(i.catalogCategoryId)).length} {t.catalog.inactiveItems}
+              </>
+            ) : (
+              <>
+                {selectedPriceListId && priceListCategoryIds.size > 0
+                  ? activeItems.filter((i) => i.priceListId === selectedPriceListId || priceListCategoryIds.has(i.catalogCategoryId)).length
+                  : activeItems.length} {t.common.active}, {selectedPriceListId && priceListCategoryIds.size > 0
+                  ? inactiveItems.filter((i) => i.priceListId === selectedPriceListId || priceListCategoryIds.has(i.catalogCategoryId)).length
+                  : inactiveItems.length} {t.catalog.inactiveItems}{deletedItems.length > 0 ? `, ${deletedItems.length} ${t.common.deleted.toLowerCase()}` : ''}
+              </>
+            )}
           </p>
         </div>
+        {!isNeakPriceList && (
         <div className="flex items-center gap-2">
           {hasPermission('catalog.update') && hasPermission('catalog.delete') && (
           <Button variant="secondary" onClick={() => setResetConfirm(true)}>
@@ -374,6 +422,7 @@ export function CatalogPage() {
           </Button>
           )}
         </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-4">
@@ -459,7 +508,7 @@ export function CatalogPage() {
                 <CardContent>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">{getCategoryNameById(category, appLanguage)}</h3>
-                    {hasPermission('catalog.create') && (
+                    {!isNeakPriceList && hasPermission('catalog.create') && (
                     <Button
                       size="sm"
                       variant="secondary"
@@ -477,8 +526,17 @@ export function CatalogPage() {
                         <ThSortable column="catalogCode">{t.catalog.code}</ThSortable>
                         <ThSortable column="catalogName">{t.catalog.name}</ThSortable>
                         <ThSortable column="catalogUnit">{t.catalog.unit}</ThSortable>
-                        <ThSortable column="catalogPrice" align="right">{t.catalog.price}</ThSortable>
-                        <ThSortable column="catalogTechnicalPrice" align="right">{t.catalog.technicalPrice}</ThSortable>
+                        {isNeakPriceList ? (
+                          <>
+                            <th className="pb-3 font-medium text-right">{t.catalog.neakPoints}</th>
+                            <th className="pb-3 font-medium text-right">{t.catalog.neakMinTime}</th>
+                          </>
+                        ) : (
+                          <>
+                            <ThSortable column="catalogPrice" align="right">{t.catalog.price}</ThSortable>
+                            <ThSortable column="catalogTechnicalPrice" align="right">{t.catalog.technicalPrice}</ThSortable>
+                          </>
+                        )}
                         <th className="pb-3 font-medium text-center">SVG</th>
                         <th className="pb-3 font-medium text-center">{t.catalog.applicability}</th>
                         <th className="pb-3 font-medium text-right">{t.common.actions}</th>
@@ -494,12 +552,21 @@ export function CatalogPage() {
                             </span>
                           </td>
                           <td className="py-3 text-gray-500">{item.catalogUnit}</td>
-                          <td className="py-3 text-right font-medium">
-                            {formatCurrency(item.catalogPrice)}
-                          </td>
-                          <td className="py-3 text-right font-medium">
-                            {item.hasTechnicalPrice ? formatCurrency(item.catalogTechnicalPrice) : '-'}
-                          </td>
+                          {isNeakPriceList ? (
+                            <>
+                              <td className="py-3 text-right font-medium">{item.neakPoints ?? 0}</td>
+                              <td className="py-3 text-right text-gray-600">{item.neakMinimumTimeMin ?? 0}</td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="py-3 text-right font-medium">
+                                {formatCurrency(item.catalogPrice)}
+                              </td>
+                              <td className="py-3 text-right font-medium">
+                                {item.hasTechnicalPrice ? formatCurrency(item.catalogTechnicalPrice) : '-'}
+                              </td>
+                            </>
+                          )}
                           <td className="py-3 text-center">
                             {item.svgLayer ? (
                               <svg className="w-4 h-4 text-green-500 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -542,7 +609,32 @@ export function CatalogPage() {
                           </td>
                           <td className="py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {showDeleted ? (
+                              {isNeakPriceList ? (
+                                <>
+                                  {hasPermission('catalog.update') && (
+                                    <IconBtn onClick={() => setEditingItem(item)} title={t.common.edit} className="text-gray-600 hover:bg-gray-100">
+                                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                      </svg>
+                                    </IconBtn>
+                                  )}
+                                  {hasPermission('catalog.update') && (
+                                    item.isActive ? (
+                                    <IconBtn onClick={() => updateNeakCatalogItem({ ...item, isActive: false })} title="Deaktiválás" className="text-red-600 hover:bg-red-50">
+                                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </IconBtn>
+                                    ) : (
+                                    <IconBtn onClick={() => updateNeakCatalogItem({ ...item, isActive: true })} title="Aktiválás" className="text-green-600 hover:bg-green-50">
+                                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    </IconBtn>
+                                    )
+                                  )}
+                                </>
+                              ) : showDeleted ? (
                                 hasPermission('catalog.delete') && (
                                   <IconBtn onClick={() => setRestoreConfirm(item.catalogItemId)} title={t.common.restore} className="text-green-600 hover:bg-green-50">
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -694,10 +786,11 @@ export function CatalogPage() {
         }}
         onSubmit={editingItem ? handleEditItem : handleCreateItem}
         item={editingItem || undefined}
-        title={editingItem ? t.catalog.editItem : t.catalog.newItem}
+        title={editingItem && isNeakPriceList ? t.catalog.editNeakItem : editingItem ? t.catalog.editItem : t.catalog.newItem}
         existingCodes={catalog.map((c) => c.catalogCode)}
         categoryIds={categoryIds}
         getCategoryLabel={(catId) => getCategoryNameById(catId, appLanguage)}
+        isNeak={isNeakPriceList}
       />
 
       {/* Delete Confirmation */}
@@ -747,6 +840,7 @@ interface CatalogItemFormModalProps {
   existingCodes?: string[];
   categoryIds?: string[];
   getCategoryLabel?: (catId: string) => string;
+  isNeak?: boolean;
 }
 
 function CatalogItemFormModal({
@@ -758,6 +852,7 @@ function CatalogItemFormModal({
   existingCodes,
   categoryIds,
   getCategoryLabel,
+  isNeak,
 }: CatalogItemFormModalProps) {
   const { t } = useSettings();
   const formatGroupedNumber = (value: number): string => {
@@ -835,6 +930,17 @@ function CatalogItemFormModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isNeak) {
+      // NEAK mode: only submit SVG + isActive
+      onSubmit({
+        ...formData,
+        hasTechnicalPrice: false,
+      });
+      onClose();
+      return;
+    }
+
     const newErrors: Record<string, string> = {};
 
     if (!formData.catalogCode.trim()) newErrors.catalogCode = t.validation.required;
@@ -868,275 +974,348 @@ function CatalogItemFormModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Select
-            label={t.catalog.category}
-            value={formData.catalogCategoryId}
-            onChange={(e) =>
-              setFormData({ ...formData, catalogCategoryId: e.target.value })
-            }
-            options={(categoryIds && categoryIds.length > 0 ? categoryIds : []).map((catId) => ({ value: catId, label: getCategoryLabel ? getCategoryLabel(catId) : catId }))}
-            required
-          />
-          <Input
-            label={t.catalog.code}
-            value={formData.catalogCode}
-            onChange={(e) =>
-              setFormData({ ...formData, catalogCode: e.target.value.toUpperCase() })
-            }
-            error={errors.catalogCode}
-            required
-            placeholder="pl. KONZ01"
-          />
-        </div>
+        {isNeak ? (
+          <>
+            {/* NEAK mode: read-only fields + editable SVG/isActive */}
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label={t.catalog.category}
+                value={getCategoryLabel ? getCategoryLabel(formData.catalogCategoryId) : formData.catalogCategoryId}
+                onChange={() => {}}
+                disabled
+              />
+              <Input
+                label={t.catalog.code}
+                value={formData.catalogCode}
+                onChange={() => {}}
+                disabled
+              />
+            </div>
 
-        <Input
-          label={t.catalog.name}
-          value={formData.catalogName}
-          onChange={(e) => setFormData({ ...formData, catalogName: e.target.value })}
-          error={errors.catalogName}
-          required
-          placeholder="pl. Konzultáció"
-        />
+            <Input
+              label={t.catalog.name}
+              value={formData.catalogName}
+              onChange={() => {}}
+              disabled
+            />
 
-        <div className="grid grid-cols-2 gap-4">
-          <Input
-            label={t.catalog.nameEn}
-            value={formData.catalogNameEn || ''}
-            onChange={(e) => setFormData({ ...formData, catalogNameEn: e.target.value })}
-            placeholder="e.g. Consultation"
-          />
-          <Input
-            label={t.catalog.nameDe}
-            value={formData.catalogNameDe || ''}
-            onChange={(e) => setFormData({ ...formData, catalogNameDe: e.target.value })}
-            placeholder="z.B. Beratung"
-          />
-        </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label={t.catalog.unit}
+                value={formData.catalogUnit}
+                onChange={() => {}}
+                disabled
+              />
+              <Input
+                label={t.catalog.neakPoints}
+                value={String(item?.neakPoints ?? 0)}
+                onChange={() => {}}
+                disabled
+              />
+            </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
-          <div className="md:col-span-5">
-            <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t.catalog.price}
-                <span className="text-red-500 ml-1">*</span>
+            <Input
+              label={t.catalog.neakMinTime}
+              value={String(item?.neakMinimumTimeMin ?? 0)}
+              onChange={() => {}}
+              disabled
+            />
+
+            <Input
+              label={t.catalog.svgLayers}
+              type="text"
+              value={formData.svgLayer}
+              onChange={(e) => setFormData({ ...formData, svgLayer: e.target.value, hasLayer: e.target.value.trim().length > 0 })}
+              placeholder="filling-composite-[surfaces4]"
+            />
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isActiveNeak"
+                checked={formData.isActive}
+                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
+              />
+              <label htmlFor="isActiveNeak" className="text-sm text-gray-700">
+                Aktív (megjelenik az árlistában)
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={catalogPriceInput}
-                  onChange={(e) => {
-                    const parsed = parseGroupedNumber(e.target.value);
-                    setCatalogPriceInput(formatGroupedNumber(parsed));
-                    setFormData({ ...formData, catalogPrice: parsed });
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                    e.preventDefault();
-                    const step = formData.catalogPriceCurrency === 'HUF' ? 1000 : 10;
-                    const direction = e.key === 'ArrowUp' ? 1 : -1;
-                    const next = Math.max(0, formData.catalogPrice + direction * step);
-                    setCatalogPriceInput(formatGroupedNumber(next));
-                    setFormData({ ...formData, catalogPrice: next });
-                  }}
-                  className="w-full px-3 py-2 pr-10 text-right tabular-nums border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
-                  required
-                />
-                <div className="absolute inset-y-0 right-1 flex flex-col justify-center gap-0.5">
-                  <button
-                    type="button"
-                    className="h-4 w-6 rounded text-gray-500 hover:bg-gray-100"
-                    onClick={() => {
-                      const step = formData.catalogPriceCurrency === 'HUF' ? 1000 : 10;
-                      const next = Math.max(0, formData.catalogPrice + step);
-                      setCatalogPriceInput(formatGroupedNumber(next));
-                      setFormData({ ...formData, catalogPrice: next });
-                    }}
-                    aria-label="Increase price"
-                  >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="mx-auto h-3 w-3">
-                      <path d="M5.25 11.25 10 6.5l4.75 4.75h-9.5Z" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="h-4 w-6 rounded text-gray-500 hover:bg-gray-100"
-                    onClick={() => {
-                      const step = formData.catalogPriceCurrency === 'HUF' ? 1000 : 10;
-                      const next = Math.max(0, formData.catalogPrice - step);
-                      setCatalogPriceInput(formatGroupedNumber(next));
-                      setFormData({ ...formData, catalogPrice: next });
-                    }}
-                    aria-label="Decrease price"
-                  >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="mx-auto h-3 w-3">
-                      <path d="m5.25 8.75 4.75 4.75 4.75-4.75h-9.5Z" />
-                    </svg>
-                  </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Normal mode */}
+            <div className="grid grid-cols-2 gap-4">
+              <Select
+                label={t.catalog.category}
+                value={formData.catalogCategoryId}
+                onChange={(e) =>
+                  setFormData({ ...formData, catalogCategoryId: e.target.value })
+                }
+                options={(categoryIds && categoryIds.length > 0 ? categoryIds : []).map((catId) => ({ value: catId, label: getCategoryLabel ? getCategoryLabel(catId) : catId }))}
+                required
+              />
+              <Input
+                label={t.catalog.code}
+                value={formData.catalogCode}
+                onChange={(e) =>
+                  setFormData({ ...formData, catalogCode: e.target.value.toUpperCase() })
+                }
+                error={errors.catalogCode}
+                required
+                placeholder="pl. KONZ01"
+              />
+            </div>
+
+            <Input
+              label={t.catalog.name}
+              value={formData.catalogName}
+              onChange={(e) => setFormData({ ...formData, catalogName: e.target.value })}
+              error={errors.catalogName}
+              required
+              placeholder="pl. Konzultáció"
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label={t.catalog.nameEn}
+                value={formData.catalogNameEn || ''}
+                onChange={(e) => setFormData({ ...formData, catalogNameEn: e.target.value })}
+                placeholder="e.g. Consultation"
+              />
+              <Input
+                label={t.catalog.nameDe}
+                value={formData.catalogNameDe || ''}
+                onChange={(e) => setFormData({ ...formData, catalogNameDe: e.target.value })}
+                placeholder="z.B. Beratung"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
+              <div className="md:col-span-5">
+                <div className="w-full">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t.catalog.price}
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={catalogPriceInput}
+                      onChange={(e) => {
+                        const parsed = parseGroupedNumber(e.target.value);
+                        setCatalogPriceInput(formatGroupedNumber(parsed));
+                        setFormData({ ...formData, catalogPrice: parsed });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                        e.preventDefault();
+                        const step = formData.catalogPriceCurrency === 'HUF' ? 1000 : 10;
+                        const direction = e.key === 'ArrowUp' ? 1 : -1;
+                        const next = Math.max(0, formData.catalogPrice + direction * step);
+                        setCatalogPriceInput(formatGroupedNumber(next));
+                        setFormData({ ...formData, catalogPrice: next });
+                      }}
+                      className="w-full px-3 py-2 pr-10 text-right tabular-nums border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                      required
+                    />
+                    <div className="absolute inset-y-0 right-1 flex flex-col justify-center gap-0.5">
+                      <button
+                        type="button"
+                        className="h-4 w-6 rounded text-gray-500 hover:bg-gray-100"
+                        onClick={() => {
+                          const step = formData.catalogPriceCurrency === 'HUF' ? 1000 : 10;
+                          const next = Math.max(0, formData.catalogPrice + step);
+                          setCatalogPriceInput(formatGroupedNumber(next));
+                          setFormData({ ...formData, catalogPrice: next });
+                        }}
+                        aria-label="Increase price"
+                      >
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="mx-auto h-3 w-3">
+                          <path d="M5.25 11.25 10 6.5l4.75 4.75h-9.5Z" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="h-4 w-6 rounded text-gray-500 hover:bg-gray-100"
+                        onClick={() => {
+                          const step = formData.catalogPriceCurrency === 'HUF' ? 1000 : 10;
+                          const next = Math.max(0, formData.catalogPrice - step);
+                          setCatalogPriceInput(formatGroupedNumber(next));
+                          setFormData({ ...formData, catalogPrice: next });
+                        }}
+                        aria-label="Decrease price"
+                      >
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="mx-auto h-3 w-3">
+                          <path d="m5.25 8.75 4.75 4.75 4.75-4.75h-9.5Z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  {errors.catalogPrice && <p className="mt-1 text-sm text-red-600">{errors.catalogPrice}</p>}
                 </div>
               </div>
-              {errors.catalogPrice && <p className="mt-1 text-sm text-red-600">{errors.catalogPrice}</p>}
+              <div className="md:col-span-3">
+                <Select
+                  label={t.catalog.currency}
+                  value={formData.catalogPriceCurrency}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      catalogPriceCurrency: e.target.value as 'HUF' | 'EUR',
+                    })
+                  }
+                  style={{ minWidth: 0 }}
+                  options={[
+                    { value: 'HUF', label: 'HUF' },
+                    { value: 'EUR', label: 'EUR' },
+                  ]}
+                />
+              </div>
+              <div className="md:col-span-4">
+                <Select
+                  label={t.catalog.unit}
+                  value={formData.catalogUnit}
+                  onChange={(e) =>
+                    setFormData({ ...formData, catalogUnit: e.target.value as CatalogUnit })
+                  }
+                  style={{ minWidth: 0 }}
+                  options={CATALOG_UNITS.map((unit) => ({ value: unit, label: unit }))}
+                  error={errors.catalogUnit}
+                  required
+                />
+              </div>
             </div>
-          </div>
-          <div className="md:col-span-3">
-            <Select
-              label={t.catalog.currency}
-              value={formData.catalogPriceCurrency}
-              onChange={(e) =>
+
+            <Input
+              label={t.catalog.technicalPrice}
+              type="number"
+              value={formData.catalogTechnicalPrice}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0;
                 setFormData({
                   ...formData,
-                  catalogPriceCurrency: e.target.value as 'HUF' | 'EUR',
-                })
-              }
-              style={{ minWidth: 0 }}
-              options={[
-                { value: 'HUF', label: 'HUF' },
-                { value: 'EUR', label: 'EUR' },
-              ]}
+                  catalogTechnicalPrice: value,
+                  hasTechnicalPrice: value > 0,
+                });
+              }}
+              error={errors.catalogTechnicalPrice}
+              min={0}
+              placeholder="0"
             />
-          </div>
-          <div className="md:col-span-4">
-            <Select
-              label={t.catalog.unit}
-              value={formData.catalogUnit}
-              onChange={(e) =>
-                setFormData({ ...formData, catalogUnit: e.target.value as CatalogUnit })
-              }
-              style={{ minWidth: 0 }}
-              options={CATALOG_UNITS.map((unit) => ({ value: unit, label: unit }))}
-              error={errors.catalogUnit}
-              required
+
+            <Input
+              label={t.catalog.svgLayers}
+              type="text"
+              value={formData.svgLayer}
+              onChange={(e) => setFormData({ ...formData, svgLayer: e.target.value, hasLayer: e.target.value.trim().length > 0 })}
+              placeholder="filling-composite-[surfaces4]"
             />
-          </div>
-        </div>
 
-        <Input
-          label={t.catalog.technicalPrice}
-          type="number"
-          value={formData.catalogTechnicalPrice}
-          onChange={(e) => {
-            const value = parseFloat(e.target.value) || 0;
-            setFormData({
-              ...formData,
-              catalogTechnicalPrice: value,
-              hasTechnicalPrice: value > 0,
-            });
-          }}
-          error={errors.catalogTechnicalPrice}
-          min={0}
-          placeholder="0"
-        />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {t.catalog.applicability}
+              </label>
+              <div className="flex flex-wrap gap-4">
+                {[
+                  { value: 'fullMouth', label: t.catalog.fullMouth },
+                  { value: 'arch', label: t.catalog.arch },
+                  { value: 'quadrant', label: t.catalog.quadrant },
+                  { value: 'tooth', label: t.catalog.toothItem },
+                ].map((opt) => {
+                  const currentValue = formData.isFullMouth ? 'fullMouth'
+                    : formData.isArch ? 'arch'
+                    : formData.isQuadrant ? 'quadrant'
+                    : 'tooth';
+                  return (
+                    <label key={opt.value} className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="radio"
+                        name="applicability"
+                        checked={currentValue === opt.value}
+                        onChange={() => setFormData({
+                          ...formData,
+                          isFullMouth: opt.value === 'fullMouth',
+                          isArch: opt.value === 'arch',
+                          isQuadrant: opt.value === 'quadrant',
+                        })}
+                        className="w-4 h-4 text-dental-600 focus:ring-dental-500"
+                      />
+                      {opt.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
 
-        <Input
-          label={t.catalog.svgLayers}
-          type="text"
-          value={formData.svgLayer}
-          onChange={(e) => setFormData({ ...formData, svgLayer: e.target.value, hasLayer: e.target.value.trim().length > 0 })}
-          placeholder="filling-composite-[surfaces4]"
-        />
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {t.catalog.applicability}
-          </label>
-          <div className="flex flex-wrap gap-4">
-            {[
-              { value: 'fullMouth', label: t.catalog.fullMouth },
-              { value: 'arch', label: t.catalog.arch },
-              { value: 'quadrant', label: t.catalog.quadrant },
-              { value: 'tooth', label: t.catalog.toothItem },
-            ].map((opt) => {
-              const currentValue = formData.isFullMouth ? 'fullMouth'
-                : formData.isArch ? 'arch'
-                : formData.isQuadrant ? 'quadrant'
-                : 'tooth';
-              return (
-                <label key={opt.value} className="flex items-center gap-2 text-sm text-gray-700">
-                  <input
-                    type="radio"
-                    name="applicability"
-                    checked={currentValue === opt.value}
-                    onChange={() => setFormData({
-                      ...formData,
-                      isFullMouth: opt.value === 'fullMouth',
-                      isArch: opt.value === 'arch',
-                      isQuadrant: opt.value === 'quadrant',
-                    })}
-                    className="w-4 h-4 text-dental-600 focus:ring-dental-500"
-                  />
-                  {opt.label}
+            {formData.isArch && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t.catalog.maxTeethPerArch ?? 'Max fog / állcsont'}
                 </label>
-              );
-            })}
-          </div>
-        </div>
+                <input
+                  type="number"
+                  value={formData.maxTeethPerArch ?? ''}
+                  onChange={(e) => setFormData({ ...formData, maxTeethPerArch: e.target.value ? Number(e.target.value) : undefined })}
+                  min={1}
+                  max={14}
+                  placeholder="—"
+                  className="w-24 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500"
+                />
+              </div>
+            )}
 
-        {formData.isArch && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t.catalog.maxTeethPerArch ?? 'Max fog / állcsont'}
-            </label>
-            <input
-              type="number"
-              value={formData.maxTeethPerArch ?? ''}
-              onChange={(e) => setFormData({ ...formData, maxTeethPerArch: e.target.value ? Number(e.target.value) : undefined })}
-              min={1}
-              max={14}
-              placeholder="—"
-              className="w-24 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500"
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {t.catalog.restrictions ?? 'Korlátozás'}
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={formData.milkToothOnly ?? false}
+                  onChange={(e) => setFormData({ ...formData, milkToothOnly: e.target.checked })}
+                  className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
+                />
+                {t.catalog.milkToothOnly ?? 'Csak tejfogra'}
+              </label>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {t.catalog.allowedTeeth ?? 'Engedélyezett fogak'}
+              </label>
+              <input
+                type="text"
+                value={formData.allowedTeeth?.join(', ') ?? ''}
+                onChange={(e) => {
+                  const text = e.target.value.trim();
+                  if (!text) {
+                    setFormData({ ...formData, allowedTeeth: undefined });
+                  } else {
+                    const nums = text.split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0);
+                    setFormData({ ...formData, allowedTeeth: nums.length > 0 ? nums : undefined });
+                  }
+                }}
+                placeholder="14, 15, 24, 25, ..."
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={formData.isActive}
+                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
+              />
+              <label htmlFor="isActive" className="text-sm text-gray-700">
+                Aktív (megjelenik az árlistában)
+              </label>
+            </div>
+          </>
         )}
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {t.catalog.restrictions ?? 'Korlátozás'}
-          </label>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={formData.milkToothOnly ?? false}
-              onChange={(e) => setFormData({ ...formData, milkToothOnly: e.target.checked })}
-              className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
-            />
-            {t.catalog.milkToothOnly ?? 'Csak tejfogra'}
-          </label>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t.catalog.allowedTeeth ?? 'Engedélyezett fogak'}
-          </label>
-          <input
-            type="text"
-            value={formData.allowedTeeth?.join(', ') ?? ''}
-            onChange={(e) => {
-              const text = e.target.value.trim();
-              if (!text) {
-                setFormData({ ...formData, allowedTeeth: undefined });
-              } else {
-                const nums = text.split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0);
-                setFormData({ ...formData, allowedTeeth: nums.length > 0 ? nums : undefined });
-              }
-            }}
-            placeholder="14, 15, 24, 25, ..."
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="isActive"
-            checked={formData.isActive}
-            onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-            className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
-          />
-          <label htmlFor="isActive" className="text-sm text-gray-700">
-            Aktív (megjelenik az árlistában)
-          </label>
-        </div>
 
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="secondary" onClick={onClose}>
