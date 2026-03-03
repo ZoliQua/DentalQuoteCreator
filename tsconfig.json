@@ -19,10 +19,10 @@
     "paths": {
       "@/*": ["src/*"],
       "@odontogram-shell": ["src/modules/odontogram/odontogram-shell"],
-      "@flexi-importer": ["submodules/dq-flexi-importer/src"],
-      "@flexi-importer/*": ["submodules/dq-flexi-importer/src/*"]
+      "@dq-importer": ["submodules/dq-importer/src"],
+      "@dq-importer/*": ["submodules/dq-importer/src/*"]
     }
   },
-  "include": ["src", "submodules/dq-flexi-importer/src"],
+  "include": ["src", "submodules/dq-importer/src"],
   "exclude": ["src/modules/odontogram/engine"]
 }

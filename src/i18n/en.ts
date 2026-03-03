@@ -12,7 +12,7 @@ export const en: TranslationKeys = {
     dataManagement: 'Data Management',
     lab: 'Test Lab',
     labOdontogram: 'Odontogram Lab',
-    labFlexiImport: 'Flexi Import',
+    labImporter: 'Patient Import',
     admin: 'Administration',
     loggedInAs: 'Logged in as:',
     quotesActive: 'Active quotes',

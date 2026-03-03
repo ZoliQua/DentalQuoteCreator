@@ -198,7 +198,7 @@ export function Layout({ children }: LayoutProps) {
       ),
       children: [
         { to: '/odontogram-lab', label: t.nav.labOdontogram },
-        { to: '/flexi-import', label: t.nav.labFlexiImport },
+        { to: '/importer', label: t.nav.labImporter },
       ],
     },
   ];

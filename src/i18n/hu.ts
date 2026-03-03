@@ -10,7 +10,7 @@ export const hu = {
     dataManagement: 'Adatkezelés',
     lab: 'Teszt felület',
     labOdontogram: 'Odontogram Lab',
-    labFlexiImport: 'Flexi Import',
+    labImporter: 'Páciens Import',
     admin: 'Adminisztráció',
     loggedInAs: 'Bejelentkezve:',
     quotesActive: 'Aktív árajánlatok',

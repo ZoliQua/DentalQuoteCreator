@@ -23,11 +23,11 @@ import { VisualQuoteEditorPage } from './pages/VisualQuoteEditorPage';
 import { DatabaseBrowserPage } from './pages/DatabaseBrowserPage';
 import { CatalogLayout } from './pages/CatalogLayout';
 import { Card, CardContent } from './components/common';
-import { FlexiImporterPage } from '@flexi-importer';
+import { ImporterPage } from '@dq-importer';
 import { OdontogramHost } from './modules/odontogram/OdontogramHost';
 import type { OdontogramState } from './modules/odontogram/types';
 
-function FlexiOdontogramViewer({ initialState }: { initialState: unknown }) {
+function ImporterOdontogramViewer({ initialState }: { initialState: unknown }) {
   return <OdontogramHost patientId="" mode="view" initialState={initialState as OdontogramState | null} onChange={() => {}} hidePanel />;
 }
 
@@ -124,7 +124,7 @@ function App() {
         <Route path="/data/usage" element={<Guard permission="data.view"><DataManagementPage key="usage" section="usage" /></Guard>} />
         <Route path="/data/browser" element={<Guard permission="data.browse"><DatabaseBrowserPage /></Guard>} />
         <Route path="/odontogram-lab" element={<Guard permission="lab.view"><OdontogramLabPage /></Guard>} />
-        <Route path="/flexi-import" element={<Guard permission="lab.view"><FlexiImporterPage OdontogramViewer={FlexiOdontogramViewer} /></Guard>} />
+        <Route path="/importer" element={<Guard permission="lab.view"><ImporterPage OdontogramViewer={ImporterOdontogramViewer} /></Guard>} />
         <Route
           path="/admin"
           element={canOpenAdmin ? <AdminPage /> : <NoPermissionPage />}

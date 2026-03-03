@@ -11,7 +11,7 @@ export const de: TranslationKeys = {
     dataManagement: 'Datenverwaltung',
     lab: 'Testbereich',
     labOdontogram: 'Odontogram Lab',
-    labFlexiImport: 'Flexi Import',
+    labImporter: 'Patienten Import',
     admin: 'Administration',
     loggedInAs: 'Angemeldet als:',
     quotesActive: 'Aktive Kostenvoranschläge',
