@@ -4,3 +4,4 @@ export * from './quote';
 export * from './settings';
 export * from './dentalStatus.types';
 export * from './invoice';
+export * from './appointment';

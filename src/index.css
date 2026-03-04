@@ -53,3 +53,105 @@
     @apply bg-dental-100 text-dental-700 font-medium;
   }
 }
+
+/* FullCalendar overrides to match dental color scheme */
+.fc .fc-button-primary {
+  background-color: #0284c7 !important; /* dental-600 */
+  border-color: #0284c7 !important;
+}
+.fc .fc-button-primary:hover {
+  background-color: #0369a1 !important; /* dental-700 */
+  border-color: #0369a1 !important;
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background-color: #075985 !important; /* dental-800 */
+  border-color: #075985 !important;
+}
+.fc .fc-button-primary:focus {
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.4) !important; /* dental-500 */
+}
+.fc .fc-button-primary:disabled {
+  background-color: #0284c7 !important;
+  border-color: #0284c7 !important;
+  opacity: 0.6;
+}
+
+/* Today background */
+.fc .fc-day-today {
+  background-color: #f0f9ff !important; /* dental-50 */
+}
+
+/* Selection highlight */
+.fc .fc-highlight {
+  background-color: rgba(14, 165, 233, 0.15) !important; /* dental-500 at 15% */
+}
+
+/* Now indicator */
+.fc .fc-timegrid-now-indicator-line {
+  border-color: #0ea5e9 !important; /* dental-500 */
+}
+.fc .fc-timegrid-now-indicator-arrow {
+  border-top-color: #0ea5e9 !important;
+  border-bottom-color: #0ea5e9 !important;
+}
+
+/* Event styling */
+.fc .fc-event {
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  border: none !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Headers */
+.fc .fc-col-header-cell {
+  background-color: #f9fafb; /* gray-50 */
+  font-weight: 500;
+  color: #374151; /* gray-700 */
+}
+
+/* Time slot borders */
+.fc .fc-timegrid-slot {
+  border-color: #e5e7eb !important; /* gray-200 */
+}
+.fc .fc-timegrid-slot-minor {
+  border-color: #f3f4f6 !important; /* gray-100 */
+}
+
+/* Table borders */
+.fc td, .fc th {
+  border-color: #e5e7eb !important; /* gray-200 */
+}
+
+/* Toolbar title */
+.fc .fc-toolbar-title {
+  color: #111827; /* gray-900 */
+  font-weight: 600;
+}
+
+/* Non-business hours */
+.fc .fc-non-business {
+  background-color: #f9fafb !important; /* gray-50 */
+}
+
+/* Multi-chair calendar: hide time axis on non-first columns */
+.multi-cal-hide-time .fc .fc-timegrid-axis {
+  visibility: hidden;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  overflow: hidden;
+}
+.multi-cal-hide-time .fc .fc-timegrid-axis-frame {
+  display: none;
+}
+.multi-cal-hide-time .fc .fc-timegrid-slot-label {
+  visibility: hidden;
+  width: 0;
+  min-width: 0;
+  padding: 0 !important;
+}
+.multi-cal-hide-time .fc .fc-timegrid-slot-label-frame {
+  display: none;
+}

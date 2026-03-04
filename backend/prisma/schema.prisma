@@ -134,8 +134,9 @@ model Patient {
   isHungarianPhone     Boolean  @default(true)
   treatmentArchive     String?
 
-  quotes    Quote[]
-  snapshots DentalStatusSnapshot[]
+  quotes       Quote[]
+  snapshots    DentalStatusSnapshot[]
+  appointments Appointment[]
 }
 
 model Quote {
@@ -440,4 +441,57 @@ model Country {
   countryNameHu  String
   countryNameEn  String @default("")
   countryNameDe  String @default("")
+}
+
+model AppointmentChair {
+  chairId     String   @id
+  chairNr     Int
+  chairNameHu String
+  chairNameEn String   @default("")
+  chairNameDe String   @default("")
+  isActive    Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+  createdBy   String?
+}
+
+model AppointmentType {
+  typeId             String  @id
+  nameHu             String
+  nameEn             String  @default("")
+  nameDe             String  @default("")
+  color              String
+  defaultDurationMin Int
+  isSystem           Boolean @default(false)
+  isActive           Boolean @default(true)
+  sortOrder          Int     @default(0)
+
+  appointments Appointment[]
+}
+
+model Appointment {
+  appointmentId     String    @id
+  patientId         String?
+  chairIndex        Int       @default(0)
+  startDateTime     DateTime
+  endDateTime       DateTime
+  title             String
+  description       String?
+  appointmentTypeId String?
+  status            String    @default("scheduled")
+  color             String?
+  notes             String?
+  isArchived        Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdByUserId   String?
+  googleEventId     String?
+
+  patient         Patient?         @relation(fields: [patientId], references: [patientId])
+  appointmentType AppointmentType? @relation(fields: [appointmentTypeId], references: [typeId])
+
+  @@index([patientId])
+  @@index([startDateTime])
+  @@index([endDateTime])
+  @@index([appointmentTypeId])
+  @@index([status])
 }

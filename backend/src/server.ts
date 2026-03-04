@@ -44,6 +44,9 @@ const createActivityId = (): string => 'UA' + randomBytes(4).toString('hex');
 const createPermOverrideId = (): string => 'UP' + randomBytes(4).toString('hex');
 const createNeakCheckId = (): string => 'NC' + randomBytes(5).toString('hex');
 const createVisitorLogId = (): string => 'VL' + randomBytes(4).toString('hex');
+const createAppointmentId = (): string => 'APT' + randomBytes(4).toString('hex');
+const createAppointmentTypeId = (): string => 'atype' + randomBytes(3).toString('hex');
+const createChairId = (nr: number): string => `chair-${String(nr).padStart(2, '0')}`;
 
 const MAX_ID_RETRIES = 5;
 async function createWithUniqueId<T>(
@@ -92,6 +95,9 @@ const ALL_PERMISSION_KEYS = [
   'settings.edit',
   'data.view',
   'data.browse',
+  'calendar.view',
+  'calendar.create',
+  'calendar.delete',
   'admin.users.manage',
   'admin.permissions.manage',
 ] as const;
@@ -160,6 +166,24 @@ const defaultSettings: JsonRecord = {
     defaultCountry: 'Magyarország',
     patientTypes: ['Privát páciens', 'NEAK páciens'],
   },
+  calendar: {
+    slotInterval: 15,
+    slotIntervalOptions: [5, 10, 15, 30, 45, 60, 90, 120, 150],
+    chairCount: 2,
+    chairNames: ['1. szék', '2. szék'],
+    showWeekends: true,
+    defaultView: 'week',
+    defaultDuration: 30,
+    workingHours: [
+      { dayOfWeek: 0, isWorkday: false, startTime: '08:00', endTime: '16:00' },
+      { dayOfWeek: 1, isWorkday: true, startTime: '08:00', endTime: '16:00' },
+      { dayOfWeek: 2, isWorkday: true, startTime: '08:00', endTime: '16:00' },
+      { dayOfWeek: 3, isWorkday: true, startTime: '08:00', endTime: '16:00' },
+      { dayOfWeek: 4, isWorkday: true, startTime: '08:00', endTime: '16:00' },
+      { dayOfWeek: 5, isWorkday: true, startTime: '08:00', endTime: '14:00' },
+      { dayOfWeek: 6, isWorkday: false, startTime: '08:00', endTime: '14:00' },
+    ],
+  },
   language: 'hu',
   defaultValidityDays: 60,
   dateFormat: 'YYYY-MM-DD HH:MM:SS',
@@ -211,9 +235,9 @@ const ROLE_PERMISSION_PRESETS: Record<UserRole, readonly PermissionKey[]> = {
   admin: [...ALL_PERMISSION_KEYS],
   beta_tester: [...ALL_PERMISSION_KEYS],
   receptionist: ALL_PERMISSION_KEYS.filter(k => !['admin.users.manage', 'admin.permissions.manage', 'lab.view', 'data.browse'].includes(k)),
-  doctor: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.view.detail', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'pricelist.view', 'catalog.deactivate'],
-  assistant: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.view.detail', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'patients.delete', 'pricelist.view', 'catalog.deactivate'],
-  user: [],
+  doctor: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.view.detail', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'pricelist.view', 'catalog.deactivate', 'calendar.view', 'calendar.create'],
+  assistant: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.view.detail', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'patients.delete', 'pricelist.view', 'catalog.deactivate', 'calendar.view', 'calendar.create'],
+  user: ['calendar.view', 'calendar.create'],
 };
 
 const VALID_ROLES: readonly string[] = ['admin', 'doctor', 'assistant', 'receptionist', 'user', 'beta_tester'];
@@ -729,6 +753,9 @@ const BROWSABLE_TABLES = [
   'VisitorLog',
   'InvoiceSettings',
   'Country',
+  'AppointmentType',
+  'AppointmentChair',
+  'Appointment',
 ] as const;
 
 const TABLE_PK_MAP: Record<string, string[]> = {
@@ -758,6 +785,9 @@ const TABLE_PK_MAP: Record<string, string[]> = {
   VisitorLog: ['id'],
   InvoiceSettings: ['id'],
   Country: ['countryId'],
+  AppointmentType: ['typeId'],
+  AppointmentChair: ['chairId'],
+  Appointment: ['appointmentId'],
 };
 
 const serializeRow = (row: Record<string, unknown>): Record<string, unknown> => {
@@ -2739,6 +2769,214 @@ server.get('/countries', async (request, reply) => {
   return prisma.country.findMany({ orderBy: { countryNameHu: 'asc' } });
 });
 
+// ── Appointment Types CRUD ─────────────────────────────────────
+server.get('/appointment-types', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.view');
+  if (!user) return;
+  return prisma.appointmentType.findMany({ orderBy: { sortOrder: 'asc' } });
+});
+
+server.post('/appointment-types', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.create');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const typeId = createAppointmentTypeId();
+  const type = await prisma.appointmentType.create({
+    data: {
+      typeId,
+      nameHu: String(body.nameHu || ''),
+      nameEn: String(body.nameEn || ''),
+      nameDe: String(body.nameDe || ''),
+      color: String(body.color || '#3B82F6'),
+      defaultDurationMin: Number(body.defaultDurationMin) || 30,
+      isSystem: false,
+      isActive: body.isActive !== false,
+      sortOrder: Number(body.sortOrder) || 0,
+    },
+  });
+  return type;
+});
+
+server.patch('/appointment-types/:typeId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.create');
+  if (!user) return;
+  const { typeId } = request.params as { typeId: string };
+  const body = request.body as JsonRecord;
+  const data: Record<string, unknown> = {};
+  if (body.nameHu !== undefined) data.nameHu = String(body.nameHu);
+  if (body.nameEn !== undefined) data.nameEn = String(body.nameEn);
+  if (body.nameDe !== undefined) data.nameDe = String(body.nameDe);
+  if (body.color !== undefined) data.color = String(body.color);
+  if (body.defaultDurationMin !== undefined) data.defaultDurationMin = Number(body.defaultDurationMin);
+  if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
+  if (body.sortOrder !== undefined) data.sortOrder = Number(body.sortOrder);
+  return prisma.appointmentType.update({ where: { typeId }, data });
+});
+
+server.delete('/appointment-types/:typeId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.delete');
+  if (!user) return;
+  const { typeId } = request.params as { typeId: string };
+  const existing = await prisma.appointmentType.findUnique({ where: { typeId } });
+  if (!existing) return reply.status(404).send({ error: 'Not found' });
+  if (existing.isSystem) return reply.status(400).send({ error: 'Cannot delete system appointment type' });
+  await prisma.appointmentType.delete({ where: { typeId } });
+  return { success: true };
+});
+
+// ── Appointment Chairs CRUD ────────────────────────────────────
+server.get('/appointment-chairs', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.view');
+  if (!user) return;
+  return prisma.appointmentChair.findMany({ orderBy: { chairNr: 'asc' } });
+});
+
+server.post('/appointment-chairs', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.create');
+  if (!user) return;
+  const count = await prisma.appointmentChair.count();
+  if (count >= 7) return reply.status(400).send({ error: 'Maximum 7 chairs allowed' });
+  const maxNr = await prisma.appointmentChair.aggregate({ _max: { chairNr: true } });
+  const nextNr = (maxNr._max.chairNr || 0) + 1;
+  const body = request.body as JsonRecord;
+  const chair = await prisma.appointmentChair.create({
+    data: {
+      chairId: createChairId(nextNr),
+      chairNr: nextNr,
+      chairNameHu: String(body.chairNameHu || `${nextNr}. szék`),
+      chairNameEn: String(body.chairNameEn || ''),
+      chairNameDe: String(body.chairNameDe || ''),
+      isActive: body.isActive !== false,
+      createdBy: user.id,
+    },
+  });
+  return chair;
+});
+
+server.patch('/appointment-chairs/:chairId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.create');
+  if (!user) return;
+  const { chairId } = request.params as { chairId: string };
+  const body = request.body as JsonRecord;
+  const data: Record<string, unknown> = {};
+  if (body.chairNameHu !== undefined) data.chairNameHu = String(body.chairNameHu);
+  if (body.chairNameEn !== undefined) data.chairNameEn = String(body.chairNameEn);
+  if (body.chairNameDe !== undefined) data.chairNameDe = String(body.chairNameDe);
+  if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
+  return prisma.appointmentChair.update({ where: { chairId }, data });
+});
+
+server.delete('/appointment-chairs/:chairId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.delete');
+  if (!user) return;
+  const { chairId } = request.params as { chairId: string };
+  const count = await prisma.appointmentChair.count();
+  if (count <= 1) return reply.status(400).send({ error: 'Must have at least 1 chair' });
+  const existing = await prisma.appointmentChair.findUnique({ where: { chairId } });
+  if (!existing) return reply.status(404).send({ error: 'Not found' });
+  await prisma.appointmentChair.delete({ where: { chairId } });
+  return { success: true };
+});
+
+// ── Appointments CRUD ─────────────────────────────────────────
+server.get('/appointments', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.view');
+  if (!user) return;
+  const query = request.query as Record<string, string>;
+  const where: Record<string, unknown> = { isArchived: false };
+  if (query.start && query.end) {
+    where.startDateTime = { gte: new Date(query.start) };
+    where.endDateTime = { lte: new Date(query.end) };
+  }
+  if (query.chairIndex !== undefined) where.chairIndex = Number(query.chairIndex);
+  if (query.patientId) where.patientId = query.patientId;
+  if (query.status) where.status = query.status;
+  return prisma.appointment.findMany({
+    where,
+    orderBy: { startDateTime: 'asc' },
+    include: {
+      patient: { select: { patientId: true, lastName: true, firstName: true } },
+      appointmentType: true,
+    },
+  });
+});
+
+server.get('/appointments/by-patient/:patientId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.view');
+  if (!user) return;
+  const { patientId } = request.params as { patientId: string };
+  return prisma.appointment.findMany({
+    where: { patientId, isArchived: false },
+    orderBy: { startDateTime: 'asc' },
+    include: { appointmentType: true },
+  });
+});
+
+server.post('/appointments', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.create');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const appointmentId = createAppointmentId();
+  const appointment = await prisma.appointment.create({
+    data: {
+      appointmentId,
+      patientId: body.patientId ? String(body.patientId) : null,
+      chairIndex: Number(body.chairIndex) || 0,
+      startDateTime: new Date(String(body.startDateTime)),
+      endDateTime: new Date(String(body.endDateTime)),
+      title: String(body.title || ''),
+      description: body.description ? String(body.description) : null,
+      appointmentTypeId: body.appointmentTypeId ? String(body.appointmentTypeId) : null,
+      status: String(body.status || 'scheduled'),
+      color: body.color ? String(body.color) : null,
+      notes: body.notes ? String(body.notes) : null,
+      createdByUserId: user.id,
+    },
+    include: {
+      patient: { select: { patientId: true, lastName: true, firstName: true } },
+      appointmentType: true,
+    },
+  });
+  return appointment;
+});
+
+server.patch('/appointments/:appointmentId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.create');
+  if (!user) return;
+  const { appointmentId } = request.params as { appointmentId: string };
+  const body = request.body as JsonRecord;
+  const data: Record<string, unknown> = {};
+  if (body.patientId !== undefined) data.patientId = body.patientId ? String(body.patientId) : null;
+  if (body.chairIndex !== undefined) data.chairIndex = Number(body.chairIndex);
+  if (body.startDateTime !== undefined) data.startDateTime = new Date(String(body.startDateTime));
+  if (body.endDateTime !== undefined) data.endDateTime = new Date(String(body.endDateTime));
+  if (body.title !== undefined) data.title = String(body.title);
+  if (body.description !== undefined) data.description = body.description ? String(body.description) : null;
+  if (body.appointmentTypeId !== undefined) data.appointmentTypeId = body.appointmentTypeId ? String(body.appointmentTypeId) : null;
+  if (body.status !== undefined) data.status = String(body.status);
+  if (body.color !== undefined) data.color = body.color ? String(body.color) : null;
+  if (body.notes !== undefined) data.notes = body.notes ? String(body.notes) : null;
+  return prisma.appointment.update({
+    where: { appointmentId },
+    data,
+    include: {
+      patient: { select: { patientId: true, lastName: true, firstName: true } },
+      appointmentType: true,
+    },
+  });
+});
+
+server.delete('/appointments/:appointmentId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.delete');
+  if (!user) return;
+  const { appointmentId } = request.params as { appointmentId: string };
+  await prisma.appointment.update({
+    where: { appointmentId },
+    data: { isArchived: true },
+  });
+  return { success: true };
+});
+
 // ── NEAK API Test ─────────────────────────────────────────────
 server.post('/api/neak/test', async (request, reply) => {
   const user = await requirePermission(request, reply, 'settings.view');
@@ -4416,6 +4654,109 @@ const runPendingMigrations = async () => {
     `);
   } catch (e) {
     server.log.warn('Country migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create AppointmentType table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "AppointmentType" (
+        "typeId" TEXT NOT NULL,
+        "nameHu" TEXT NOT NULL,
+        "nameEn" TEXT NOT NULL DEFAULT '',
+        "nameDe" TEXT NOT NULL DEFAULT '',
+        "color" TEXT NOT NULL,
+        "defaultDurationMin" INTEGER NOT NULL,
+        "isSystem" BOOLEAN NOT NULL DEFAULT false,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "sortOrder" INTEGER NOT NULL DEFAULT 0,
+        CONSTRAINT "AppointmentType_pkey" PRIMARY KEY ("typeId")
+      )
+    `);
+  } catch (e) {
+    server.log.warn('AppointmentType migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create Appointment table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Appointment" (
+        "appointmentId" TEXT NOT NULL,
+        "patientId" TEXT,
+        "chairIndex" INTEGER NOT NULL DEFAULT 0,
+        "startDateTime" TIMESTAMP(3) NOT NULL,
+        "endDateTime" TIMESTAMP(3) NOT NULL,
+        "title" TEXT NOT NULL,
+        "description" TEXT,
+        "appointmentTypeId" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'scheduled',
+        "color" TEXT,
+        "notes" TEXT,
+        "isArchived" BOOLEAN NOT NULL DEFAULT false,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        "createdByUserId" TEXT,
+        "googleEventId" TEXT,
+        CONSTRAINT "Appointment_pkey" PRIMARY KEY ("appointmentId"),
+        CONSTRAINT "Appointment_patientId_fkey" FOREIGN KEY ("patientId") REFERENCES "Patient"("patientId") ON DELETE SET NULL ON UPDATE CASCADE,
+        CONSTRAINT "Appointment_appointmentTypeId_fkey" FOREIGN KEY ("appointmentTypeId") REFERENCES "AppointmentType"("typeId") ON DELETE SET NULL ON UPDATE CASCADE
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Appointment_patientId_idx" ON "Appointment"("patientId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Appointment_startDateTime_idx" ON "Appointment"("startDateTime")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Appointment_endDateTime_idx" ON "Appointment"("endDateTime")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Appointment_appointmentTypeId_idx" ON "Appointment"("appointmentTypeId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Appointment_status_idx" ON "Appointment"("status")`);
+  } catch (e) {
+    server.log.warn('Appointment migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Seed default appointment types
+  try {
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO "AppointmentType" ("typeId", "nameHu", "nameEn", "nameDe", "color", "defaultDurationMin", "isSystem", "isActive", "sortOrder")
+      VALUES
+        ('atype001', 'Kontroll', 'Check-up', 'Kontrolle', '#3B82F6', 30, true, true, 1),
+        ('atype002', 'Kezelés', 'Treatment', 'Behandlung', '#10B981', 60, true, true, 2),
+        ('atype003', 'Konzultáció', 'Consultation', 'Beratung', '#8B5CF6', 30, true, true, 3),
+        ('atype004', 'Sürgősségi', 'Emergency', 'Notfall', '#EF4444', 30, true, true, 4),
+        ('atype005', 'Fogkő-eltávolítás', 'Scaling', 'Zahnsteinentfernung', '#14B8A6', 45, true, true, 5),
+        ('atype006', 'Implantátum', 'Implant', 'Implantat', '#F59E0B', 90, true, true, 6)
+      ON CONFLICT ("typeId") DO NOTHING
+    `);
+  } catch (e) {
+    server.log.warn('AppointmentType seed skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create AppointmentChair table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "AppointmentChair" (
+        "chairId" TEXT NOT NULL,
+        "chairNr" INTEGER NOT NULL,
+        "chairNameHu" TEXT NOT NULL,
+        "chairNameEn" TEXT NOT NULL DEFAULT '',
+        "chairNameDe" TEXT NOT NULL DEFAULT '',
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "createdBy" TEXT,
+        CONSTRAINT "AppointmentChair_pkey" PRIMARY KEY ("chairId")
+      )
+    `);
+  } catch (e) {
+    server.log.warn('AppointmentChair migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Seed default chairs
+  try {
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO "AppointmentChair" ("chairId", "chairNr", "chairNameHu", "chairNameEn", "chairNameDe", "isActive", "updatedAt")
+      VALUES
+        ('chair-01', 1, '1. szék', '1st chair', '1. Stuhl', true, NOW()),
+        ('chair-02', 2, '2. szék', '2nd chair', '2. Stuhl', true, NOW())
+      ON CONFLICT ("chairId") DO NOTHING
+    `);
+  } catch (e) {
+    server.log.warn('AppointmentChair seed skipped: ' + (e instanceof Error ? e.message : String(e)));
   }
 };
 

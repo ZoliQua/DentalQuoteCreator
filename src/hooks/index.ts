@@ -6,3 +6,4 @@ export * from './useInvoices';
 export * from './usePriceLists';
 export * from './usePriceListCategories';
 export * from './useCatalogCodeFormatter';
+export * from './useAppointments';

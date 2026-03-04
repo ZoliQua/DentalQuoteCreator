@@ -4,11 +4,14 @@ import { useSettings } from '../context/SettingsContext';
 import { useQuotes } from '../hooks';
 import { Settings, Doctor, DateFormat, PdfFontFamily } from '../types';
 import { Button, Card, CardContent, CardHeader, Input, TextArea, Select, ConfirmModal, Modal, PageTabBar } from '../components/common';
+import { useAppointments } from '../hooks/useAppointments';
+import type { AppointmentType } from '../types';
+import type { AppointmentChair } from '../types/appointment';
 import type { PageTab } from '../components/common/PageTabBar';
 import { formatDateTimeWithPattern } from '../utils';
 import { getAuthHeaders } from '../utils/auth';
 
-type SettingsSection = 'general' | 'clinic' | 'patient' | 'quotes' | 'invoicing' | 'neak';
+type SettingsSection = 'general' | 'clinic' | 'patient' | 'quotes' | 'invoicing' | 'neak' | 'calendar';
 
 type DoctorRow = { doctorId: string; doctorName: string; doctorNum: string; doctorEESZTId: string };
 
@@ -61,6 +64,25 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
   const [deptSortDir, setDeptSortDir] = useState<'asc' | 'desc'>('asc');
   const [newDept, setNewDept] = useState({ neakDepartmentNameHu: '', neakDepartmentNameEn: '', neakDepartmentNameDe: '', neakDepartmentCode: '', neakDepartmentHours: 20, neakDepartmentMaxPoints: 100000, neakDepartmentPrefix: '', neakDepartmentLevel: 'A', neakDepartmentIndicator: 'adult' });
   const [countriesList, setCountriesList] = useState<Array<{ countryId: number; countryNameHu: string; countryNameEn: string; countryNameDe: string }>>([]);
+  // Appointment types for calendar settings
+  const {
+    appointmentTypes,
+    fetchAppointmentTypes,
+    createAppointmentType,
+    updateAppointmentType,
+    deleteAppointmentType,
+    chairs,
+    fetchChairs,
+    createChair,
+    updateChair,
+    deleteChair,
+  } = useAppointments();
+  const [typeModalOpen, setTypeModalOpen] = useState(false);
+  const [editingType, setEditingType] = useState<AppointmentType | null>(null);
+  const [typeForm, setTypeForm] = useState({ nameHu: '', nameEn: '', nameDe: '', color: '#3B82F6', defaultDurationMin: 30, sortOrder: 0, isActive: true });
+  const [chairModalOpen, setChairModalOpen] = useState(false);
+  const [editingChair, setEditingChair] = useState<AppointmentChair | null>(null);
+  const [chairForm, setChairForm] = useState({ chairNameHu: '', chairNameEn: '', chairNameDe: '', isActive: true });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -150,6 +172,13 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
   useEffect(() => {
     if (section === 'neak') loadNeakData();
   }, [section, loadNeakData]);
+
+  useEffect(() => {
+    if (section === 'calendar') {
+      fetchAppointmentTypes();
+      fetchChairs();
+    }
+  }, [section, fetchAppointmentTypes, fetchChairs]);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -377,6 +406,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
     { key: 'general', to: '/settings/general', label: t.settings.tabGeneral, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
     { key: 'clinic', to: '/settings/clinic', label: t.settings.tabClinic, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg> },
     { key: 'patient', to: '/settings/patient', label: t.settings.tabPatient, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
+    { key: 'calendar', to: '/settings/calendar', label: t.settings.tabCalendar, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
     { key: 'quotes', to: '/settings/quotes', label: t.settings.tabQuotes, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
     { key: 'invoicing', to: '/settings/invoicing', label: t.settings.tabInvoicing, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg> },
     { key: 'neak', to: '/settings/neak', label: t.settings.tabNeak, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> },
@@ -414,6 +444,17 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
       icon: (
         <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+    },
+    {
+      key: 'calendar',
+      to: '/settings/calendar',
+      title: t.settings.calendarSettings,
+      description: t.settings.overviewCalendarDesc,
+      icon: (
+        <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
       ),
     },
@@ -1692,6 +1733,377 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
               cancelText={t.common.cancel}
               variant="danger"
             />
+          </>
+        )}
+
+        {section === 'calendar' && (
+          <>
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  {t.calendar.settingsTitle}
+                </h2>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Slot interval + default duration */}
+                <div className="grid grid-cols-3 gap-4">
+                  <Select
+                    label={t.calendar.slotInterval}
+                    value={String(formData.calendar?.slotInterval || 15)}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        calendar: { ...formData.calendar, slotInterval: Number(e.target.value) },
+                      })
+                    }
+                    options={(formData.calendar?.slotIntervalOptions || [5, 10, 15, 30, 45, 60, 90, 120, 150]).map(
+                      (n: number) => ({ value: String(n), label: `${n} ${t.calendar.minutes}` })
+                    )}
+                  />
+                  <Input
+                    label={`${t.calendar.defaultDuration} (${t.calendar.minutes})`}
+                    type="number"
+                    value={String(formData.calendar?.defaultDuration || 30)}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        calendar: { ...formData.calendar, defaultDuration: Number(e.target.value) || 30 },
+                      })
+                    }
+                  />
+                  <Select
+                    label={t.calendar.defaultView}
+                    value={formData.calendar?.defaultView || 'week'}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        calendar: { ...formData.calendar, defaultView: e.target.value as 'week' | 'day' | 'month' },
+                      })
+                    }
+                    options={[
+                      { value: 'week', label: t.calendar.viewWeek },
+                      { value: 'day', label: t.calendar.viewDay },
+                      { value: 'month', label: t.calendar.viewMonth },
+                    ]}
+                  />
+                </div>
+
+                {/* Show weekends */}
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.calendar?.showWeekends !== false}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          calendar: { ...formData.calendar, showWeekends: e.target.checked },
+                        })
+                      }
+                      className="rounded border-gray-300"
+                    />
+                    <span className="text-sm text-gray-700">{t.calendar.showWeekends}</span>
+                  </label>
+                </div>
+
+                {/* Working hours */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">{t.calendar.workingHours}</h3>
+                  <div className="space-y-2">
+                    {(() => {
+                      const rawHours = formData.calendar?.workingHours?.length ? formData.calendar.workingHours : [
+                        { dayOfWeek: 0, isWorkday: false, startTime: '08:00', endTime: '16:00' },
+                        { dayOfWeek: 1, isWorkday: true, startTime: '08:00', endTime: '16:00' },
+                        { dayOfWeek: 2, isWorkday: true, startTime: '08:00', endTime: '16:00' },
+                        { dayOfWeek: 3, isWorkday: true, startTime: '08:00', endTime: '16:00' },
+                        { dayOfWeek: 4, isWorkday: true, startTime: '08:00', endTime: '16:00' },
+                        { dayOfWeek: 5, isWorkday: true, startTime: '08:00', endTime: '14:00' },
+                        { dayOfWeek: 6, isWorkday: false, startTime: '08:00', endTime: '14:00' },
+                      ];
+                      // Reorder: Monday(1)..Saturday(6), Sunday(0)
+                      const mondayFirst = [...rawHours.filter(h => h.dayOfWeek !== 0), ...rawHours.filter(h => h.dayOfWeek === 0)];
+                      return mondayFirst;
+                    })().map((wh: { dayOfWeek: number; isWorkday: boolean; startTime: string; endTime: string; breakStartTime?: string; breakEndTime?: string }) => {
+                      const dayNames: Record<string, string[]> = {
+                        hu: ['Vasárnap', 'Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek', 'Szombat'],
+                        en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+                        de: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'],
+                      };
+                      const names = dayNames[appLanguage] || dayNames.hu;
+                      const updateWh = (field: string, value: unknown) => {
+                        const defaults = [
+                          { dayOfWeek: 0, isWorkday: false, startTime: '08:00', endTime: '16:00' },
+                          { dayOfWeek: 1, isWorkday: true, startTime: '08:00', endTime: '16:00' },
+                          { dayOfWeek: 2, isWorkday: true, startTime: '08:00', endTime: '16:00' },
+                          { dayOfWeek: 3, isWorkday: true, startTime: '08:00', endTime: '16:00' },
+                          { dayOfWeek: 4, isWorkday: true, startTime: '08:00', endTime: '16:00' },
+                          { dayOfWeek: 5, isWorkday: true, startTime: '08:00', endTime: '14:00' },
+                          { dayOfWeek: 6, isWorkday: false, startTime: '08:00', endTime: '14:00' },
+                        ];
+                        const hours = formData.calendar?.workingHours?.length
+                          ? [...formData.calendar.workingHours]
+                          : [...defaults];
+                        const arrIdx = hours.findIndex(h => h.dayOfWeek === wh.dayOfWeek);
+                        if (arrIdx >= 0) hours[arrIdx] = { ...hours[arrIdx], [field]: value };
+                        setFormData({
+                          ...formData,
+                          calendar: { ...formData.calendar, workingHours: hours },
+                        });
+                      };
+                      return (
+                        <div key={wh.dayOfWeek} className="flex items-center gap-3 text-sm">
+                          <label className="flex items-center gap-2 w-32">
+                            <input
+                              type="checkbox"
+                              checked={wh.isWorkday}
+                              onChange={(e) => updateWh('isWorkday', e.target.checked)}
+                              className="rounded border-gray-300"
+                            />
+                            <span className={wh.isWorkday ? 'font-medium' : 'text-gray-400'}>{names[wh.dayOfWeek]}</span>
+                          </label>
+                          <input
+                            type="time"
+                            value={wh.startTime}
+                            onChange={(e) => updateWh('startTime', e.target.value)}
+                            className={`px-2 py-1 border border-gray-300 rounded text-sm ${!wh.isWorkday ? 'opacity-40' : ''}`}
+                          />
+                          <span className="text-gray-400">–</span>
+                          <input
+                            type="time"
+                            value={wh.endTime}
+                            onChange={(e) => updateWh('endTime', e.target.value)}
+                            className={`px-2 py-1 border border-gray-300 rounded text-sm ${!wh.isWorkday ? 'opacity-40' : ''}`}
+                          />
+                          <span className="text-gray-300 ml-2">|</span>
+                          <span className="text-xs text-gray-400">{t.calendar.breakStart}:</span>
+                          <input
+                            type="time"
+                            value={wh.breakStartTime || ''}
+                            onChange={(e) => updateWh('breakStartTime', e.target.value || undefined)}
+                            className={`px-2 py-1 border border-gray-300 rounded text-sm w-24 ${!wh.isWorkday ? 'opacity-40' : ''}`}
+                          />
+                          <span className="text-xs text-gray-400">{t.calendar.breakEnd}:</span>
+                          <input
+                            type="time"
+                            value={wh.breakEndTime || ''}
+                            onChange={(e) => updateWh('breakEndTime', e.target.value || undefined)}
+                            className={`px-2 py-1 border border-gray-300 rounded text-sm w-24 ${!wh.isWorkday ? 'opacity-40' : ''}`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Dental Chairs */}
+          <Card className="mt-6">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  </svg>
+                  {t.calendar.chairsTitle}
+                </h2>
+                <Button size="sm" disabled={chairs.length >= 7} onClick={() => {
+                  setEditingChair(null);
+                  setChairForm({ chairNameHu: '', chairNameEn: '', chairNameDe: '', isActive: true });
+                  setChairModalOpen(true);
+                }}>{t.calendar.addChair}</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.chairNumber}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.chairName}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.status}</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.common.actions}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {chairs.map((chair) => {
+                      const name = appLanguage === 'en' && chair.chairNameEn ? chair.chairNameEn : appLanguage === 'de' && chair.chairNameDe ? chair.chairNameDe : chair.chairNameHu;
+                      return (
+                        <tr key={chair.chairId} className={chair.isActive ? '' : 'opacity-50'}>
+                          <td className="px-4 py-3 text-sm text-gray-600">{chair.chairNr}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{name}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-0.5 rounded text-xs ${chair.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                              {chair.isActive ? t.common.active : t.common.inactive}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button variant="secondary" size="sm" onClick={() => {
+                                setEditingChair(chair);
+                                setChairForm({ chairNameHu: chair.chairNameHu, chairNameEn: chair.chairNameEn, chairNameDe: chair.chairNameDe, isActive: chair.isActive });
+                                setChairModalOpen(true);
+                              }}>{t.common.edit}</Button>
+                              <Button variant="danger" size="sm" disabled={chairs.length <= 1} onClick={async () => {
+                                if (!confirm(t.calendar.deleteChairConfirm)) return;
+                                await deleteChair(chair.chairId);
+                                fetchChairs();
+                              }}>{t.common.delete}</Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {chairs.length >= 7 && (
+                <p className="text-xs text-amber-600 mt-2">{t.calendar.maxSevenChairs}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Chair Edit Modal */}
+          <Modal isOpen={chairModalOpen} onClose={() => setChairModalOpen(false)} title={editingChair ? t.calendar.editChair : t.calendar.addChair}>
+            <div className="space-y-4">
+              <Input label={`${t.calendar.chairName} (HU)`} value={chairForm.chairNameHu} onChange={(e) => setChairForm({ ...chairForm, chairNameHu: e.target.value })} />
+              <Input label={`${t.calendar.chairName} (EN)`} value={chairForm.chairNameEn} onChange={(e) => setChairForm({ ...chairForm, chairNameEn: e.target.value })} />
+              <Input label={`${t.calendar.chairName} (DE)`} value={chairForm.chairNameDe} onChange={(e) => setChairForm({ ...chairForm, chairNameDe: e.target.value })} />
+              <div className="flex items-end pb-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={chairForm.isActive} onChange={(e) => setChairForm({ ...chairForm, isActive: e.target.checked })} className="rounded border-gray-300" />
+                  <span className="text-sm text-gray-700">{t.common.active}</span>
+                </label>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="secondary" onClick={() => setChairModalOpen(false)}>{t.common.cancel}</Button>
+                <Button disabled={!chairForm.chairNameHu} onClick={async () => {
+                  if (editingChair) {
+                    await updateChair(editingChair.chairId, chairForm);
+                  } else {
+                    await createChair(chairForm);
+                  }
+                  setChairModalOpen(false);
+                  fetchChairs();
+                }}>{t.common.save}</Button>
+              </div>
+            </div>
+          </Modal>
+
+          {/* Appointment Types */}
+          <Card className="mt-6">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  </svg>
+                  {t.calendar.typesTitle}
+                </h2>
+                <Button size="sm" onClick={() => {
+                  setEditingType(null);
+                  setTypeForm({ nameHu: '', nameEn: '', nameDe: '', color: '#3B82F6', defaultDurationMin: 30, sortOrder: (appointmentTypes.length + 1) * 10, isActive: true });
+                  setTypeModalOpen(true);
+                }}>{t.calendar.addType}</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.typeColor}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.typeName}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.typeDefaultDuration}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.status}</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.common.actions}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {appointmentTypes.map((type) => {
+                      const name = appLanguage === 'en' && type.nameEn ? type.nameEn : appLanguage === 'de' && type.nameDe ? type.nameDe : type.nameHu;
+                      return (
+                        <tr key={type.typeId} className={type.isActive ? '' : 'opacity-50'}>
+                          <td className="px-4 py-3"><div className="w-6 h-6 rounded-full border border-gray-200" style={{ backgroundColor: type.color }} /></td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                            {name}
+                            {type.isSystem && <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{t.calendar.typeSystem}</span>}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{type.defaultDurationMin} {t.calendar.minutes}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-0.5 rounded text-xs ${type.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                              {type.isActive ? t.common.active : t.common.inactive}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button variant="secondary" size="sm" onClick={() => {
+                                setEditingType(type);
+                                setTypeForm({ nameHu: type.nameHu, nameEn: type.nameEn, nameDe: type.nameDe, color: type.color, defaultDurationMin: type.defaultDurationMin, sortOrder: type.sortOrder, isActive: type.isActive });
+                                setTypeModalOpen(true);
+                              }}>{t.common.edit}</Button>
+                              {!type.isSystem && (
+                                <Button variant="danger" size="sm" onClick={async () => {
+                                  if (!confirm(t.calendar.deleteConfirm)) return;
+                                  await deleteAppointmentType(type.typeId);
+                                  fetchAppointmentTypes();
+                                }}>{t.common.delete}</Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Type Edit Modal */}
+          <Modal isOpen={typeModalOpen} onClose={() => setTypeModalOpen(false)} title={editingType ? t.calendar.editType : t.calendar.addType}>
+            <div className="space-y-4">
+              <Input label={`${t.calendar.typeName} (HU)`} value={typeForm.nameHu} onChange={(e) => setTypeForm({ ...typeForm, nameHu: e.target.value })} />
+              <Input label={`${t.calendar.typeName} (EN)`} value={typeForm.nameEn} onChange={(e) => setTypeForm({ ...typeForm, nameEn: e.target.value })} />
+              <Input label={`${t.calendar.typeName} (DE)`} value={typeForm.nameDe} onChange={(e) => setTypeForm({ ...typeForm, nameDe: e.target.value })} />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.calendar.typeColor}</label>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={typeForm.color} onChange={(e) => setTypeForm({ ...typeForm, color: e.target.value })} className="w-10 h-10 rounded border border-gray-300 cursor-pointer" />
+                    <input type="text" value={typeForm.color} onChange={(e) => setTypeForm({ ...typeForm, color: e.target.value })} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                  </div>
+                </div>
+                <Input label={`${t.calendar.typeDefaultDuration} (${t.calendar.minutes})`} type="number" value={String(typeForm.defaultDurationMin)} onChange={(e) => setTypeForm({ ...typeForm, defaultDurationMin: Number(e.target.value) || 30 })} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Sort order" type="number" value={String(typeForm.sortOrder)} onChange={(e) => setTypeForm({ ...typeForm, sortOrder: Number(e.target.value) || 0 })} />
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={typeForm.isActive} onChange={(e) => setTypeForm({ ...typeForm, isActive: e.target.checked })} className="rounded border-gray-300" />
+                    <span className="text-sm text-gray-700">{t.common.active}</span>
+                  </label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="secondary" onClick={() => setTypeModalOpen(false)}>{t.common.cancel}</Button>
+                <Button disabled={!typeForm.nameHu} onClick={async () => {
+                  if (editingType) {
+                    await updateAppointmentType(editingType.typeId, typeForm);
+                  } else {
+                    await createAppointmentType(typeForm);
+                  }
+                  setTypeModalOpen(false);
+                  fetchAppointmentTypes();
+                }}>{t.common.save}</Button>
+              </div>
+            </div>
+          </Modal>
           </>
         )}
       </div>

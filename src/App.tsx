@@ -21,6 +21,7 @@ import { LoginPage } from './pages/LoginPage';
 import { AdminPage } from './pages/AdminPage';
 import { VisualQuoteEditorPage } from './pages/VisualQuoteEditorPage';
 import { DatabaseBrowserPage } from './pages/DatabaseBrowserPage';
+import { CalendarPage } from './pages/CalendarPage';
 import { CatalogLayout } from './pages/CatalogLayout';
 import { Card, CardContent } from './components/common';
 import { ImporterPage } from '@dq-importer';
@@ -114,6 +115,11 @@ function App() {
         <Route path="/settings/quotes" element={<Guard permission="settings.view"><SettingsPage key="quotes" section="quotes" /></Guard>} />
         <Route path="/settings/invoicing" element={<Guard permission="settings.view"><SettingsPage key="invoicing" section="invoicing" /></Guard>} />
         <Route path="/settings/neak" element={<Guard permission="settings.view"><SettingsPage key="neak" section="neak" /></Guard>} />
+        <Route path="/settings/calendar" element={<Guard permission="settings.view"><SettingsPage key="calendar" section="calendar" /></Guard>} />
+        <Route path="/calendar" element={<Guard permission="calendar.view"><CalendarPage /></Guard>} />
+        <Route path="/calendar/day" element={<Guard permission="calendar.view"><CalendarPage initialView="timeGridDay" /></Guard>} />
+        <Route path="/calendar/week" element={<Guard permission="calendar.view"><CalendarPage initialView="timeGridWeek" /></Guard>} />
+        <Route path="/calendar/month" element={<Guard permission="calendar.view"><CalendarPage initialView="dayGridMonth" /></Guard>} />
         <Route path="/invoices" element={<Guard permission="invoices.view"><InvoicesPage /></Guard>} />
         <Route path="/invoices/:invoiceId" element={<Guard permission="invoices.view.detail"><InvoiceDetailPage /></Guard>} />
         <Route path="/data" element={<Guard permission="data.view"><DataManagementPage key="overview" /></Guard>} />

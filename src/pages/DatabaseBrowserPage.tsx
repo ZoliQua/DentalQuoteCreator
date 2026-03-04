@@ -28,6 +28,9 @@ const PAGE_SIZES = [10, 25, 50, 100];
 const READ_ONLY_COLUMNS = new Set(['createdAt', 'updatedAt']);
 
 const TABLES = [
+  'Appointment',
+  'AppointmentChair',
+  'AppointmentType',
   'AppSettings',
   'AuthSession',
   'Country',

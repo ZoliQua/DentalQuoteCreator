@@ -55,7 +55,8 @@ import {
   updateTimelineSnapshot,
 } from '../modules/odontogram/odontogramTimelineStorage';
 import type { OdontogramState, OdontogramTimelineEntry } from '../modules/odontogram/types';
-import type { Patient, PatientFormData, Country } from '../types';
+import type { Patient, PatientFormData, Country, Appointment } from '../types';
+import { useAppointments } from '../hooks/useAppointments';
 import { NeakCheckModal } from '../modules/neak/NeakCheckModal';
 import { checkJogviszony, saveCheck } from '../modules/neak';
 
@@ -199,6 +200,16 @@ export function PatientDetailPage() {
     if (!c) return id;
     return appLanguage === 'de' ? c.countryNameDe : appLanguage === 'en' ? c.countryNameEn : c.countryNameHu;
   };
+  const { fetchAppointmentsByPatient } = useAppointments();
+  const [patientAppointments, setPatientAppointments] = useState<Appointment[]>([]);
+
+  useEffect(() => {
+    if (!patientId) return;
+    fetchAppointmentsByPatient(patientId).then((data) => {
+      if (Array.isArray(data)) setPatientAppointments(data);
+    });
+  }, [patientId, fetchAppointmentsByPatient]);
+
   const hostRef = useRef<OdontogramHostHandle | null>(null);
   const { getPatient, editPatient, duplicatePatient, archivePatient, deletePatient } = usePatients();
   const { getQuotesByPatient, createQuote, deleteQuote, duplicateQuote, addEventToQuote, getQuote, reopenTreatment } = useQuotes();
@@ -725,6 +736,58 @@ export function PatientDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Upcoming Appointments */}
+        {patientAppointments.length > 0 && (
+          <Card>
+            <CardHeader>
+              <h2 className="text-sm font-semibold">{t.calendar.upcomingAppointments}</h2>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {patientAppointments
+                  .filter((a) => new Date(a.startDateTime) >= new Date())
+                  .slice(0, 5)
+                  .map((a) => {
+                    const start = new Date(a.startDateTime);
+                    const statusColors: Record<string, string> = {
+                      scheduled: 'bg-blue-100 text-blue-800',
+                      confirmed: 'bg-green-100 text-green-800',
+                      completed: 'bg-gray-100 text-gray-600',
+                      cancelled: 'bg-red-100 text-red-700',
+                      noShow: 'bg-yellow-100 text-yellow-800',
+                    };
+                    const statusLabels: Record<string, string> = {
+                      scheduled: t.calendar.statusScheduled,
+                      confirmed: t.calendar.statusConfirmed,
+                      completed: t.calendar.statusCompleted,
+                      cancelled: t.calendar.statusCancelled,
+                      noShow: t.calendar.statusNoShow,
+                    };
+                    return (
+                      <div key={a.appointmentId} className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          {a.appointmentType && (
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: a.appointmentType.color }} />
+                          )}
+                          <span className="font-medium">{a.title}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-gray-500">
+                          <span>{start.toLocaleDateString()} {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-xs ${statusColors[a.status] || 'bg-gray-100 text-gray-600'}`}>
+                            {statusLabels[a.status] || a.status}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                {patientAppointments.filter((a) => new Date(a.startDateTime) >= new Date()).length === 0 && (
+                  <p className="text-sm text-gray-400">{t.calendar.noAppointments}</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div id="patientQuotesSection" className="lg:col-span-2 space-y-4">
           <div id="patientQuotesHeader" className="flex items-center justify-between">

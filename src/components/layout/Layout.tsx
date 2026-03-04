@@ -68,6 +68,22 @@ export function Layout({ children }: LayoutProps) {
       ],
     },
     {
+      key: 'calendar',
+      to: '/calendar',
+      label: t.nav.calendar,
+      permission: 'calendar.view',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+      children: [
+        { to: '/calendar/day', label: t.nav.calendarDay },
+        { to: '/calendar/week', label: t.nav.calendarWeek },
+        { to: '/calendar/month', label: t.nav.calendarMonth },
+      ],
+    },
+    {
       key: 'quotes',
       to: '/quotes',
       label: t.nav.quotes,
@@ -151,6 +167,7 @@ export function Layout({ children }: LayoutProps) {
         { to: '/settings/general', label: t.nav.settingsGeneral },
         { to: '/settings/clinic', label: t.nav.settingsClinic },
         { to: '/settings/patient', label: t.nav.settingsPatient },
+        { to: '/settings/calendar', label: t.nav.settingsCalendar },
         { to: '/settings/quotes', label: t.nav.settingsQuotes },
         { to: '/settings/invoicing', label: t.nav.settingsInvoicing },
         { to: '/settings/neak', label: t.nav.settingsNeak },

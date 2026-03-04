@@ -73,9 +73,10 @@ export interface Settings {
   clinic: ClinicSettings;
   doctors: Doctor[];
   pdf: PdfSettings;
-  quote: QuoteSettings; // New: quote numbering settings
+  quote: QuoteSettings;
   invoice: InvoiceSettings;
   patient: PatientSettings;
+  calendar: import('./appointment').CalendarSettings;
   language: 'hu' | 'en' | 'de';
   defaultValidityDays: number;
   dateFormat: DateFormat;
