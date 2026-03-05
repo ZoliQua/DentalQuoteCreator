@@ -47,17 +47,18 @@ export function useAppointments() {
     return res.json();
   }, []);
 
-  const updateAppointment = useCallback(async (id: string, data: Partial<Appointment>): Promise<Appointment> => {
+  const updateAppointment = useCallback(async (id: string, data: Partial<Appointment>, scope?: 'single' | 'future' | 'all'): Promise<Appointment> => {
     const res = await fetch(`${API}/appointments/${id}`, {
       method: 'PATCH',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, scope: scope || 'single' }),
     });
     return res.json();
   }, []);
 
-  const deleteAppointment = useCallback(async (id: string) => {
-    await fetch(`${API}/appointments/${id}`, {
+  const deleteAppointment = useCallback(async (id: string, scope?: 'single' | 'future' | 'all') => {
+    const params = scope && scope !== 'single' ? `?scope=${scope}` : '';
+    await fetch(`${API}/appointments/${id}${params}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });

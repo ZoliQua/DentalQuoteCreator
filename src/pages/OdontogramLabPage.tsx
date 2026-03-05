@@ -57,15 +57,15 @@ export function OdontogramLabPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t.nav.lab}</h1>
-        <p className="text-sm text-gray-500">{t.lab.subtitle}</p>
+        <h1 className="text-2xl font-bold text-theme-primary">{t.nav.lab}</h1>
+        <p className="text-sm text-theme-tertiary">{t.lab.subtitle}</p>
       </div>
 
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">{t.lab.odontogramTitle}</h2>
-            <span className="text-xs text-gray-500">{t.lab.defaultModeEdit}</span>
+            <span className="text-xs text-theme-tertiary">{t.lab.defaultModeEdit}</span>
           </div>
         </CardHeader>
         <CardContent>
@@ -83,7 +83,7 @@ export function OdontogramLabPage() {
         <CardHeader>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <h2 className="text-lg font-semibold">{t.lab.debugPanelTitle}</h2>
-            {statusMessage && <span className="text-sm text-gray-500">{statusMessage}</span>}
+            {statusMessage && <span className="text-sm text-theme-tertiary">{statusMessage}</span>}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">

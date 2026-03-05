@@ -84,7 +84,7 @@ export function AppointmentTypesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">{t.calendar.typesTitle}</h1>
+        <h1 className="text-2xl font-bold text-theme-primary">{t.calendar.typesTitle}</h1>
         <Button onClick={openCreate}>{t.calendar.addType}</Button>
       </div>
 
@@ -94,44 +94,44 @@ export function AppointmentTypesPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-theme-primary">
+              <thead className="bg-theme-tertiary">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">
                     {t.calendar.typeColor}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">
                     {t.calendar.typeName}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">
                     {t.calendar.typeDefaultDuration}
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">
                     {t.calendar.status}
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-theme-tertiary uppercase">
                     {t.common.actions}
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-theme-primary">
                 {appointmentTypes.map((type) => (
                   <tr key={type.typeId} className={type.isActive ? '' : 'opacity-50'}>
                     <td className="px-4 py-3">
                       <div
-                        className="w-6 h-6 rounded-full border border-gray-200"
+                        className="w-6 h-6 rounded-full border border-theme-primary"
                         style={{ backgroundColor: type.color }}
                       />
                     </td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    <td className="px-4 py-3 text-sm font-medium text-theme-primary">
                       {getTypeName(type)}
                       {type.isSystem && (
-                        <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                        <span className="ml-2 text-xs bg-theme-hover text-theme-secondary px-2 py-0.5 rounded">
                           {t.calendar.typeSystem}
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
+                    <td className="px-4 py-3 text-sm text-theme-secondary">
                       {type.defaultDurationMin} {t.calendar.minutes}
                     </td>
                     <td className="px-4 py-3 text-sm">
@@ -139,7 +139,7 @@ export function AppointmentTypesPage() {
                         className={`px-2 py-0.5 rounded text-xs ${
                           type.isActive
                             ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-600'
+                            : 'bg-theme-hover text-theme-secondary'
                         }`}
                       >
                         {type.isActive ? t.common.active : t.common.inactive}
@@ -193,7 +193,7 @@ export function AppointmentTypesPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
                 {t.calendar.typeColor}
               </label>
               <div className="flex items-center gap-2">
@@ -201,13 +201,13 @@ export function AppointmentTypesPage() {
                   type="color"
                   value={form.color}
                   onChange={(e) => setForm({ ...form, color: e.target.value })}
-                  className="w-10 h-10 rounded border border-gray-300 cursor-pointer"
+                  className="w-10 h-10 rounded border border-theme-secondary cursor-pointer"
                 />
                 <input
                   type="text"
                   value={form.color}
                   onChange={(e) => setForm({ ...form, color: e.target.value })}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  className="flex-1 px-3 py-2 border border-theme-secondary rounded-lg text-sm"
                 />
               </div>
             </div>
@@ -232,9 +232,9 @@ export function AppointmentTypesPage() {
                   type="checkbox"
                   checked={form.isActive}
                   onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                  className="rounded border-gray-300"
+                  className="rounded border-theme-secondary"
                 />
-                <span className="text-sm text-gray-700">{t.common.active}</span>
+                <span className="text-sm text-theme-secondary">{t.common.active}</span>
               </label>
             </div>
           </div>

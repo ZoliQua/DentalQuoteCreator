@@ -131,7 +131,7 @@ function TimelineActionButtons({
     <div className="flex items-center gap-1">
       <button
         type="button"
-        className="rounded-md border border-gray-200 p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+        className="rounded-md border border-theme-primary p-2 text-theme-secondary transition-colors hover:bg-theme-hover hover:text-theme-primary"
         onClick={(event) => {
           event.stopPropagation();
           onEdit();
@@ -146,7 +146,7 @@ function TimelineActionButtons({
       </button>
       <button
         type="button"
-        className="rounded-md border border-gray-200 p-2 text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
+        className="rounded-md border border-theme-primary p-2 text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
         onClick={(event) => {
           event.stopPropagation();
           onDelete();
@@ -171,7 +171,7 @@ function TimelinePlusButton({ onClick, title }: { onClick: () => void; title: st
       onClick={onClick}
       title={title}
       aria-label={title}
-      className="rounded-md border border-gray-200 p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+      className="rounded-md border border-theme-primary p-2 text-theme-secondary transition-colors hover:bg-theme-hover hover:text-theme-primary"
     >
       <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -296,7 +296,7 @@ export function PatientDetailPage() {
   if (!patient) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-gray-900">{t.patients.notFound}</h2>
+        <h2 className="text-xl font-semibold text-theme-primary">{t.patients.notFound}</h2>
         <Link to="/patients" className="text-dental-600 hover:text-dental-700 mt-4 inline-block">
           {t.patients.backToPatients}
         </Link>
@@ -498,17 +498,17 @@ export function PatientDetailPage() {
     <div id="patientDetailPage" className="space-y-6">
       <div id="patientHeader" className="flex items-start justify-between">
         <div id="patientTitleBlock">
-          <div id="patientBreadcrumb" className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+          <div id="patientBreadcrumb" className="flex items-center gap-2 text-sm text-theme-tertiary mb-2">
             <Link to="/patients" className="hover:text-dental-600">
               {t.patients.title}
             </Link>
             <span>/</span>
             <span>{formatPatientName(patient.lastName, patient.firstName, patient.title)}</span>
           </div>
-          <h1 id="patientNameDisplay" className="text-2xl font-bold text-gray-900">
+          <h1 id="patientNameDisplay" className="text-2xl font-bold text-theme-primary">
             {formatPatientName(patient.lastName, patient.firstName, patient.title)}
             {patientAge !== null && (
-              <span className="ml-2 align-middle text-base font-medium text-gray-500">
+              <span className="ml-2 align-middle text-base font-medium text-theme-tertiary">
                 ({patientAge}
                 {(patient.sex === 'male' || patient.sex === 'female') && (
                   <img
@@ -540,9 +540,9 @@ export function PatientDetailPage() {
             initialState={initialOdontogramState}
             onChange={() => {}}
             panelContent={
-              <div className="rounded-lg border border-gray-200 bg-gray-50">
-                <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-                  <span className="text-sm font-semibold text-gray-900">{t.patients.statusTimeline}</span>
+              <div className="rounded-lg border border-theme-primary bg-theme-tertiary">
+                <div className="flex items-center justify-between border-b border-theme-primary px-4 py-3">
+                  <span className="text-sm font-semibold text-theme-primary">{t.patients.statusTimeline}</span>
                   <TimelinePlusButton
                     onClick={handleAddTimelineStatus}
                     title={t.patients.statusTimelineAdd}
@@ -550,7 +550,7 @@ export function PatientDetailPage() {
                 </div>
                 <div className="space-y-2 px-4 py-3">
                   {timelineRows.length === 0 ? (
-                    <p className="text-sm text-gray-500">{t.patients.noStatusHistory}</p>
+                    <p className="text-sm text-theme-tertiary">{t.patients.noStatusHistory}</p>
                   ) : (
                     timelineRows.map((entry) => (
                       <div
@@ -558,11 +558,11 @@ export function PatientDetailPage() {
                         className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 ${
                           activeSnapshotId === entry.snapshotId
                             ? 'border-dental-300 bg-dental-50'
-                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                            : 'border-theme-primary bg-theme-secondary hover:bg-theme-tertiary'
                         }`}
                         onClick={() => loadSnapshotForView(entry.snapshotId)}
                       >
-                        <span className="text-sm text-gray-700">{entry.formatted}</span>
+                        <span className="text-sm text-theme-secondary">{entry.formatted}</span>
                         <TimelineActionButtons
                           onEdit={() => handleOpenEditSnapshot(entry.snapshotId)}
                           onDelete={() => setPendingDeleteSnapshotId(entry.snapshotId)}
@@ -598,32 +598,32 @@ export function PatientDetailPage() {
             <div id="patientDataCardContent">
               <CardContent className="space-y-4">
             <div>
-              <label className="text-sm text-gray-500">{t.patients.birthDate}</label>
+              <label className="text-sm text-theme-tertiary">{t.patients.birthDate}</label>
               <p className="font-medium">{formatDate(patient.birthDate, 'long')}</p>
             </div>
             {patient.birthPlace && (
               <div>
-                <label className="text-sm text-gray-500">{t.patients.birthPlace}</label>
+                <label className="text-sm text-theme-tertiary">{t.patients.birthPlace}</label>
                 <p className="font-medium">{patient.birthPlace}</p>
               </div>
             )}
             {patient.mothersName && (
               <div>
-                <label className="text-sm text-gray-500">{t.patients.mothersName}</label>
+                <label className="text-sm text-theme-tertiary">{t.patients.mothersName}</label>
                 <p className="font-medium">{patient.mothersName}</p>
               </div>
             )}
             <div>
-              <label className="text-sm text-gray-500">{t.patients.sex}</label>
+              <label className="text-sm text-theme-tertiary">{t.patients.sex}</label>
               <p className="font-medium">{t.patients[patient.sex]}</p>
             </div>
             {patient.insuranceNum && (
               <div>
-                <label className="text-sm text-gray-500">{t.patients.insuranceNum}</label>
+                <label className="text-sm text-theme-tertiary">{t.patients.insuranceNum}</label>
                 <div className="flex items-center gap-2">
                   <p className="font-medium">{patient.insuranceNum}</p>
                   {patient.neakDocumentType != null && patient.neakDocumentType !== 1 && (
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                    <span className="text-xs bg-theme-hover text-theme-secondary px-2 py-0.5 rounded">
                       {t.patients[`neakDocType${patient.neakDocumentType}` as keyof typeof t.patients] || t.patients.neakDocumentType}
                     </span>
                   )}
@@ -631,7 +631,7 @@ export function PatientDetailPage() {
                     <button
                       type="button"
                       onClick={() => setNeakModalOpen(true)}
-                      className="rounded-md border border-gray-200 p-1.5 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
+                      className="rounded-md border border-theme-primary p-1.5 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
                       title={t.neak.checkButton}
                     >
                       <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -642,7 +642,7 @@ export function PatientDetailPage() {
                   )}
                 </div>
                 {neakChecks.length > 0 && neakChecks[0].result.tranKod && (
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-theme-muted mt-1">
                     {t.neak.transactionCode}: <span className="font-mono">{neakChecks[0].result.tranKod}</span>
                   </p>
                 )}
@@ -650,7 +650,7 @@ export function PatientDetailPage() {
             )}
             {(patient.zipCode || patient.city || patient.street) && (
               <div>
-                <label className="text-sm text-gray-500">{t.patients.addressSection}</label>
+                <label className="text-sm text-theme-tertiary">{t.patients.addressSection}</label>
                 <p className="font-medium">
                   {patient.country && patient.isForeignAddress ? `${resolveCountryName(patient.country)}, ` : ''}
                   {[patient.zipCode, patient.city].filter(Boolean).join(' ')}
@@ -658,7 +658,7 @@ export function PatientDetailPage() {
                   {patient.street}
                 </p>
                 {patient.isForeignAddress && (
-                  <span className="inline-block mt-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                  <span className="inline-block mt-1 text-xs bg-theme-hover text-theme-secondary px-2 py-0.5 rounded">
                     {t.patients.foreignAddress}
                   </span>
                 )}
@@ -666,43 +666,43 @@ export function PatientDetailPage() {
             )}
             {patient.phone && (
               <div>
-                <label className="text-sm text-gray-500">{t.patients.phone}</label>
+                <label className="text-sm text-theme-tertiary">{t.patients.phone}</label>
                 <p className="font-medium">{patient.phone}</p>
               </div>
             )}
             {patient.email && (
               <div>
-                <label className="text-sm text-gray-500">{t.patients.email}</label>
+                <label className="text-sm text-theme-tertiary">{t.patients.email}</label>
                 <p className="font-medium">{patient.email}</p>
               </div>
             )}
             {(patient.patientVATName || patient.patientVATNumber || patient.patientVATAddress) && (
               <div>
-                <label className="text-sm text-gray-500">{t.patients.billingSection}</label>
+                <label className="text-sm text-theme-tertiary">{t.patients.billingSection}</label>
                 {patient.patientVATName && <p className="font-medium">{patient.patientVATName}</p>}
-                {patient.patientVATNumber && <p className="text-sm text-gray-600">{t.patients.patientVATNumber}: {patient.patientVATNumber}</p>}
-                {patient.patientVATAddress && <p className="text-sm text-gray-600">{t.patients.patientVATAddress}: {patient.patientVATAddress}</p>}
+                {patient.patientVATNumber && <p className="text-sm text-theme-secondary">{t.patients.patientVATNumber}: {patient.patientVATNumber}</p>}
+                {patient.patientVATAddress && <p className="text-sm text-theme-secondary">{t.patients.patientVATAddress}: {patient.patientVATAddress}</p>}
               </div>
             )}
             {patient.patientDiscount != null && patient.patientDiscount > 0 && (
               <div>
-                <label className="text-sm text-gray-500">{t.patients.patientDiscount}</label>
+                <label className="text-sm text-theme-tertiary">{t.patients.patientDiscount}</label>
                 <p className="font-medium">{patient.patientDiscount}%</p>
               </div>
             )}
             {patient.patientType && (
               <div>
-                <label className="text-sm text-gray-500">{t.patients.patientType}</label>
+                <label className="text-sm text-theme-tertiary">{t.patients.patientType}</label>
                 <p className="font-medium">{patient.patientType}</p>
               </div>
             )}
             {patient.notes && (
               <div>
-                <label className="text-sm text-gray-500">{t.patients.notes}</label>
-                <p className="text-gray-700 whitespace-pre-wrap">{patient.notes}</p>
+                <label className="text-sm text-theme-tertiary">{t.patients.notes}</label>
+                <p className="text-theme-secondary whitespace-pre-wrap">{patient.notes}</p>
               </div>
             )}
-            <div className="pt-4 border-t text-sm text-gray-500">
+            <div className="pt-4 border-t text-sm text-theme-tertiary">
               <p>
                 {t.patients.createdAt}: {formatDate(patient.createdAt)}
               </p>
@@ -753,7 +753,7 @@ export function PatientDetailPage() {
                     const statusColors: Record<string, string> = {
                       scheduled: 'bg-blue-100 text-blue-800',
                       confirmed: 'bg-green-100 text-green-800',
-                      completed: 'bg-gray-100 text-gray-600',
+                      completed: 'bg-theme-hover text-theme-secondary',
                       cancelled: 'bg-red-100 text-red-700',
                       noShow: 'bg-yellow-100 text-yellow-800',
                     };
@@ -772,9 +772,9 @@ export function PatientDetailPage() {
                           )}
                           <span className="font-medium">{a.title}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-gray-500">
+                        <div className="flex items-center gap-2 text-theme-tertiary">
                           <span>{start.toLocaleDateString()} {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          <span className={`px-1.5 py-0.5 rounded text-xs ${statusColors[a.status] || 'bg-gray-100 text-gray-600'}`}>
+                          <span className={`px-1.5 py-0.5 rounded text-xs ${statusColors[a.status] || 'bg-theme-hover text-theme-secondary'}`}>
                             {statusLabels[a.status] || a.status}
                           </span>
                         </div>
@@ -782,7 +782,7 @@ export function PatientDetailPage() {
                     );
                   })}
                 {patientAppointments.filter((a) => new Date(a.startDateTime) >= new Date()).length === 0 && (
-                  <p className="text-sm text-gray-400">{t.calendar.noAppointments}</p>
+                  <p className="text-sm text-theme-muted">{t.calendar.noAppointments}</p>
                 )}
               </div>
             </CardContent>
@@ -832,9 +832,9 @@ export function PatientDetailPage() {
                       >
                         <div className="flex items-center gap-4">
                           <div>
-                            <h3 className="font-semibold text-gray-900">{quote.quoteName}</h3>
-                            <div className="flex items-center gap-3 text-sm text-gray-500">
-                              <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-600">
+                            <h3 className="font-semibold text-theme-primary">{quote.quoteName}</h3>
+                            <div className="flex items-center gap-3 text-sm text-theme-tertiary">
+                              <span className="rounded bg-theme-hover px-2 py-0.5 font-mono text-xs text-theme-secondary">
                                 {quote.quoteNumber || formatQuoteId(quote.quoteId)}
                               </span>
                               <span>{formatDate(quote.createdAt)}</span>
@@ -866,8 +866,8 @@ export function PatientDetailPage() {
                       </Link>
                       <div className="flex items-center gap-4">
                         <div className="text-right">
-                          <p className="font-semibold text-gray-900">{formatCurrency(totals.total)}</p>
-                          <p className="text-sm text-gray-500">
+                          <p className="font-semibold text-theme-primary">{formatCurrency(totals.total)}</p>
+                          <p className="text-sm text-theme-tertiary">
                             {t.quotes.itemsCount.replace('{count}', String(quote.items.length))}
                           </p>
                         </div>
@@ -907,7 +907,7 @@ export function PatientDetailPage() {
           {patientInvoices.length === 0 ? (
             <Card>
               <CardContent>
-                <p className="text-sm text-gray-500">{t.patients.noInvoicesForPatient}</p>
+                <p className="text-sm text-theme-tertiary">{t.patients.noInvoicesForPatient}</p>
               </CardContent>
             </Card>
           ) : (
@@ -923,10 +923,10 @@ export function PatientDetailPage() {
                     {hasPermission('invoices.view.detail') ? (
                       <Link to={`/invoices/${invoice.id}`} className="flex-1">
                         <div>
-                          <h3 className="font-semibold text-gray-900">
+                          <h3 className="font-semibold text-theme-primary">
                             {invoice.szamlazzInvoiceNumber || t.invoices.preview}
                           </h3>
-                          <div className="flex items-center gap-3 text-sm text-gray-500">
+                          <div className="flex items-center gap-3 text-sm text-theme-tertiary">
                             <span>{formatDateTime(invoice.createdAt)}</span>
                             <Badge
                               variant={
@@ -945,10 +945,10 @@ export function PatientDetailPage() {
                       </Link>
                     ) : (
                       <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">
+                        <h3 className="font-semibold text-theme-primary">
                           {invoice.szamlazzInvoiceNumber || t.invoices.preview}
                         </h3>
-                        <div className="flex items-center gap-3 text-sm text-gray-500">
+                        <div className="flex items-center gap-3 text-sm text-theme-tertiary">
                           <span>{formatDateTime(invoice.createdAt)}</span>
                           <Badge
                             variant={
@@ -967,7 +967,7 @@ export function PatientDetailPage() {
                     )}
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <p className={`font-semibold ${invoice.status === 'storno' ? 'text-red-600' : 'text-gray-900'}`}>
+                        <p className={`font-semibold ${invoice.status === 'storno' ? 'text-red-600' : 'text-theme-primary'}`}>
                           {invoice.status === 'storno' ? `-${formatCurrency(invoice.totalGross, invoice.currency)}` : formatCurrency(invoice.totalGross, invoice.currency)}
                         </p>
                       </div>
@@ -1014,7 +1014,7 @@ export function PatientDetailPage() {
               {neakChecks.length === 0 ? (
                 <Card>
                   <CardContent>
-                    <p className="text-sm text-gray-500">{t.neak.noHistory}</p>
+                    <p className="text-sm text-theme-tertiary">{t.neak.noHistory}</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -1035,10 +1035,10 @@ export function PatientDetailPage() {
                         <CardContent>
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="text-sm text-gray-500">
+                              <p className="text-sm text-theme-tertiary">
                                 {formatDateTime(entry.checkedAt)}
                               </p>
-                              <p className="text-xs text-gray-400">TAJ: {formatInsuranceNum(entry.taj)}</p>
+                              <p className="text-xs text-theme-muted">TAJ: {formatInsuranceNum(entry.taj)}</p>
                             </div>
                             <div>
                               {badge ? (
@@ -1053,7 +1053,7 @@ export function PatientDetailPage() {
                             </div>
                           </div>
                           {entry.result.tranKod && (
-                            <p className="text-xs text-gray-400 mt-1 font-mono">{t.neak.transactionCode}: {entry.result.tranKod}</p>
+                            <p className="text-xs text-theme-muted mt-1 font-mono">{t.neak.transactionCode}: {entry.result.tranKod}</p>
                           )}
                         </CardContent>
                       </Card>
@@ -1167,7 +1167,7 @@ export function PatientDetailPage() {
         <div className="space-y-3">
           <button
             type="button"
-            className="w-full rounded-lg border border-gray-200 p-4 text-left hover:border-dental-400 hover:bg-dental-50 transition-colors"
+            className="w-full rounded-lg border border-theme-primary p-4 text-left hover:border-dental-400 hover:bg-dental-50 transition-colors"
             onClick={handleCreateItemizedQuote}
           >
             <div className="flex items-center gap-3">
@@ -1175,15 +1175,15 @@ export function PatientDetailPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
               </svg>
               <div>
-                <p className="font-semibold text-gray-900">{t.quotes.newQuoteItemized}</p>
-                <p className="text-sm text-gray-500">{t.quotes.newQuoteItemizedDesc}</p>
+                <p className="font-semibold text-theme-primary">{t.quotes.newQuoteItemized}</p>
+                <p className="text-sm text-theme-tertiary">{t.quotes.newQuoteItemizedDesc}</p>
               </div>
             </div>
           </button>
 
           <button
             type="button"
-            className="w-full rounded-lg border border-gray-200 p-4 text-left hover:border-dental-400 hover:bg-dental-50 transition-colors"
+            className="w-full rounded-lg border border-theme-primary p-4 text-left hover:border-dental-400 hover:bg-dental-50 transition-colors"
             onClick={handleCreateVisualQuote}
           >
             <div className="flex items-center gap-3">
@@ -1191,27 +1191,27 @@ export function PatientDetailPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
               </svg>
               <div>
-                <p className="font-semibold text-gray-900">{t.quotes.newQuoteVisual}</p>
-                <p className="text-sm text-gray-500">{t.quotes.newQuoteVisualDesc}</p>
+                <p className="font-semibold text-theme-primary">{t.quotes.newQuoteVisual}</p>
+                <p className="text-sm text-theme-tertiary">{t.quotes.newQuoteVisualDesc}</p>
               </div>
             </div>
           </button>
 
           <button
             type="button"
-            className="w-full rounded-lg border border-gray-200 p-4 text-left opacity-50 cursor-not-allowed"
+            className="w-full rounded-lg border border-theme-primary p-4 text-left opacity-50 cursor-not-allowed"
             disabled
           >
             <div className="flex items-center gap-3">
-              <svg className="h-8 w-8 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="h-8 w-8 text-theme-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="font-semibold text-gray-500">{t.quotes.newQuoteAutomatic}</p>
+                  <p className="font-semibold text-theme-tertiary">{t.quotes.newQuoteAutomatic}</p>
                   <Badge variant="default" size="sm">{t.common.comingSoon}</Badge>
                 </div>
-                <p className="text-sm text-gray-400">{t.quotes.newQuoteAutomaticDesc}</p>
+                <p className="text-sm text-theme-muted">{t.quotes.newQuoteAutomaticDesc}</p>
               </div>
             </div>
           </button>
@@ -1442,13 +1442,13 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
         {/* Row 1: Title, Last Name, First Name */}
         <div className="flex gap-4">
           <div className="w-20 shrink-0 min-w-0">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
               {t.patients.titleLabel}
             </label>
             <select
               value={formData.title || ''}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full min-w-0 px-1 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300 text-sm"
+              className="w-full min-w-0 px-1 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary text-sm"
             >
               {titleOptions.map((v) => (
                 <option key={v} value={v}>{v || '—'}</option>
@@ -1500,7 +1500,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
         {/* Row 3: Birth Date, Birth Place */}
         <div className="grid grid-cols-2 gap-4">
           <div className="w-full">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
               {t.patients.birthDate}
               <span className="text-red-500 ml-1">*</span>
             </label>
@@ -1510,7 +1510,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
                 onChange={(e) => handleBirthDateTextChange(e.target.value)}
                 placeholder={getDatePlaceholder()}
                 className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors ${
-                  errors.birthDate ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
+                  errors.birthDate ? 'border-red-500 focus:ring-red-500' : 'border-theme-secondary'
                 }`}
               />
               <input
@@ -1527,7 +1527,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
                 tabIndex={-1}
               />
               <svg
-                className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -1565,7 +1565,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
             ]}
           />
           <div className="w-full">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
               {t.patients.insuranceNum}
             </label>
             <div className="flex gap-1">
@@ -1579,7 +1579,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
                 className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
                   (() => {
                     const state = getTajValidationState(formData.insuranceNum || '', formData.neakDocumentType);
-                    if (state === 'empty') return 'border-gray-300 focus:ring-dental-500';
+                    if (state === 'empty') return 'border-theme-secondary focus:ring-dental-500';
                     if (state === 'incomplete') return 'border-yellow-300 bg-yellow-50 focus:ring-yellow-500';
                     if (state === 'valid') return 'border-green-500 bg-green-50 focus:ring-green-500';
                     return 'border-red-500 bg-red-50 focus:ring-red-500';
@@ -1591,7 +1591,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
                 <button
                   type="button"
                   onClick={() => setNeakModalOpen(true)}
-                  className="shrink-0 rounded-lg border border-gray-300 p-2 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
+                  className="shrink-0 rounded-lg border border-theme-secondary p-2 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
                   title={t.neak.checkButton}
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1615,15 +1615,15 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
 
         {/* Address Section */}
         <div className="border-t pt-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.addressSection}</h3>
+          <h3 className="text-sm font-semibold text-theme-secondary mb-3">{t.patients.addressSection}</h3>
 
           <div className="grid grid-cols-[1fr_8rem_1fr] gap-4 items-end">
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.patients.country}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.patients.country}</label>
               <div className="flex items-center gap-2">
                 {formData.isForeignAddress ? (
                   <select
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors"
+                    className="flex-1 px-3 py-2 border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors"
                     value={formData.country || ''}
                     onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                   >
@@ -1636,7 +1636,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
                   </select>
                 ) : (
                   <input
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 transition-colors"
+                    className="flex-1 px-3 py-2 border border-theme-secondary rounded-lg bg-theme-tertiary transition-colors"
                     value={countryName(formData.country)}
                     readOnly
                   />
@@ -1703,15 +1703,15 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
 
         {/* Contact Section */}
         <div className="border-t pt-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.contactInfo}</h3>
+          <h3 className="text-sm font-semibold text-theme-secondary mb-3">{t.patients.contactInfo}</h3>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.patients.phone}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.patients.phone}</label>
               <div className="flex items-center gap-2">
                 <input
                   type="tel"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors"
+                  className="flex-1 px-3 py-2 border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors"
                   value={formData.phone || (formData.isHungarianPhone ? '+36 ' : '+')}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -1739,7 +1739,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
                   className={`px-2 py-2 rounded-lg border transition-colors text-lg leading-none ${
                     formData.isHungarianPhone
                       ? 'border-green-500 bg-green-50'
-                      : 'border-gray-300 bg-gray-100 grayscale opacity-50'
+                      : 'border-theme-secondary bg-theme-hover grayscale opacity-50'
                   }`}
                   title="Magyar telefonszám"
                 >
@@ -1759,7 +1759,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
 
         {/* Billing Section */}
         <div className="border-t pt-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.billingSection}</h3>
+          <h3 className="text-sm font-semibold text-theme-secondary mb-3">{t.patients.billingSection}</h3>
           <div className="grid grid-cols-2 gap-4">
             <Input
               label={t.patients.patientVATName}
@@ -1767,7 +1767,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
               onChange={(e) => setFormData({ ...formData, patientVATName: e.target.value })}
             />
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
                 {t.patients.patientVATNumber}
               </label>
               <div className="flex gap-1">
@@ -1775,14 +1775,14 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
                   value={formData.patientVATNumber || ''}
                   onChange={(e) => { setFormData({ ...formData, patientVATNumber: e.target.value }); setVatResult(null); }}
                   placeholder="12345678-1-42"
-                  className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                  className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary"
                 />
                 {(formData.patientVATNumber?.replace(/\D/g, '').length ?? 0) >= 8 && (
                   <button
                     type="button"
                     onClick={handleVatCheck}
                     disabled={vatChecking}
-                    className="shrink-0 rounded-lg border border-gray-300 p-2 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors disabled:opacity-50"
+                    className="shrink-0 rounded-lg border border-theme-secondary p-2 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors disabled:opacity-50"
                     title={t.patients.vatCheckButton}
                   >
                     {vatChecking ? (
@@ -1815,7 +1815,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
 
         {/* Patient Characteristics Section */}
         <div className="border-t pt-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.characteristicsSection}</h3>
+          <h3 className="text-sm font-semibold text-theme-secondary mb-3">{t.patients.characteristicsSection}</h3>
           <div className="grid grid-cols-2 gap-4">
             <Select
               label={t.patients.patientDiscount}

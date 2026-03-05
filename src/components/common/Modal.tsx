@@ -63,14 +63,14 @@ export function Modal({
           onClick={onClose}
         />
         <div
-          className={`relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-xl ${sizeClasses[size]} transform transition-all`}
+          className={`relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-xl bg-white dark:bg-gray-950 shadow-xl border border-gray-300 dark:border-gray-600 ${sizeClasses[size]} transform transition-all`}
         >
-          <div className="flex items-center justify-between px-6 py-4 border-b">
-            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-theme-primary">
+            <h3 className="text-lg font-semibold text-theme-primary">{title}</h3>
             {showCloseButton && (
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-theme-muted hover:text-theme-secondary transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -122,7 +122,7 @@ export function ConfirmModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
-      <p className="text-gray-600 mb-6">{message}</p>
+      <p className="text-theme-secondary mb-6">{message}</p>
       <div className="flex justify-end gap-3">
         <Button variant="secondary" onClick={onClose}>
           {cancelText}

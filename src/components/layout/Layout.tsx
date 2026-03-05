@@ -15,7 +15,7 @@ interface LayoutProps {
 }
 
 export function Layout({ children }: LayoutProps) {
-  const { t, appLanguage, setAppLanguage } = useSettings();
+  const { t, appLanguage, setAppLanguage, theme, setTheme } = useSettings();
   const { user, logout, hasPermission } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [openMenus, setOpenMenus] = useState<Set<string>>(new Set());
@@ -241,29 +241,29 @@ export function Layout({ children }: LayoutProps) {
   const navItems = allNavItems.filter((item) => !item.permission || hasPermission(item.permission));
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-theme-primary flex">
       {/* Sidebar */}
       <aside
         className={`${
           isSidebarOpen ? 'w-64' : 'w-20'
-        } bg-white border-r border-gray-200 flex flex-col transition-all duration-300`}
+        } bg-theme-sidebar border-r border-theme-primary flex flex-col transition-all duration-300`}
       >
         {/* Logo + logged-in user */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
+        <div className="h-16 flex items-center justify-between px-4 border-b border-theme-primary">
           {isSidebarOpen && (
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-2">
                 <img src={dcqLogo} alt="DentalQuoter" className="w-12 h-12 flex-shrink-0" />
-                <span className="font-semibold text-gray-800">DentalQuoter</span>
+                <span className="font-semibold text-theme-primary">DentalQuoter</span>
               </div>
               {user && (
-                <p className="text-xs text-gray-500 truncate pl-10">{user.email}</p>
+                <p className="text-xs text-theme-tertiary truncate pl-10">{user.email}</p>
               )}
             </div>
           )}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 flex-shrink-0"
+            className="p-2 rounded-lg text-theme-tertiary hover:bg-theme-hover flex-shrink-0"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               {isSidebarOpen ? (
@@ -300,8 +300,8 @@ export function Layout({ children }: LayoutProps) {
                       onClick={() => toggleSubmenu(item.key)}
                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                         isParentActive
-                          ? 'bg-dental-100 text-dental-700 font-medium'
-                          : 'text-gray-700 hover:bg-dental-50 hover:text-dental-700'
+                          ? 'bg-theme-sidebar-active text-dental-700 dark:text-dental-300 font-medium'
+                          : 'text-theme-secondary hover:bg-theme-sidebar-hover hover:text-dental-700 dark:hover:text-dental-300'
                       }`}
                     >
                       {item.icon}
@@ -326,8 +326,8 @@ export function Layout({ children }: LayoutProps) {
                               className={() =>
                                 `flex items-center pl-12 pr-4 py-2 rounded-lg text-sm transition-colors ${
                                   isChildActive
-                                    ? 'bg-dental-100 text-dental-700 font-medium'
-                                    : 'text-gray-600 hover:bg-dental-50 hover:text-dental-700'
+                                    ? 'bg-theme-sidebar-active text-dental-700 dark:text-dental-300 font-medium'
+                                    : 'text-theme-secondary hover:bg-theme-sidebar-hover hover:text-dental-700 dark:hover:text-dental-300'
                                 }`
                               }
                             >
@@ -350,8 +350,8 @@ export function Layout({ children }: LayoutProps) {
                     className={({ isActive }) =>
                       `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                         isActive || (item.to !== '/' && location.pathname.startsWith(item.to))
-                          ? 'bg-dental-100 text-dental-700 font-medium'
-                          : 'text-gray-700 hover:bg-dental-50 hover:text-dental-700'
+                          ? 'bg-theme-sidebar-active text-dental-700 dark:text-dental-300 font-medium'
+                          : 'text-theme-secondary hover:bg-theme-sidebar-hover hover:text-dental-700 dark:hover:text-dental-300'
                       }`
                     }
                     title={!isSidebarOpen ? item.label : undefined}
@@ -365,23 +365,35 @@ export function Layout({ children }: LayoutProps) {
           </ul>
         </nav>
 
-        {/* Language Toggle + Logout */}
-        <div className="p-4 border-t border-gray-200">
+        {/* Language + Theme Toggle + Logout */}
+        <div className="p-4 border-t border-theme-primary">
           {isSidebarOpen ? (
-            <div className="w-full">
-              <label className="sr-only" htmlFor="app-language-selector">
-                {t.settings.language}
-              </label>
+            <div className="flex items-center gap-2">
               <select
                 id="app-language-selector"
                 value={appLanguage}
                 onChange={(event) => setAppLanguage(event.target.value as 'hu' | 'en' | 'de')}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-dental-500"
+                className="flex-1 min-w-0 px-2 py-2 rounded-lg border border-theme-secondary bg-theme-input text-sm text-theme-secondary focus:outline-none focus:ring-2 focus:ring-dental-500"
               >
-                <option value="hu">🇭🇺 {t.settings.hungarian}</option>
-                <option value="en">🇬🇧 {t.settings.english}</option>
-                <option value="de">🇩🇪 {t.settings.german}</option>
+                <option value="hu">🇭🇺 Magyar</option>
+                <option value="en">🇬🇧 English</option>
+                <option value="de">🇩🇪 Deutsch</option>
               </select>
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="shrink-0 w-10 h-10 flex items-center justify-center rounded-lg border border-theme-secondary text-theme-secondary hover:bg-theme-hover transition-colors"
+                title={theme === 'dark' ? t.settings.themeLight : t.settings.themeDark}
+              >
+                {theme === 'dark' ? (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                )}
+              </button>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-1">
@@ -392,18 +404,33 @@ export function Layout({ children }: LayoutProps) {
                   className={`w-10 h-8 rounded-md text-lg leading-none transition-colors ${
                     appLanguage === lang
                       ? 'bg-dental-100 ring-2 ring-dental-500'
-                      : 'hover:bg-gray-100'
+                      : 'hover:bg-theme-hover'
                   }`}
                   title={lang === 'hu' ? t.settings.hungarian : lang === 'en' ? t.settings.english : t.settings.german}
                 >
                   {flag}
                 </button>
               ))}
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="w-10 h-8 flex items-center justify-center rounded-md text-theme-secondary hover:bg-theme-hover transition-colors"
+                title={theme === 'dark' ? t.settings.themeLight : t.settings.themeDark}
+              >
+                {theme === 'dark' ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                )}
+              </button>
             </div>
           )}
           <button
             onClick={() => logout()}
-            className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            className="mt-3 w-full rounded-lg border border-theme-secondary px-3 py-2 text-sm text-theme-secondary hover:bg-theme-hover"
           >
             {isSidebarOpen ? t.login.logout : t.login.logoutShort}
           </button>

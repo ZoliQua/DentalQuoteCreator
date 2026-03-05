@@ -168,21 +168,21 @@ function PermissionGroupedList({
         const allChecked = isGroupAllChecked(groupKeys);
 
         return (
-          <div key={group.label} className="border border-slate-100 rounded-lg">
+          <div key={group.label} className="border border-theme-primary rounded-lg">
             <div
-              className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-slate-50"
+              className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-theme-tertiary"
               onClick={() => toggleGroup(group.label)}
             >
               <div className="flex items-center gap-2">
                 <svg
-                  className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                  className={`w-4 h-4 text-theme-muted transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
-                <span className="font-medium text-slate-800 text-sm">{group.label}</span>
+                <span className="font-medium text-theme-primary text-sm">{group.label}</span>
               </div>
               <input
                 type="checkbox"
@@ -198,8 +198,8 @@ function PermissionGroupedList({
                 {groupKeys.map((key) => {
                   const perm = permMap[key];
                   return (
-                    <label key={key} className="flex items-center justify-between py-1.5 pl-6 border-t border-slate-50">
-                      <span className="text-slate-700 text-sm">{labels[key] || key}</span>
+                    <label key={key} className="flex items-center justify-between py-1.5 pl-6 border-t border-theme-primary">
+                      <span className="text-theme-secondary text-sm">{labels[key] || key}</span>
                       <input
                         type="checkbox"
                         checked={perm.isAllowed}
@@ -466,8 +466,8 @@ export function AdminPage() {
 
   if (!canManageUsers && !canManagePermissions) {
     return (
-      <div className="text-slate-700">
-        <h1 className="text-2xl font-bold text-slate-900">{t.admin.title}</h1>
+      <div className="text-theme-secondary">
+        <h1 className="text-2xl font-bold text-theme-primary">{t.admin.title}</h1>
         <p className="mt-2">{t.admin.noPermission}</p>
       </div>
     );
@@ -476,8 +476,8 @@ export function AdminPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">{t.admin.title}</h1>
-        <p className="text-slate-600 mt-2">{t.admin.subtitle}</p>
+        <h1 className="text-3xl font-bold text-theme-primary">{t.admin.title}</h1>
+        <p className="text-theme-secondary mt-2">{t.admin.subtitle}</p>
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">{error}</div>}
@@ -502,17 +502,17 @@ export function AdminPage() {
         </div>
       )}
 
-      <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-xl font-semibold text-slate-900">{t.admin.users}</h2>
+      <section className="bg-theme-secondary border border-theme-primary rounded-xl overflow-hidden">
+        <div className="border-b border-theme-primary px-5 py-4">
+          <h2 className="text-xl font-semibold text-theme-primary">{t.admin.users}</h2>
         </div>
         {loading ? (
-          <div className="px-5 py-4 text-slate-600">{t.common.loading}</div>
+          <div className="px-5 py-4 text-theme-secondary">{t.common.loading}</div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2">
-            <div className="border-r border-slate-200">
+            <div className="border-r border-theme-primary">
               <table className="w-full text-left">
-                <thead className="bg-slate-50 text-slate-600 text-sm uppercase">
+                <thead className="bg-theme-tertiary text-theme-secondary text-sm uppercase">
                   <tr>
                     <th className="px-4 py-3">{t.admin.name}</th>
                     <th className="px-4 py-3">{t.patients.email}</th>
@@ -524,21 +524,21 @@ export function AdminPage() {
                   {users.map((entry) => (
                     <tr
                       key={entry.id}
-                      className={`border-t border-slate-100 cursor-pointer ${
-                        selectedUserId === entry.id ? 'bg-dental-50' : 'hover:bg-slate-50'
+                      className={`border-t border-theme-primary cursor-pointer ${
+                        selectedUserId === entry.id ? 'bg-dental-50 dark:bg-dental-900/30' : 'hover:bg-theme-tertiary'
                       }`}
                       onClick={() => setSelectedUserId(entry.id)}
                     >
-                      <td className="px-4 py-3 font-medium text-slate-900">{entry.fullName}</td>
-                      <td className="px-4 py-3 text-slate-700">{entry.email}</td>
-                      <td className="px-4 py-3 text-slate-700">{getRoleLabel(entry.role, t)}</td>
+                      <td className="px-4 py-3 font-medium text-theme-primary">{entry.fullName}</td>
+                      <td className="px-4 py-3 text-theme-secondary">{entry.email}</td>
+                      <td className="px-4 py-3 text-theme-secondary">{getRoleLabel(entry.role, t)}</td>
                       {canManageUsers && (
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
                               title={t.admin.editUser}
-                              className="p-1.5 rounded-md text-slate-500 hover:text-dental-600 hover:bg-slate-100"
+                              className="p-1.5 rounded-md text-theme-tertiary hover:text-dental-600 hover:bg-theme-hover"
                               onClick={(e) => { e.stopPropagation(); openEditModal(entry); }}
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -550,8 +550,8 @@ export function AdminPage() {
                               title={t.admin.deleteUser}
                               className={`p-1.5 rounded-md ${
                                 entry.role === 'admin'
-                                  ? 'text-slate-300 cursor-not-allowed'
-                                  : 'text-slate-500 hover:text-red-600 hover:bg-red-50'
+                                  ? 'text-theme-muted cursor-not-allowed'
+                                  : 'text-theme-tertiary hover:text-red-600 hover:bg-red-50'
                               }`}
                               disabled={entry.role === 'admin'}
                               onClick={(e) => { e.stopPropagation(); setDeletingUser(entry); }}
@@ -571,14 +571,14 @@ export function AdminPage() {
 
             <div className="p-5 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-slate-900">{t.admin.permissions}</h3>
+                <h3 className="text-lg font-semibold text-theme-primary">{t.admin.permissions}</h3>
                 {selectedUser && (
                   <div className="flex items-center gap-1">
                     {canManagePermissions && (
                       <button
                         type="button"
                         title={t.admin.auditLogTitle}
-                        className="p-1.5 rounded-md text-slate-500 hover:text-dental-600 hover:bg-slate-100"
+                        className="p-1.5 rounded-md text-theme-tertiary hover:text-dental-600 hover:bg-theme-hover"
                         onClick={() => openAuditLog(selectedUser)}
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -590,7 +590,7 @@ export function AdminPage() {
                       <button
                         type="button"
                         title={t.admin.activityLogTitle}
-                        className="p-1.5 rounded-md text-slate-500 hover:text-dental-600 hover:bg-slate-100"
+                        className="p-1.5 rounded-md text-theme-tertiary hover:text-dental-600 hover:bg-theme-hover"
                         onClick={() => openActivityLog(selectedUser)}
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -601,10 +601,10 @@ export function AdminPage() {
                   </div>
                 )}
               </div>
-              {!selectedUser && <p className="text-slate-600">{t.admin.selectUser}</p>}
+              {!selectedUser && <p className="text-theme-secondary">{t.admin.selectUser}</p>}
               {selectedUser && (
                 <>
-                  <p className="text-sm text-slate-600">
+                  <p className="text-sm text-theme-secondary">
                     {selectedUser.fullName} ({getRoleLabel(selectedUser.role, t)})
                   </p>
                   <PermissionGroupedList
@@ -629,40 +629,40 @@ export function AdminPage() {
       >
         <form onSubmit={handleUpdateUser} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t.admin.fullName}</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">{t.admin.fullName}</label>
             <input
               value={editForm.fullName}
               onChange={(event) => setEditForm((prev) => ({ ...prev, fullName: event.target.value }))}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-theme-secondary px-3 py-2"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t.patients.email}</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">{t.patients.email}</label>
             <input
               type="email"
               value={editForm.email}
               onChange={(event) => setEditForm((prev) => ({ ...prev, email: event.target.value }))}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-theme-secondary px-3 py-2"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t.admin.newPassword}</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">{t.admin.newPassword}</label>
             <input
               type="password"
               value={editForm.password}
               onChange={(event) => setEditForm((prev) => ({ ...prev, password: event.target.value }))}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-theme-secondary px-3 py-2"
               placeholder={t.admin.newPasswordPlaceholder}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t.admin.role}</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">{t.admin.role}</label>
             <select
               value={editForm.role}
               onChange={(event) => setEditForm((prev) => ({ ...prev, role: event.target.value as UserRole }))}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-theme-secondary px-3 py-2"
             >
               {ROLE_OPTIONS.map((r) => (
                 <option key={r} value={r}>{getRoleLabel(r, t)}</option>
@@ -673,7 +673,7 @@ export function AdminPage() {
             <button
               type="button"
               onClick={() => setEditingUser(null)}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-theme-secondary px-4 py-2 text-theme-secondary hover:bg-theme-tertiary"
             >
               {t.common.cancel}
             </button>
@@ -706,13 +706,13 @@ export function AdminPage() {
         size="lg"
       >
         {auditLogLoading ? (
-          <p className="text-slate-600">{t.common.loading}</p>
+          <p className="text-theme-secondary">{t.common.loading}</p>
         ) : auditLogEntries.length === 0 ? (
-          <p className="text-slate-600">{t.admin.auditLogNoEntries}</p>
+          <p className="text-theme-secondary">{t.admin.auditLogNoEntries}</p>
         ) : (
           <div className="overflow-auto max-h-96">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600 uppercase">
+              <thead className="bg-theme-tertiary text-theme-secondary uppercase">
                 <tr>
                   <th className="px-3 py-2">{t.admin.auditLogWhen}</th>
                   <th className="px-3 py-2">{t.admin.auditLogWho}</th>
@@ -723,7 +723,7 @@ export function AdminPage() {
               </thead>
               <tbody>
                 {auditLogEntries.map((entry) => (
-                  <tr key={entry.id} className="border-t border-slate-100">
+                  <tr key={entry.id} className="border-t border-theme-primary">
                     <td className="px-3 py-2 whitespace-nowrap">{new Date(entry.changedAt).toLocaleString()}</td>
                     <td className="px-3 py-2">{entry.changedByName}</td>
                     <td className="px-3 py-2">{getPermissionLabels(t)[entry.key] || entry.key}</td>
@@ -745,36 +745,36 @@ export function AdminPage() {
       >
         <form onSubmit={handleCreateUser} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t.admin.fullName}</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">{t.admin.fullName}</label>
             <input
               value={newUser.fullName}
               onChange={(event) => setNewUser((prev) => ({ ...prev, fullName: event.target.value }))}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-theme-secondary px-3 py-2"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t.patients.email}</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">{t.patients.email}</label>
             <input
               type="email"
               value={newUser.email}
               onChange={(event) => setNewUser((prev) => ({ ...prev, email: event.target.value }))}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-theme-secondary px-3 py-2"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t.admin.password}</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">{t.admin.password}</label>
             <input
               type="password"
               value={newUser.password}
               onChange={(event) => setNewUser((prev) => ({ ...prev, password: event.target.value }))}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-theme-secondary px-3 py-2"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t.admin.passwordConfirm}</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">{t.admin.passwordConfirm}</label>
             <input
               type="password"
               value={newUser.passwordConfirm}
@@ -782,7 +782,7 @@ export function AdminPage() {
               className={`w-full rounded-lg border px-3 py-2 ${
                 newUser.passwordConfirm && newUser.password !== newUser.passwordConfirm
                   ? 'border-red-500'
-                  : 'border-slate-300'
+                  : 'border-theme-secondary'
               }`}
               required
             />
@@ -791,11 +791,11 @@ export function AdminPage() {
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t.admin.role}</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">{t.admin.role}</label>
             <select
               value={newUser.role}
               onChange={(event) => setNewUser((prev) => ({ ...prev, role: event.target.value as UserRole }))}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-theme-secondary px-3 py-2"
             >
               {ROLE_OPTIONS.map((r) => (
                 <option key={r} value={r}>{getRoleLabel(r, t)}</option>
@@ -806,7 +806,7 @@ export function AdminPage() {
             <button
               type="button"
               onClick={() => setShowAddUserModal(false)}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-theme-secondary px-4 py-2 text-theme-secondary hover:bg-theme-tertiary"
             >
               {t.common.cancel}
             </button>
@@ -828,13 +828,13 @@ export function AdminPage() {
         size="lg"
       >
         {activityLogLoading ? (
-          <p className="text-slate-600">{t.common.loading}</p>
+          <p className="text-theme-secondary">{t.common.loading}</p>
         ) : activityLogEntries.length === 0 ? (
-          <p className="text-slate-600">{t.admin.activityLogNoEntries}</p>
+          <p className="text-theme-secondary">{t.admin.activityLogNoEntries}</p>
         ) : (
           <div className="overflow-auto max-h-96">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600 uppercase">
+              <thead className="bg-theme-tertiary text-theme-secondary uppercase">
                 <tr>
                   <th className="px-3 py-2">{t.admin.activityLogRow}</th>
                   <th className="px-3 py-2">{t.admin.activityLogTimestamp}</th>
@@ -844,16 +844,16 @@ export function AdminPage() {
               </thead>
               <tbody>
                 {activityLogEntries.map((entry, idx) => (
-                  <tr key={entry.id} className="border-t border-slate-100">
+                  <tr key={entry.id} className="border-t border-theme-primary">
                     <td className="px-3 py-2">{idx + 1}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{new Date(entry.createdAt).toLocaleString()}</td>
                     <td className="px-3 py-2">{getActivityLabel(entry.action, t)}</td>
-                    <td className="px-3 py-2 text-xs text-slate-600">
+                    <td className="px-3 py-2 text-xs text-theme-secondary">
                       {entry.entityType && <span>{entry.entityType}{entry.entityId ? ` #${entry.entityId.slice(0, 8)}` : ''}</span>}
                       {entry.details && Object.keys(entry.details).length > 0 && (
                         <span className="ml-1">{JSON.stringify(entry.details)}</span>
                       )}
-                      {entry.ipAddress && <span className="ml-1 text-slate-400">{entry.ipAddress}</span>}
+                      {entry.ipAddress && <span className="ml-1 text-theme-muted">{entry.ipAddress}</span>}
                     </td>
                   </tr>
                 ))}

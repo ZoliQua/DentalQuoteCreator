@@ -6,11 +6,14 @@ import type { Appointment, AppointmentType, AppointmentStatus } from '../../type
 import type { AppointmentChair } from '../../types/appointment';
 import type { Patient } from '../../types';
 
+type RecurrenceScope = 'single' | 'future' | 'all';
+type RecurrencePattern = 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly';
+
 interface AppointmentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Partial<Appointment>) => Promise<void>;
-  onDelete?: () => Promise<void>;
+  onSave: (data: Partial<Appointment>, scope?: RecurrenceScope) => Promise<void>;
+  onDelete?: (scope?: RecurrenceScope) => Promise<void>;
   appointment?: Appointment | null;
   defaultStart?: string;
   defaultEnd?: string;
@@ -21,6 +24,18 @@ interface AppointmentModalProps {
 }
 
 const STATUS_OPTIONS: AppointmentStatus[] = ['scheduled', 'confirmed', 'completed', 'cancelled', 'noShow'];
+
+/** Convert a recurrence pattern to an RRULE string (without DTSTART) */
+function patternToRRule(pattern: RecurrencePattern, startDate: Date): string | null {
+  const dayMap: Record<number, string> = { 0: 'SU', 1: 'MO', 2: 'TU', 3: 'WE', 4: 'TH', 5: 'FR', 6: 'SA' };
+  switch (pattern) {
+    case 'daily': return 'RRULE:FREQ=DAILY;COUNT=90';
+    case 'weekly': return `RRULE:FREQ=WEEKLY;BYDAY=${dayMap[startDate.getDay()]};COUNT=52`;
+    case 'biweekly': return `RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=${dayMap[startDate.getDay()]};COUNT=26`;
+    case 'monthly': return `RRULE:FREQ=MONTHLY;BYMONTHDAY=${startDate.getDate()};COUNT=12`;
+    default: return null;
+  }
+}
 
 export function AppointmentModal({
   isOpen,
@@ -37,6 +52,7 @@ export function AppointmentModal({
 }: AppointmentModalProps) {
   const { t, appLanguage } = useSettings();
   const isEdit = !!appointment;
+  const isRecurring = !!(appointment?.recurrenceRule || appointment?.recurrenceParentId);
 
   const [patientId, setPatientId] = useState<string>('');
   const [patientSearch, setPatientSearch] = useState('');
@@ -51,6 +67,9 @@ export function AppointmentModal({
   const [status, setStatus] = useState<AppointmentStatus>('scheduled');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>('none');
+  // Scope dialog state
+  const [scopeAction, setScopeAction] = useState<'edit' | 'delete' | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -72,6 +91,7 @@ export function AppointmentModal({
       setTitle(appointment.title);
       setStatus(appointment.status);
       setNotes(appointment.notes || '');
+      setRecurrencePattern('none');
     } else {
       setPatientId('');
       setPatientSearch('');
@@ -96,11 +116,13 @@ export function AppointmentModal({
       setTitle('');
       setStatus('scheduled');
       setNotes('');
+      setRecurrencePattern('none');
       if (appointmentTypes.length > 0) {
         const t0 = appointmentTypes[0];
         setTitle(getTypeName(t0, appLanguage));
       }
     }
+    setScopeAction(null);
   }, [isOpen, appointment, defaultStart, defaultEnd, appointmentTypes, appLanguage]);
 
   // When type changes, update title and end time
@@ -144,22 +166,65 @@ export function AppointmentModal({
     noShow: t.calendar.statusNoShow,
   };
 
-  const handleSave = async () => {
+  const recurrenceOptions = [
+    { value: 'none', label: t.calendar.recurrence.noRepeat },
+    { value: 'daily', label: t.calendar.recurrence.daily },
+    { value: 'weekly', label: t.calendar.recurrence.weekly },
+    { value: 'biweekly', label: t.calendar.recurrence.biweekly },
+    { value: 'monthly', label: t.calendar.recurrence.monthly },
+  ];
+
+  const buildSaveData = (): Partial<Appointment> => {
     const startIso = parseBirthDateFromDisplay(startDate);
     const endIso = parseBirthDateFromDisplay(endDate);
-    if (!startIso || !endIso || !startTime || !endTime) return;
+    if (!startIso || !endIso || !startTime || !endTime) return {};
+
+    const startDt = new Date(`${startIso}T${startTime}`);
+    const data: Partial<Appointment> = {
+      patientId: patientId || null,
+      chairIndex,
+      startDateTime: startDt.toISOString(),
+      endDateTime: new Date(`${endIso}T${endTime}`).toISOString(),
+      title,
+      appointmentTypeId: appointmentTypeId || undefined,
+      status,
+      notes: notes || undefined,
+    };
+
+    // Add recurrence rule for new appointments
+    if (!isEdit && recurrencePattern !== 'none') {
+      data.recurrenceRule = patternToRRule(recurrencePattern, startDt) ?? undefined;
+    }
+
+    return data;
+  };
+
+  const executeSave = async (scope?: RecurrenceScope) => {
+    const data = buildSaveData();
+    if (!data.startDateTime) return;
     setSaving(true);
     try {
-      await onSave({
-        patientId: patientId || null,
-        chairIndex,
-        startDateTime: new Date(`${startIso}T${startTime}`).toISOString(),
-        endDateTime: new Date(`${endIso}T${endTime}`).toISOString(),
-        title,
-        appointmentTypeId: appointmentTypeId || undefined,
-        status,
-        notes: notes || undefined,
-      });
+      await onSave(data, scope);
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (isEdit && isRecurring) {
+      // Show scope dialog for recurring event edits
+      setScopeAction('edit');
+      return;
+    }
+    await executeSave();
+  };
+
+  const executeDelete = async (scope?: RecurrenceScope) => {
+    if (!onDelete) return;
+    setSaving(true);
+    try {
+      await onDelete(scope);
       onClose();
     } finally {
       setSaving(false);
@@ -167,15 +232,55 @@ export function AppointmentModal({
   };
 
   const handleDelete = async () => {
-    if (!onDelete) return;
-    setSaving(true);
-    try {
-      await onDelete();
-      onClose();
-    } finally {
-      setSaving(false);
+    if (isRecurring) {
+      setScopeAction('delete');
+      return;
     }
+    await executeDelete();
   };
+
+  // Scope selection dialog
+  if (scopeAction) {
+    const isDeleteAction = scopeAction === 'delete';
+    const tr = t.calendar.recurrence;
+    return (
+      <Modal
+        isOpen={isOpen}
+        onClose={() => setScopeAction(null)}
+        title={isDeleteAction ? tr.deleteScope : tr.editScope}
+        size="sm"
+      >
+        <div className="space-y-3 py-2">
+          <button
+            className="w-full text-left px-4 py-3 rounded-lg border border-theme-primary hover:bg-theme-tertiary transition-colors"
+            onClick={() => isDeleteAction ? executeDelete('single') : executeSave('single')}
+            disabled={saving}
+          >
+            <div className="font-medium text-sm">{isDeleteAction ? tr.deleteScopeThis : tr.editScopeThis}</div>
+          </button>
+          <button
+            className="w-full text-left px-4 py-3 rounded-lg border border-theme-primary hover:bg-theme-tertiary transition-colors"
+            onClick={() => isDeleteAction ? executeDelete('future') : executeSave('future')}
+            disabled={saving}
+          >
+            <div className="font-medium text-sm">{isDeleteAction ? tr.deleteScopeFuture : tr.editScopeFuture}</div>
+          </button>
+          <button
+            className="w-full text-left px-4 py-3 rounded-lg border border-theme-primary hover:bg-theme-tertiary transition-colors"
+            onClick={() => isDeleteAction ? executeDelete('all') : executeSave('all')}
+            disabled={saving}
+          >
+            <div className="font-medium text-sm">{isDeleteAction ? tr.deleteScopeAll : tr.editScopeAll}</div>
+          </button>
+          <div className="flex justify-end pt-2">
+            <Button variant="secondary" onClick={() => setScopeAction(null)} disabled={saving}>
+              {t.common.cancel}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal
@@ -187,12 +292,12 @@ export function AppointmentModal({
       <div className="space-y-4">
         {/* Patient search */}
         <div className="relative">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-theme-secondary mb-1">
             {t.calendar.patient}
           </label>
           <input
             type="text"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500"
+            className="w-full px-3 py-2 border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500"
             placeholder={t.calendar.selectPatient}
             value={patientSearch}
             onChange={(e) => {
@@ -204,9 +309,9 @@ export function AppointmentModal({
             onBlur={() => setTimeout(() => setShowPatientDropdown(false), 200)}
           />
           {showPatientDropdown && filteredPatients.length > 0 && (
-            <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto">
+            <div className="absolute z-50 mt-1 w-full bg-theme-secondary border border-theme-primary rounded-lg shadow-lg max-h-48 overflow-auto">
               <button
-                className="w-full px-3 py-2 text-left text-sm text-gray-400 hover:bg-gray-50"
+                className="w-full px-3 py-2 text-left text-sm text-theme-muted hover:bg-theme-tertiary"
                 onMouseDown={() => {
                   setPatientId('');
                   setPatientSearch('');
@@ -263,7 +368,7 @@ export function AppointmentModal({
         {/* Start / End */}
         <div className="grid grid-cols-2 gap-4">
           <div className="min-w-0">
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t.calendar.startTime}</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">{t.calendar.startTime}</label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -271,7 +376,6 @@ export function AppointmentModal({
                 value={startDate}
                 onChange={(e) => {
                   setStartDate(e.target.value);
-                  // Auto-compute end on complete date change
                   const isoDate = parseBirthDateFromDisplay(e.target.value);
                   if (isoDate && startTime) {
                     const type = appointmentTypes.find((at) => at.typeId === appointmentTypeId);
@@ -284,7 +388,7 @@ export function AppointmentModal({
                     }
                   }
                 }}
-                className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent text-sm"
+                className="flex-1 min-w-0 px-3 py-2 border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent text-sm"
               />
               <input
                 type="time"
@@ -303,29 +407,52 @@ export function AppointmentModal({
                     }
                   }
                 }}
-                className="w-24 px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent text-sm"
+                className="w-24 px-2 py-2 border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent text-sm"
               />
             </div>
           </div>
           <div className="min-w-0">
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t.calendar.endTime}</label>
+            <label className="block text-sm font-medium text-theme-secondary mb-1">{t.calendar.endTime}</label>
             <div className="flex gap-2">
               <input
                 type="text"
                 placeholder={getDatePlaceholder()}
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent text-sm"
+                className="flex-1 min-w-0 px-3 py-2 border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent text-sm"
               />
               <input
                 type="time"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
-                className="w-24 px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent text-sm"
+                className="w-24 px-2 py-2 border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent text-sm"
               />
             </div>
           </div>
         </div>
+
+        {/* Recurrence — only for new appointments */}
+        {!isEdit && (
+          <Select
+            label={t.calendar.recurrence.label}
+            value={recurrencePattern}
+            onChange={(e) => setRecurrencePattern(e.target.value as RecurrencePattern)}
+            options={recurrenceOptions}
+          />
+        )}
+
+        {/* Recurring indicator for existing appointments */}
+        {isEdit && isRecurring && (
+          <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 2.1l4 4-4 4"/>
+              <path d="M3 12.2v-2a4 4 0 0 1 4-4h12.8"/>
+              <path d="M7 21.9l-4-4 4-4"/>
+              <path d="M21 11.8v2a4 4 0 0 1-4 4H4.2"/>
+            </svg>
+            <span>{t.calendar.recurrence.label}</span>
+          </div>
+        )}
 
         {/* Title */}
         <Input label={t.calendar.description} value={title} onChange={(e) => setTitle(e.target.value)} />

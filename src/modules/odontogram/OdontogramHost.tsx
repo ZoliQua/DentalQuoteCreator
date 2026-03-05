@@ -177,6 +177,8 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
       setAppLanguage,
       odontogramNumbering,
       setOdontogramNumbering,
+      theme,
+      setTheme,
     } = useSettings();
     const rootRef = useRef<HTMLDivElement | null>(null);
     const [panelSlotRoot, setPanelSlotRoot] = useState<HTMLElement | null>(null);
@@ -417,6 +419,8 @@ export const OdontogramHost = forwardRef<OdontogramHostHandle, OdontogramHostPro
             onLanguageChange={setAppLanguage}
             numberingSystem={odontogramNumbering}
             onNumberingChange={setOdontogramNumbering}
+            darkMode={theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)}
+            onDarkModeChange={(dark) => setTheme(dark ? 'dark' : 'light')}
           />
           {panelSlotRoot && panelContent ? createPortal(panelContent, panelSlotRoot) : null}
         </div>

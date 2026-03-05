@@ -24,7 +24,7 @@ export function InvoiceDetailPage() {
   if (!invoice) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold text-gray-900">{t.invoices.notFound}</h1>
+        <h1 className="text-2xl font-bold text-theme-primary">{t.invoices.notFound}</h1>
         <Link to="/invoices" className="text-dental-600 hover:text-dental-700">
           {t.invoices.backToList}
         </Link>
@@ -122,7 +122,7 @@ export function InvoiceDetailPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+          <div className="flex items-center gap-2 text-sm text-theme-tertiary mb-2">
             <Link to="/invoices" className="hover:text-dental-600">
               {t.invoices.title}
             </Link>
@@ -130,7 +130,7 @@ export function InvoiceDetailPage() {
             <span>{invoice.szamlazzInvoiceNumber || invoice.id.slice(0, 8)}</span>
           </div>
           <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-theme-primary">
               {invoice.szamlazzInvoiceNumber || t.invoices.statusDraft}
             </h1>
             <Badge variant={statusVariant(invoice.status)}>
@@ -184,12 +184,12 @@ export function InvoiceDetailPage() {
                 {invoice.items.map((item, idx) => (
                   <div
                     key={`${item.name}-${idx}`}
-                    className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm"
+                    className="flex items-center justify-between rounded-lg border border-theme-primary px-4 py-3 text-sm"
                   >
-                    <span className="w-6 text-gray-400 font-medium shrink-0">{idx + 1}.</span>
+                    <span className="w-6 text-theme-muted font-medium shrink-0">{idx + 1}.</span>
                     <div className="flex-1">
-                      <p className="font-medium text-gray-900">{item.name}</p>
-                      <p className="text-gray-500">
+                      <p className="font-medium text-theme-primary">{item.name}</p>
+                      <p className="text-theme-tertiary">
                         {item.qty} {item.unit}
                         {!isNoVat && (
                           <>
@@ -203,7 +203,7 @@ export function InvoiceDetailPage() {
                     <div className="text-right">
                       <p className="font-semibold">{formatCurrency(item.gross, invoice.currency)}</p>
                       {!isNoVat && (
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-theme-tertiary">
                           {t.invoices.netTotal}: {formatCurrency(item.net, invoice.currency)}
                         </p>
                       )}
@@ -217,11 +217,11 @@ export function InvoiceDetailPage() {
                 {!isNoVat && (
                   <>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">{t.invoices.netTotal}</span>
+                      <span className="text-theme-tertiary">{t.invoices.netTotal}</span>
                       <span>{formatCurrency(netTotal, invoice.currency)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">{t.invoices.vatTotal}</span>
+                      <span className="text-theme-tertiary">{t.invoices.vatTotal}</span>
                       <span>{formatCurrency(vatTotal, invoice.currency)}</span>
                     </div>
                   </>
@@ -244,7 +244,7 @@ export function InvoiceDetailPage() {
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div>
-                <span className="text-gray-500 text-xs">{t.invoices.billingName}</span>
+                <span className="text-theme-tertiary text-xs">{t.invoices.billingName}</span>
                 <p className="font-medium">
                   {invoice.patientId && invoice.patientId !== 'ad-hoc' ? (
                     <Link to={`/patients/${invoice.patientId}`} className="text-dental-600 hover:text-dental-700 hover:underline">
@@ -257,16 +257,16 @@ export function InvoiceDetailPage() {
               </div>
               {(invoice.buyer.zip || invoice.buyer.city || invoice.buyer.address) && (
                 <div>
-                  <span className="text-gray-500 text-xs">{t.invoices.billingAddress}</span>
-                  <p className="text-gray-700">
+                  <span className="text-theme-tertiary text-xs">{t.invoices.billingAddress}</span>
+                  <p className="text-theme-secondary">
                     {[invoice.buyer.zip, invoice.buyer.city, invoice.buyer.address].filter(Boolean).join(', ')}
                   </p>
                 </div>
               )}
               {invoice.buyer.email && (
                 <div>
-                  <span className="text-gray-500 text-xs">{t.invoices.buyerEmail}</span>
-                  <p className="text-gray-700">{invoice.buyer.email}</p>
+                  <span className="text-theme-tertiary text-xs">{t.invoices.buyerEmail}</span>
+                  <p className="text-theme-secondary">{invoice.buyer.email}</p>
                 </div>
               )}
             </CardContent>
@@ -279,47 +279,47 @@ export function InvoiceDetailPage() {
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">{t.invoices.relatedQuote}</span>
+                <span className="text-theme-tertiary">{t.invoices.relatedQuote}</span>
                 {quoteLink ? (
                   <Link to={quoteLink} className="font-medium text-dental-600 hover:text-dental-700 hover:underline">
                     {invoice.quoteNumber || invoice.quoteId.slice(0, 8)}
                   </Link>
                 ) : (
-                  <span className="text-gray-400">{t.invoices.noQuote}</span>
+                  <span className="text-theme-muted">{t.invoices.noQuote}</span>
                 )}
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">{t.invoices.invoiceNumber}</span>
+                <span className="text-theme-tertiary">{t.invoices.invoiceNumber}</span>
                 <span className="font-medium">{invoice.szamlazzInvoiceNumber || '-'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">{t.invoices.status}</span>
+                <span className="text-theme-tertiary">{t.invoices.status}</span>
                 <Badge variant={statusVariant(invoice.status)}>
                   {statusLabel(invoice.status)}
                 </Badge>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">{t.invoices.issueDate}</span>
+                <span className="text-theme-tertiary">{t.invoices.issueDate}</span>
                 <span>{formatDate(invoice.createdAt)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">{t.invoices.fulfillmentDate}</span>
+                <span className="text-theme-tertiary">{t.invoices.fulfillmentDate}</span>
                 <span>{formatDate(invoice.fulfillmentDate)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">{t.invoices.dueDate}</span>
+                <span className="text-theme-tertiary">{t.invoices.dueDate}</span>
                 <span>{formatDate(invoice.dueDate)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">{t.invoices.paymentMethod}</span>
+                <span className="text-theme-tertiary">{t.invoices.paymentMethod}</span>
                 <span>{paymentLabel(invoice.paymentMethod)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">{t.invoices.vatContent}</span>
+                <span className="text-theme-tertiary">{t.invoices.vatContent}</span>
                 <span>{vatLabel}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">{t.invoices.currency}</span>
+                <span className="text-theme-tertiary">{t.invoices.currency}</span>
                 <span>{invoice.currency}</span>
               </div>
             </CardContent>

@@ -91,8 +91,8 @@ export function CatalogLayout({ section, children }: { section?: CatalogSection;
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t.nav.catalog}</h1>
-        <p className="text-gray-500 mt-1">{t.catalog.subtitle}</p>
+        <h1 className="text-2xl font-bold text-theme-primary">{t.nav.catalog}</h1>
+        <p className="text-theme-tertiary mt-1">{t.catalog.subtitle}</p>
       </div>
 
       <PageTabBar tabs={tabs} />
@@ -103,13 +103,13 @@ export function CatalogLayout({ section, children }: { section?: CatalogSection;
             <Link
               key={card.key}
               to={card.to}
-              className="block rounded-lg border border-gray-200 bg-white p-5 hover:border-dental-300 hover:shadow-md transition-all"
+              className="block rounded-lg border border-theme-primary bg-theme-secondary p-5 hover:border-dental-300 hover:shadow-md transition-all"
             >
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">{card.icon}</div>
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900">{card.title}</h3>
-                  <p className="text-xs text-gray-500 mt-1">{card.description}</p>
+                  <h3 className="text-sm font-semibold text-theme-primary">{card.title}</h3>
+                  <p className="text-xs text-theme-tertiary mt-1">{card.description}</p>
                 </div>
               </div>
             </Link>

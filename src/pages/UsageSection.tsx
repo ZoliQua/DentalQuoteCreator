@@ -224,10 +224,10 @@ export function UsageSection() {
             { label: dm.usageWeek, data: stats.week },
             { label: dm.usageMonth, data: stats.month },
           ].map((card) => (
-            <div key={card.label} className="rounded-lg border border-gray-200 bg-white p-5">
-              <p className="text-sm font-medium text-gray-500">{card.label}</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{card.data.total}</p>
-              <p className="text-xs text-gray-500 mt-1">
+            <div key={card.label} className="rounded-lg border border-theme-primary bg-theme-secondary p-5">
+              <p className="text-sm font-medium text-theme-tertiary">{card.label}</p>
+              <p className="text-3xl font-bold text-theme-primary mt-1">{card.data.total}</p>
+              <p className="text-xs text-theme-tertiary mt-1">
                 {dm.usageVisitors} &middot; {card.data.unique} {dm.usageUnique}
               </p>
             </div>
@@ -240,7 +240,7 @@ export function UsageSection() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+              <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
               {dm.usageTitle}
             </h2>
             <div className="flex flex-wrap items-center gap-2">
@@ -257,7 +257,7 @@ export function UsageSection() {
           {/* Filters */}
           <div className="flex flex-wrap items-end gap-3 mb-4">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">{dm.usageYear}</label>
+              <label className="block text-xs text-theme-tertiary mb-1">{dm.usageYear}</label>
               <select
                 className="border rounded px-2 py-1 text-sm"
                 value={filterYear}
@@ -268,7 +268,7 @@ export function UsageSection() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">{dm.usageMonth2}</label>
+              <label className="block text-xs text-theme-tertiary mb-1">{dm.usageMonth2}</label>
               <select
                 className="border rounded px-2 py-1 text-sm"
                 value={filterMonth}
@@ -279,7 +279,7 @@ export function UsageSection() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">{dm.usageDay}</label>
+              <label className="block text-xs text-theme-tertiary mb-1">{dm.usageDay}</label>
               <select
                 className="border rounded px-2 py-1 text-sm"
                 value={filterDay}
@@ -300,10 +300,10 @@ export function UsageSection() {
             </Button>
           </div>
 
-          {visitorLoading && <p className="text-sm text-gray-500 py-4">{dm.dbReportLoading}</p>}
+          {visitorLoading && <p className="text-sm text-theme-tertiary py-4">{dm.dbReportLoading}</p>}
 
           {!visitorLoading && visitors.length === 0 && (
-            <p className="text-sm text-gray-500 py-4">{dm.usageNoData}</p>
+            <p className="text-sm text-theme-tertiary py-4">{dm.usageNoData}</p>
           )}
 
           {!visitorLoading && visitors.length > 0 && (
@@ -311,11 +311,11 @@ export function UsageSection() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b bg-gray-50">
+                    <tr className="border-b bg-theme-tertiary">
                       {visitorColumns.map((col) => (
                         <th
                           key={col.key}
-                          className="px-3 py-2 text-left font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap"
+                          className="px-3 py-2 text-left font-medium text-theme-secondary cursor-pointer select-none whitespace-nowrap"
                           onClick={() => toggleVSort(col.key)}
                         >
                           {col.label}
@@ -326,7 +326,7 @@ export function UsageSection() {
                   </thead>
                   <tbody>
                     {pagedVisitors.map((v) => (
-                      <tr key={v.id} className="border-b hover:bg-gray-50">
+                      <tr key={v.id} className="border-b hover:bg-theme-tertiary">
                         <td className="px-3 py-2 whitespace-nowrap">{formatDate(v.createdAt)}</td>
                         <td className="px-3 py-2">{v.userName ?? '-'}</td>
                         <td className="px-3 py-2">{v.ipAddress ?? '-'}</td>
@@ -342,7 +342,7 @@ export function UsageSection() {
               {/* Pagination */}
               {vTotalPages > 1 && (
                 <div className="flex items-center justify-between mt-3">
-                  <p className="text-xs text-gray-500">{sortedVisitors.length} {dm.usageVisitors}</p>
+                  <p className="text-xs text-theme-tertiary">{sortedVisitors.length} {dm.usageVisitors}</p>
                   <div className="flex gap-1">
                     <button disabled={vPage === 0} onClick={() => setVPage((p) => p - 1)} className="px-2 py-1 text-xs border rounded disabled:opacity-40">&laquo;</button>
                     <span className="px-2 py-1 text-xs">{vPage + 1} / {vTotalPages}</span>
@@ -360,7 +360,7 @@ export function UsageSection() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+              <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
               {dm.usageActivityLog}
             </h2>
             <div className="flex flex-wrap items-center gap-2">
@@ -391,10 +391,10 @@ export function UsageSection() {
             </select>
           </div>
 
-          {activityLoading && <p className="text-sm text-gray-500 py-4">{dm.dbReportLoading}</p>}
+          {activityLoading && <p className="text-sm text-theme-tertiary py-4">{dm.dbReportLoading}</p>}
 
           {!activityLoading && selectedUserId && activityLog.length === 0 && (
-            <p className="text-sm text-gray-500 py-4">{dm.usageNoData}</p>
+            <p className="text-sm text-theme-tertiary py-4">{dm.usageNoData}</p>
           )}
 
           {!activityLoading && activityLog.length > 0 && (
@@ -402,11 +402,11 @@ export function UsageSection() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b bg-gray-50">
+                    <tr className="border-b bg-theme-tertiary">
                       {activityColumns.map((col) => (
                         <th
                           key={col.key}
-                          className="px-3 py-2 text-left font-medium text-gray-600 cursor-pointer select-none whitespace-nowrap"
+                          className="px-3 py-2 text-left font-medium text-theme-secondary cursor-pointer select-none whitespace-nowrap"
                           onClick={() => toggleASort(col.key)}
                         >
                           {col.label}
@@ -417,7 +417,7 @@ export function UsageSection() {
                   </thead>
                   <tbody>
                     {pagedActivity.map((a) => (
-                      <tr key={a.id} className="border-b hover:bg-gray-50">
+                      <tr key={a.id} className="border-b hover:bg-theme-tertiary">
                         <td className="px-3 py-2 whitespace-nowrap">{formatDate(a.createdAt)}</td>
                         <td className="px-3 py-2">{a.action}</td>
                         <td className="px-3 py-2">{a.page ?? '-'}</td>
@@ -434,7 +434,7 @@ export function UsageSection() {
               </div>
               {aTotalPages > 1 && (
                 <div className="flex items-center justify-between mt-3">
-                  <p className="text-xs text-gray-500">{sortedActivity.length} {dm.usageVisitors}</p>
+                  <p className="text-xs text-theme-tertiary">{sortedActivity.length} {dm.usageVisitors}</p>
                   <div className="flex gap-1">
                     <button disabled={aPage === 0} onClick={() => setAPage((p) => p - 1)} className="px-2 py-1 text-xs border rounded disabled:opacity-40">&laquo;</button>
                     <span className="px-2 py-1 text-xs">{aPage + 1} / {aTotalPages}</span>

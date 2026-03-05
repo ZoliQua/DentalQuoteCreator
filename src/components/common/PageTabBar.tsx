@@ -14,7 +14,7 @@ interface PageTabBarProps {
 
 export function PageTabBar({ tabs }: PageTabBarProps) {
   return (
-    <nav className="flex gap-1 border-b border-gray-200 mb-6 overflow-x-auto">
+    <nav className="flex gap-1 border-b border-theme-primary mb-6 overflow-x-auto">
       {tabs.map((tab) => (
         <NavLink
           key={tab.key}
@@ -24,7 +24,7 @@ export function PageTabBar({ tabs }: PageTabBarProps) {
             `flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
               isActive
                 ? 'border-dental-600 text-dental-700'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                : 'border-transparent text-theme-tertiary hover:text-theme-secondary hover:border-theme-secondary'
             }`
           }
         >

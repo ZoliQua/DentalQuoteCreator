@@ -1,0 +1,14 @@
+export const DEFAULT_SLOT_HEIGHT = 48; // px per slot (legacy fallback)
+export const DEFAULT_PIXELS_PER_HOUR = 192; // consistent hour height regardless of slot duration
+export const PIXELS_PER_HOUR_XSMALL = 45;
+export const PIXELS_PER_HOUR_SMALL = 64;
+export const PIXELS_PER_HOUR_MEDIUM = 100;
+export const PIXELS_PER_HOUR_LONG = 192;
+export const DEFAULT_SLOT_DURATION = 15; // minutes
+export const DEFAULT_SLOT_MIN_TIME = '07:00';
+export const DEFAULT_SLOT_MAX_TIME = '20:00';
+export const DEFAULT_FIRST_DAY = 1; // Monday
+export const TIME_AXIS_WIDTH = 60; // px
+export const MIN_EVENT_HEIGHT = 18; // px — minimum rendered height for very short events
+export const RESIZE_HANDLE_HEIGHT = 6; // px
+export const NOW_INDICATOR_INTERVAL = 60_000; // ms — update every minute

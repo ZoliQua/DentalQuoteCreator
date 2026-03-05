@@ -267,15 +267,15 @@ export function DatabaseBrowserPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t.dataManagement.title}</h1>
-        <p className="text-gray-500 mt-1">{t.dataManagement.subtitle}</p>
+        <h1 className="text-2xl font-bold text-theme-primary">{t.dataManagement.title}</h1>
+        <p className="text-theme-tertiary mt-1">{t.dataManagement.subtitle}</p>
       </div>
 
       <PageTabBar tabs={tabs} />
 
       {/* Browser title */}
       <h2 className="text-lg font-semibold flex items-center gap-2">
-        <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         {t.dataManagement.browserTitle}
@@ -308,7 +308,7 @@ export function DatabaseBrowserPage() {
               />
             </div>
             {data && (
-              <p className="text-sm text-gray-500 pb-2">
+              <p className="text-sm text-theme-tertiary pb-2">
                 {t.dbBrowser.totalRows}: <strong>{new Intl.NumberFormat('hu-HU').format(data.totalRows)}</strong>
               </p>
             )}
@@ -317,7 +317,7 @@ export function DatabaseBrowserPage() {
       </Card>
 
       {/* Loading / Error */}
-      {loading && <p className="text-sm text-gray-500">{t.common.loading}</p>}
+      {loading && <p className="text-sm text-theme-tertiary">{t.common.loading}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {/* Toast */}
@@ -332,7 +332,7 @@ export function DatabaseBrowserPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold"><span className="font-normal text-gray-500">{t.dataManagement.tablePrefix}</span> {data.table}</h2>
+              <h2 className="text-lg font-semibold"><span className="font-normal text-theme-tertiary">{t.dataManagement.tablePrefix}</span> {data.table}</h2>
               <div className="flex items-center gap-2">
                 <Select
                   options={PAGE_SIZES.map(s => ({ value: String(s), label: String(s) }))}
@@ -340,10 +340,10 @@ export function DatabaseBrowserPage() {
                   onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}
                   className="w-20"
                 />
-                <span className="text-sm text-gray-500">{t.common.perPage}</span>
+                <span className="text-sm text-theme-tertiary">{t.common.perPage}</span>
                 <button
                   title="CSV"
-                  className="ml-2 p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                  className="ml-2 p-1.5 rounded-lg text-theme-tertiary hover:bg-theme-hover hover:text-theme-secondary transition-colors"
                   onClick={async () => {
                     try {
                       const res = await fetch(`/backend/db/export/${data.table}`, { headers: getAuthHeaders() });
@@ -369,18 +369,18 @@ export function DatabaseBrowserPage() {
           </CardHeader>
           <CardContent noPadding>
             {data.rows.length === 0 ? (
-              <p className="p-4 text-sm text-gray-500">{t.dbBrowser.noRows}</p>
+              <p className="p-4 text-sm text-theme-tertiary">{t.dbBrowser.noRows}</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+                  <thead className="bg-theme-tertiary text-left text-xs uppercase tracking-wide text-theme-tertiary">
                     <tr>
                       {data.columns.map(col => {
                         const isActive = sortColumn === col.name;
                         return (
                           <th
                             key={col.name}
-                            className="px-3 py-2 whitespace-nowrap cursor-pointer select-none hover:bg-gray-100 transition-colors"
+                            className="px-3 py-2 whitespace-nowrap cursor-pointer select-none hover:bg-theme-hover transition-colors"
                             onClick={() => {
                               if (isActive) {
                                 setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -394,11 +394,11 @@ export function DatabaseBrowserPage() {
                             <div className="flex items-center gap-1">
                               {col.name}
                               <span className="inline-flex flex-col leading-none text-[10px]">
-                                <span className={isActive && sortDir === 'asc' ? 'text-dental-600' : 'text-gray-300'}>&#9650;</span>
-                                <span className={isActive && sortDir === 'desc' ? 'text-dental-600' : 'text-gray-300'}>&#9660;</span>
+                                <span className={isActive && sortDir === 'asc' ? 'text-dental-600' : 'text-theme-muted'}>&#9650;</span>
+                                <span className={isActive && sortDir === 'desc' ? 'text-dental-600' : 'text-theme-muted'}>&#9660;</span>
                               </span>
                             </div>
-                            <div className="font-normal text-gray-400 normal-case">{col.type}</div>
+                            <div className="font-normal text-theme-muted normal-case">{col.type}</div>
                           </th>
                         );
                       })}
@@ -411,17 +411,17 @@ export function DatabaseBrowserPage() {
                       return (
                         <tr
                           key={pkId || idx}
-                          className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
+                          className="border-t border-theme-primary hover:bg-theme-tertiary cursor-pointer"
                           onClick={() => openEditModal(row)}
                         >
                           {data.columns.map(col => (
                             <td
                               key={col.name}
-                              className="px-3 py-2 max-w-[300px] truncate text-gray-700"
+                              className="px-3 py-2 max-w-[300px] truncate text-theme-secondary"
                               title={formatCellValue(row[col.name])}
                             >
                               {row[col.name] === null ? (
-                                <span className="text-gray-400 italic">NULL</span>
+                                <span className="text-theme-muted italic">NULL</span>
                               ) : (
                                 formatCellValue(row[col.name])
                               )}
@@ -453,7 +453,7 @@ export function DatabaseBrowserPage() {
             {/* Pagination */}
             {data.totalPages > 1 && (
               <div className="flex items-center justify-between border-t px-4 py-3">
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-theme-tertiary">
                   {t.common.page} {data.page} / {data.totalPages}
                 </p>
                 <div className="flex gap-2">
@@ -500,18 +500,18 @@ export function DatabaseBrowserPage() {
 
               return (
                 <div key={col.name}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-secondary mb-1">
                     {col.name}
-                    <span className="ml-2 font-normal text-gray-400">({col.type})</span>
+                    <span className="ml-2 font-normal text-theme-muted">({col.type})</span>
                     {isPk && <span className="ml-1 text-xs text-dental-600">PK</span>}
                   </label>
                   {isReadOnly ? (
-                    <p className="text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded border border-gray-200">
+                    <p className="text-sm text-theme-secondary bg-theme-tertiary px-3 py-2 rounded border border-theme-primary">
                       {formatCellValue(editRow[col.name])}
                     </p>
                   ) : isBool ? (
                     <select
-                      className="w-full px-3 py-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-dental-500"
+                      className="w-full px-3 py-2 border rounded-lg border-theme-secondary focus:outline-none focus:ring-2 focus:ring-dental-500"
                       value={editValues[col.name] || 'false'}
                       onChange={e => setEditValues(prev => ({ ...prev, [col.name]: e.target.value }))}
                     >
@@ -521,7 +521,7 @@ export function DatabaseBrowserPage() {
                     </select>
                   ) : isJson ? (
                     <textarea
-                      className="w-full px-3 py-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-dental-500 font-mono text-sm"
+                      className="w-full px-3 py-2 border rounded-lg border-theme-secondary focus:outline-none focus:ring-2 focus:ring-dental-500 font-mono text-sm"
                       rows={4}
                       value={editValues[col.name] || ''}
                       onChange={e => setEditValues(prev => ({ ...prev, [col.name]: e.target.value }))}
@@ -529,7 +529,7 @@ export function DatabaseBrowserPage() {
                   ) : (
                     <input
                       type="text"
-                      className="w-full px-3 py-2 border rounded-lg border-gray-300 focus:outline-none focus:ring-2 focus:ring-dental-500"
+                      className="w-full px-3 py-2 border rounded-lg border-theme-secondary focus:outline-none focus:ring-2 focus:ring-dental-500"
                       value={editValues[col.name] || ''}
                       onChange={e => setEditValues(prev => ({ ...prev, [col.name]: e.target.value }))}
                     />

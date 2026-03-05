@@ -916,8 +916,8 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t.dataManagement.title}</h1>
-        <p className="text-gray-500 mt-1">{t.dataManagement.subtitle}</p>
+        <h1 className="text-2xl font-bold text-theme-primary">{t.dataManagement.title}</h1>
+        <p className="text-theme-tertiary mt-1">{t.dataManagement.subtitle}</p>
       </div>
 
       <PageTabBar tabs={tabs} />
@@ -928,8 +928,8 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
         <div
           className={`p-4 rounded-lg ${
             message.type === 'success'
-              ? 'bg-green-50 border border-green-200 text-green-800'
-              : 'bg-red-50 border border-red-200 text-red-800'
+              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
+              : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'
           }`}
         >
           <div className="flex items-center gap-2">
@@ -964,26 +964,26 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             <Link
               key={card.key}
               to={card.to}
-              className="block rounded-lg border border-gray-200 bg-white p-5 hover:border-dental-300 hover:shadow-md transition-all"
+              className="block rounded-lg border border-theme-primary bg-theme-secondary p-5 hover:border-dental-300 hover:shadow-md transition-all"
             >
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">{card.icon}</div>
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900">{card.title}</h3>
-                  <p className="text-xs text-gray-500 mt-1">{card.description}</p>
+                  <h3 className="text-sm font-semibold text-theme-primary">{card.title}</h3>
+                  <p className="text-xs text-theme-tertiary mt-1">{card.description}</p>
                 </div>
               </div>
             </Link>
           ))}
           <Link
             to={browserCard.to}
-            className="block rounded-lg border border-gray-200 bg-white p-5 hover:border-dental-300 hover:shadow-md transition-all"
+            className="block rounded-lg border border-theme-primary bg-theme-secondary p-5 hover:border-dental-300 hover:shadow-md transition-all"
           >
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0">{browserCard.icon}</div>
               <div>
-                <h3 className="text-sm font-semibold text-gray-900">{browserCard.title}</h3>
-                <p className="text-xs text-gray-500 mt-1">{browserCard.description}</p>
+                <h3 className="text-sm font-semibold text-theme-primary">{browserCard.title}</h3>
+                <p className="text-xs text-theme-tertiary mt-1">{browserCard.description}</p>
               </div>
             </div>
           </Link>
@@ -1006,7 +1006,7 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
           <Card>
             <CardHeader>
               <h2 className="text-lg font-semibold flex items-center gap-2">
-                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
                 {t.dataManagement.pricelistStatsTitle}
@@ -1015,23 +1015,23 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             <CardContent>
               <div className="flex flex-col md:flex-row gap-6">
                 <div className="flex-1 space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                    <span className="text-sm text-gray-600">{t.dataManagement.pricelistStatsCount}</span>
-                    <span className="text-lg font-bold text-gray-900">{activePriceLists.length}</span>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-theme-tertiary">
+                    <span className="text-sm text-theme-secondary">{t.dataManagement.pricelistStatsCount}</span>
+                    <span className="text-lg font-bold text-theme-primary">{activePriceLists.length}</span>
                   </div>
                   {categoryStats.map((pl, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                    <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-theme-tertiary">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                        <span className="text-sm text-gray-700">{pl.name}</span>
+                        <span className="text-sm text-theme-secondary">{pl.name}</span>
                       </div>
-                      <span className="text-sm font-semibold text-gray-900">{pl.items} {t.dataManagement.pricelistStatsItems}</span>
+                      <span className="text-sm font-semibold text-theme-primary">{pl.items} {t.dataManagement.pricelistStatsItems}</span>
                     </div>
                   ))}
                 </div>
                 {categoryStats.length > 0 && (
                   <div className="flex flex-col items-center justify-center">
-                    <p className="text-xs text-gray-500 mb-2">{t.dataManagement.pricelistStatsCategoryDistribution}</p>
+                    <p className="text-xs text-theme-tertiary mb-2">{t.dataManagement.pricelistStatsCategoryDistribution}</p>
                     <svg viewBox="0 0 120 120" className="w-36 h-36">
                       {(() => {
                         let offset = 0;
@@ -1063,14 +1063,14 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
       {section === 'pricelist' && <Card>
         <CardHeader>
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
             </svg>
             {t.dataManagement.catalogOnly.title}
           </h2>
         </CardHeader>
         <CardContent>
-          <p className="text-gray-600 mb-4">{t.dataManagement.catalogOnly.description}</p>
+          <p className="text-theme-secondary mb-4">{t.dataManagement.catalogOnly.description}</p>
           <input
             ref={catalogJsonInputRef}
             type="file"
@@ -1086,15 +1086,15 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             onChange={(event) => handleCatalogFileSelect(event, 'csv')}
           />
           <div className="space-y-4">
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="rounded-lg border border-theme-primary p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.export}</p>
-                  <p className="text-xs text-gray-500">{t.dataManagement.catalogOnly.exportDescription}</p>
+                  <p className="text-sm font-semibold text-theme-primary">{t.dataManagement.export}</p>
+                  <p className="text-xs text-theme-tertiary">{t.dataManagement.catalogOnly.exportDescription}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <select
-                    className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+                    className="border border-theme-secondary rounded-md px-2 py-1 text-sm"
                     value={selectedPriceListId}
                     onChange={(e) => setSelectedPriceListId(e.target.value)}
                   >
@@ -1115,11 +1115,11 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
               </div>
             </div>
 
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="rounded-lg border border-theme-primary p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.import}</p>
-                  <p className="text-xs text-gray-500">{t.dataManagement.catalogOnly.importDescription}</p>
+                  <p className="text-sm font-semibold text-theme-primary">{t.dataManagement.import}</p>
+                  <p className="text-xs text-theme-tertiary">{t.dataManagement.catalogOnly.importDescription}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
@@ -1170,7 +1170,7 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
           <Card>
             <CardHeader>
               <h2 className="text-lg font-semibold flex items-center gap-2">
-                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
                 {t.dataManagement.patientStatsTitle}
@@ -1178,27 +1178,27 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-                <div className="p-3 rounded-lg bg-gray-50 text-center">
-                  <p className="text-2xl font-bold text-gray-900">{allPatients.length}</p>
-                  <p className="text-xs text-gray-500">{t.dataManagement.patientStatsTotal}</p>
+                <div className="p-3 rounded-lg bg-theme-tertiary text-center">
+                  <p className="text-2xl font-bold text-theme-primary">{allPatients.length}</p>
+                  <p className="text-xs text-theme-tertiary">{t.dataManagement.patientStatsTotal}</p>
                 </div>
-                <div className="p-3 rounded-lg bg-green-50 text-center">
-                  <p className="text-2xl font-bold text-green-700">{active.length}</p>
-                  <p className="text-xs text-green-600">{t.dataManagement.patientStatsActive}</p>
+                <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-center">
+                  <p className="text-2xl font-bold text-green-700 dark:text-green-400">{active.length}</p>
+                  <p className="text-xs text-green-600 dark:text-green-500">{t.dataManagement.patientStatsActive}</p>
                 </div>
-                <div className="p-3 rounded-lg bg-red-50 text-center">
-                  <p className="text-2xl font-bold text-red-700">{deleted.length}</p>
-                  <p className="text-xs text-red-600">{t.dataManagement.patientStatsDeleted}</p>
+                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-center">
+                  <p className="text-2xl font-bold text-red-700 dark:text-red-400">{deleted.length}</p>
+                  <p className="text-xs text-red-600 dark:text-red-500">{t.dataManagement.patientStatsDeleted}</p>
                 </div>
               </div>
               {typeEntries.length > 0 && (
                 <>
-                  <p className="text-sm font-medium text-gray-700 mb-2">{t.dataManagement.patientStatsByType}</p>
+                  <p className="text-sm font-medium text-theme-secondary mb-2">{t.dataManagement.patientStatsByType}</p>
                   <div className="space-y-2">
                     {typeEntries.map(([type, count]) => (
-                      <div key={type} className="flex items-center justify-between p-2 rounded bg-gray-50">
-                        <span className="text-sm text-gray-700">{type}</span>
-                        <span className="text-sm font-semibold text-gray-900">{count}</span>
+                      <div key={type} className="flex items-center justify-between p-2 rounded bg-theme-tertiary">
+                        <span className="text-sm text-theme-secondary">{type}</span>
+                        <span className="text-sm font-semibold text-theme-primary">{count}</span>
                       </div>
                     ))}
                   </div>
@@ -1213,7 +1213,7 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
       {section === 'patients' && <Card>
         <CardHeader>
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
             {t.dataManagement.patientData.title}
@@ -1250,16 +1250,16 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
           />
           <div className="space-y-4">
             {/* Row 1: Export all */}
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="rounded-lg border border-theme-primary p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-start gap-2">
-                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 text-gray-500">
+                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 text-theme-tertiary">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.exportAllTitle}</p>
-                    <p className="text-xs text-gray-500">{t.dataManagement.patientData.exportAllDescription}</p>
+                    <p className="text-sm font-semibold text-theme-primary">{t.dataManagement.patientData.exportAllTitle}</p>
+                    <p className="text-xs text-theme-tertiary">{t.dataManagement.patientData.exportAllDescription}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1274,21 +1274,21 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             </div>
 
             {/* Row 2: Export single patient */}
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="rounded-lg border border-theme-primary p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-start gap-2">
-                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 text-gray-500">
+                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 text-theme-tertiary">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.exportSingleTitle}</p>
-                    <p className="text-xs text-gray-500">{t.dataManagement.patientData.exportSingleDescription}</p>
+                    <p className="text-sm font-semibold text-theme-primary">{t.dataManagement.patientData.exportSingleTitle}</p>
+                    <p className="text-xs text-theme-tertiary">{t.dataManagement.patientData.exportSingleDescription}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <select
-                    className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+                    className="border border-theme-secondary rounded-md px-2 py-1 text-sm"
                     value={selectedPatientId}
                     onChange={(e) => setSelectedPatientId(e.target.value)}
                   >
@@ -1310,16 +1310,16 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             </div>
 
             {/* Row 3: Import all */}
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="rounded-lg border border-theme-primary p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-start gap-2">
-                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 text-gray-500">
+                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 text-theme-tertiary">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m4-8l-4-4m0 0L16 8m4-4v12" /></svg>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.importAllTitle}</p>
-                    <p className="text-xs text-gray-500">{t.dataManagement.patientData.importAllDescription}</p>
+                    <p className="text-sm font-semibold text-theme-primary">{t.dataManagement.patientData.importAllTitle}</p>
+                    <p className="text-xs text-theme-tertiary">{t.dataManagement.patientData.importAllDescription}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1334,16 +1334,16 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             </div>
 
             {/* Row 4: Import single patient */}
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="rounded-lg border border-theme-primary p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-start gap-2">
-                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 text-gray-500">
+                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5 text-theme-tertiary">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m4-8l-4-4m0 0L16 8m4-4v12" /></svg>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">{t.dataManagement.patientData.importSingleTitle}</p>
-                    <p className="text-xs text-gray-500">{t.dataManagement.patientData.importSingleDescription}</p>
+                    <p className="text-sm font-semibold text-theme-primary">{t.dataManagement.patientData.importSingleTitle}</p>
+                    <p className="text-xs text-theme-tertiary">{t.dataManagement.patientData.importSingleDescription}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1365,7 +1365,7 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
       <Card>
         <CardHeader>
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M3 6h18M3 18h18M8 6v12M16 6v12" />
             </svg>
             {t.dataManagement.dbReportTitle}
@@ -1379,7 +1379,7 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
       <Card>
         <CardHeader>
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
             </svg>
             {t.dataManagement.databaseOnly.title}
@@ -1394,22 +1394,22 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
             className="hidden"
           />
           <div className="space-y-4">
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="rounded-lg border border-theme-primary p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.export}</p>
-                  <p className="text-xs text-gray-500">{t.dataManagement.databaseOnly.exportDescription}</p>
+                  <p className="text-sm font-semibold text-theme-primary">{t.dataManagement.export}</p>
+                  <p className="text-xs text-theme-tertiary">{t.dataManagement.databaseOnly.exportDescription}</p>
                 </div>
                 <Button size="sm" onClick={handleExport}>
                   JSON
                 </Button>
               </div>
             </div>
-            <div className="rounded-lg border border-gray-200 p-4">
+            <div className="rounded-lg border border-theme-primary p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">{t.dataManagement.import}</p>
-                  <p className="text-xs text-gray-500">{t.dataManagement.databaseOnly.importDescription}</p>
+                  <p className="text-sm font-semibold text-theme-primary">{t.dataManagement.import}</p>
+                  <p className="text-xs text-theme-tertiary">{t.dataManagement.databaseOnly.importDescription}</p>
                 </div>
                 <Button size="sm" variant="secondary" onClick={handleImportClick}>
                   JSON
@@ -1457,7 +1457,7 @@ export function DataManagementPage({ section }: { section?: DataSection }) {
       {section === 'storage' && <Card>
         <CardHeader>
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
             {t.dataManagement.storageInfoTitle}
@@ -1595,20 +1595,20 @@ function StorageInfo() {
   const stornoInvoices = invoices.filter((inv) => inv.status === 'storno');
 
   const SectionHeader = ({ children }: { children: React.ReactNode }) => (
-    <div className="flex justify-between py-2 border-b border-gray-300">
-      <span className="text-sm font-semibold text-gray-800">{children}</span>
+    <div className="flex justify-between py-2 border-b border-theme-secondary">
+      <span className="text-sm font-semibold text-theme-primary">{children}</span>
     </div>
   );
 
   const SubSectionHeader = ({ children }: { children: React.ReactNode }) => (
-    <div className="flex justify-between py-1.5 border-b border-gray-200 pl-4">
-      <span className="text-sm font-semibold text-gray-700">{children}</span>
+    <div className="flex justify-between py-1.5 border-b border-theme-primary pl-4">
+      <span className="text-sm font-semibold text-theme-secondary">{children}</span>
     </div>
   );
 
   const Row = ({ label, value, indent, indent2 }: { label: string; value: number; indent?: boolean; indent2?: boolean }) => (
-    <div className={`flex justify-between py-1.5 border-b border-gray-100 ${indent2 ? 'pl-8' : indent ? 'pl-4' : ''}`}>
-      <span className="text-sm text-gray-600">{label}</span>
+    <div className={`flex justify-between py-1.5 border-b border-theme-primary ${indent2 ? 'pl-8' : indent ? 'pl-4' : ''}`}>
+      <span className="text-sm text-theme-secondary">{label}</span>
       <span className="text-sm font-medium">{value}</span>
     </div>
   );
@@ -1711,7 +1711,7 @@ function DatabaseReport() {
   };
 
   if (loading) {
-    return <p className="text-sm text-gray-500">{t.dataManagement.dbReportLoading}</p>;
+    return <p className="text-sm text-theme-tertiary">{t.dataManagement.dbReportLoading}</p>;
   }
 
   if (error || !stats) {
@@ -1720,35 +1720,35 @@ function DatabaseReport() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-gray-200 p-3">
-        <p className="text-xs uppercase tracking-wide text-gray-500">{t.dataManagement.dbReportDatabase}</p>
-        <p className="mt-1 text-sm font-semibold text-gray-900 break-all leading-5">
+      <div className="rounded-lg border border-theme-primary p-3">
+        <p className="text-xs uppercase tracking-wide text-theme-tertiary">{t.dataManagement.dbReportDatabase}</p>
+        <p className="mt-1 text-sm font-semibold text-theme-primary break-all leading-5">
           {stats.databaseName}
         </p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="rounded-lg border border-gray-200 p-3">
-          <p className="text-xs uppercase tracking-wide text-gray-500">{t.dataManagement.dbReportTables}</p>
-          <p className="mt-1 text-sm font-semibold text-gray-900">{formatNumber(stats.tableCount)}</p>
+        <div className="rounded-lg border border-theme-primary p-3">
+          <p className="text-xs uppercase tracking-wide text-theme-tertiary">{t.dataManagement.dbReportTables}</p>
+          <p className="mt-1 text-sm font-semibold text-theme-primary">{formatNumber(stats.tableCount)}</p>
         </div>
-        <div className="rounded-lg border border-gray-200 p-3">
-          <p className="text-xs uppercase tracking-wide text-gray-500">{t.dataManagement.dbReportRows}</p>
-          <p className="mt-1 text-sm font-semibold text-gray-900">{formatNumber(stats.totalRows)}</p>
+        <div className="rounded-lg border border-theme-primary p-3">
+          <p className="text-xs uppercase tracking-wide text-theme-tertiary">{t.dataManagement.dbReportRows}</p>
+          <p className="mt-1 text-sm font-semibold text-theme-primary">{formatNumber(stats.totalRows)}</p>
         </div>
-        <div className="rounded-lg border border-gray-200 p-3">
-          <p className="text-xs uppercase tracking-wide text-gray-500">{t.dataManagement.dbReportSize}</p>
-          <p className="mt-1 text-sm font-semibold text-gray-900">{formatBytes(stats.databaseSizeBytes)}</p>
+        <div className="rounded-lg border border-theme-primary p-3">
+          <p className="text-xs uppercase tracking-wide text-theme-tertiary">{t.dataManagement.dbReportSize}</p>
+          <p className="mt-1 text-sm font-semibold text-theme-primary">{formatBytes(stats.databaseSizeBytes)}</p>
         </div>
       </div>
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-theme-tertiary">
         {t.dataManagement.dbReportLastUpdated}: {new Date(stats.generatedAt).toLocaleString('hu-HU')}
       </p>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
+      <div className="overflow-x-auto rounded-lg border border-theme-primary">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-theme-tertiary text-left text-xs uppercase tracking-wide text-theme-tertiary">
             <tr>
               <th className="px-3 py-2">{t.dataManagement.dbReportTableName}</th>
               <th className="px-3 py-2 text-right">{t.dataManagement.dbReportTableRows}</th>
@@ -1762,7 +1762,7 @@ function DatabaseReport() {
               .slice()
               .sort((a, b) => a.tableName.localeCompare(b.tableName))
               .map((table) => (
-              <tr key={table.tableName} className="border-t border-gray-100">
+              <tr key={table.tableName} className="border-t border-theme-primary">
                 <td className="px-3 py-2 font-medium">
                   <Link
                     to={`/data/browser?table=${encodeURIComponent(table.tableName)}`}
@@ -1771,10 +1771,10 @@ function DatabaseReport() {
                     {table.tableName}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right text-gray-700">{formatNumber(table.rowCount)}</td>
-                <td className="px-3 py-2 text-right text-gray-700">{formatBytes(table.dataBytes)}</td>
-                <td className="px-3 py-2 text-right text-gray-700">{formatBytes(table.indexBytes)}</td>
-                <td className="px-3 py-2 text-right font-semibold text-gray-900">{formatBytes(table.totalBytes)}</td>
+                <td className="px-3 py-2 text-right text-theme-secondary">{formatNumber(table.rowCount)}</td>
+                <td className="px-3 py-2 text-right text-theme-secondary">{formatBytes(table.dataBytes)}</td>
+                <td className="px-3 py-2 text-right text-theme-secondary">{formatBytes(table.indexBytes)}</td>
+                <td className="px-3 py-2 text-right font-semibold text-theme-primary">{formatBytes(table.totalBytes)}</td>
               </tr>
             ))}
           </tbody>

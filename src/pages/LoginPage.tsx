@@ -25,18 +25,18 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4 relative">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+    <div className="min-h-screen bg-theme-hover flex items-center justify-center px-4 relative">
+      <div className="w-full max-w-md bg-theme-secondary rounded-2xl shadow-sm border border-theme-primary p-8">
         <div className="flex flex-col items-center mb-6">
           <img src={dcqLogo} alt="DentalQuoter" className="w-24 h-24 mb-3" />
-          <span className="text-2xl font-bold text-slate-900">DentalQuoter</span>
+          <span className="text-2xl font-bold text-theme-primary">DentalQuoter</span>
         </div>
-        <h1 className="text-2xl font-bold text-slate-900">{t.login.title}</h1>
-        <p className="text-slate-600 mt-2">{t.login.subtitle}</p>
+        <h1 className="text-2xl font-bold text-theme-primary">{t.login.title}</h1>
+        <p className="text-theme-secondary mt-2">{t.login.subtitle}</p>
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="email">
+            <label className="block text-sm font-medium text-theme-secondary mb-1" htmlFor="email">
               {t.login.emailLabel}
             </label>
             <input
@@ -44,13 +44,13 @@ export function LoginPage() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-dental-500"
+              className="w-full rounded-lg border border-theme-secondary px-3 py-2 focus:outline-none focus:ring-2 focus:ring-dental-500"
               autoComplete="username"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="password">
+            <label className="block text-sm font-medium text-theme-secondary mb-1" htmlFor="password">
               {t.login.passwordLabel}
             </label>
             <input
@@ -58,7 +58,7 @@ export function LoginPage() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-dental-500"
+              className="w-full rounded-lg border border-theme-secondary px-3 py-2 focus:outline-none focus:ring-2 focus:ring-dental-500"
               autoComplete="current-password"
               required
             />
@@ -79,7 +79,7 @@ export function LoginPage() {
           id="login-language"
           value={appLanguage}
           onChange={(event) => setAppLanguage(event.target.value as 'hu' | 'en' | 'de')}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-dental-500"
+          className="rounded-lg border border-theme-secondary bg-theme-secondary px-3 py-2 text-sm text-theme-secondary focus:outline-none focus:ring-2 focus:ring-dental-500"
         >
           <option value="hu">{t.settings.hungarian}</option>
           <option value="en">{t.settings.english}</option>

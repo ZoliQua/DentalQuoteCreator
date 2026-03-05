@@ -249,7 +249,7 @@ export function QuoteEditorPage() {
   if (!patient || !quote) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-gray-900">{t.quotes.notFound}</h2>
+        <h2 className="text-xl font-semibold text-theme-primary">{t.quotes.notFound}</h2>
         <Link to="/patients" className="text-dental-600 hover:text-dental-700 mt-4 inline-block">
           {t.quotes.backToPatients}
         </Link>
@@ -679,7 +679,7 @@ export function QuoteEditorPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+          <div className="flex items-center gap-2 text-sm text-theme-tertiary mb-2">
             <Link to="/patients" className="hover:text-dental-600">
               {t.patients.title}
             </Link>
@@ -696,11 +696,11 @@ export function QuoteEditorPage() {
                 <input
                   value={quote.quoteName}
                   onChange={(e) => editQuote(quote.quoteId, { quoteName: e.target.value })}
-                  className="text-2xl font-bold text-gray-900 bg-transparent border-b border-dashed border-gray-300 focus:border-dental-500 focus:outline-none w-64"
+                  className="text-2xl font-bold text-theme-primary bg-transparent border-b border-dashed border-theme-secondary focus:border-dental-500 focus:outline-none w-64"
                   placeholder={t.quotes.quoteName}
                 />
               ) : (
-                <h1 className="text-2xl font-bold text-gray-900">{quote.quoteName}</h1>
+                <h1 className="text-2xl font-bold text-theme-primary">{quote.quoteName}</h1>
               )}
             </div>
             <Badge
@@ -779,7 +779,7 @@ export function QuoteEditorPage() {
               <div className="flex flex-wrap items-center gap-6">
                 {/* Doctor Selector */}
                 <div className="flex items-center gap-4">
-                  <label className="text-sm font-medium text-gray-700">
+                  <label className="text-sm font-medium text-theme-secondary">
                     {t.quotes.doctor}:
                   </label>
                   {quote.quoteStatus === 'draft' ? (
@@ -793,13 +793,13 @@ export function QuoteEditorPage() {
                       className="w-56"
                     />
                   ) : (
-                    <span className="text-sm font-semibold text-gray-900">{doctorName || '-'}</span>
+                    <span className="text-sm font-semibold text-theme-primary">{doctorName || '-'}</span>
                   )}
                 </div>
 
                 {/* Expected Treatments, Language and Discount Preset */}
                 <div className="flex items-center gap-3">
-                  <label className="text-sm font-medium text-gray-700">
+                  <label className="text-sm font-medium text-theme-secondary">
                     {t.quotes.expectedTreatments}
                   </label>
                   {quote.quoteStatus === 'draft' ? (
@@ -815,9 +815,9 @@ export function QuoteEditorPage() {
                       className="w-40"
                     />
                   ) : (
-                    <span className="text-sm font-semibold text-gray-900">{quote.expectedTreatments || 1} {t.quotes.treatmentSession}</span>
+                    <span className="text-sm font-semibold text-theme-primary">{quote.expectedTreatments || 1} {t.quotes.treatmentSession}</span>
                   )}
-                  <label className="text-sm font-medium text-gray-700">{t.quotes.quoteLang}</label>
+                  <label className="text-sm font-medium text-theme-secondary">{t.quotes.quoteLang}</label>
                   {quote.quoteStatus === 'draft' ? (
                     <Select
                       value={effectiveQuoteLang}
@@ -830,10 +830,10 @@ export function QuoteEditorPage() {
                       className="w-40"
                     />
                   ) : (
-                    <span className="text-sm font-semibold text-gray-900">{effectiveQuoteLang === 'hu' ? 'Magyar' : effectiveQuoteLang === 'en' ? 'English' : 'Deutsch'}</span>
+                    <span className="text-sm font-semibold text-theme-primary">{effectiveQuoteLang === 'hu' ? 'Magyar' : effectiveQuoteLang === 'en' ? 'English' : 'Deutsch'}</span>
                   )}
                   <div className="flex items-center gap-3">
-                    <label className="text-sm font-medium text-gray-700">
+                    <label className="text-sm font-medium text-theme-secondary">
                       {t.quotes.generalDiscount}
                     </label>
                     {quote.quoteStatus === 'draft' ? (
@@ -852,7 +852,7 @@ export function QuoteEditorPage() {
                         className="w-28"
                       />
                     ) : (
-                      <span className="text-sm font-semibold text-gray-900">
+                      <span className="text-sm font-semibold text-theme-primary">
                         {lineDiscountPreset === 'none' ? t.common.none : lineDiscountPreset === 'custom' ? t.common.custom : `${lineDiscountPreset}%`}
                       </span>
                     )}
@@ -957,8 +957,8 @@ export function QuoteEditorPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 mb-3 pb-3 border-b">
-                <span className="text-sm text-gray-500">{t.quotes.quoteValidity}:</span>
-                <span className="text-base font-semibold text-gray-900">
+                <span className="text-sm text-theme-tertiary">{t.quotes.quoteValidity}:</span>
+                <span className="text-base font-semibold text-theme-primary">
                   {formatDate(quote.validUntil)}
                 </span>
                 {(() => {
@@ -966,7 +966,7 @@ export function QuoteEditorPage() {
                   const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00');
                   const diff = Math.round((valid.getTime() - today.getTime()) / 86400000);
                   return diff > 0
-                    ? <span className="text-xs text-gray-500">({diff} {t.quotes.quoteValidityDays})</span>
+                    ? <span className="text-xs text-theme-tertiary">({diff} {t.quotes.quoteValidityDays})</span>
                     : <span className="text-xs text-red-500 font-medium">({t.quotes.quoteValidityExpired})</span>;
                 })()}
                 {quote.quoteStatus === 'draft' && (
@@ -975,7 +975,7 @@ export function QuoteEditorPage() {
                     setValidUntilText(formatBirthDateForDisplay(quote.validUntil.slice(0, 10)));
                     setValidUntilModalOpen(true);
                   }}
-                  className="p-1 text-gray-400 hover:text-dental-600 transition-colors"
+                  className="p-1 text-theme-muted hover:text-dental-600 transition-colors"
                   title={t.common.edit}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -986,11 +986,11 @@ export function QuoteEditorPage() {
               </div>
               {quote.isDeleted ? (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">{t.quotes.acceptanceDeleted}</span>
+                  <span className="text-sm text-theme-secondary">{t.quotes.acceptanceDeleted}</span>
                   <button
                     type="button"
                     onClick={() => restoreQuote(quote.quoteId)}
-                    className="rounded-md border border-gray-200 p-1.5 text-green-600 hover:bg-green-50 transition-colors"
+                    className="rounded-md border border-theme-primary p-1.5 text-green-600 hover:bg-green-50 transition-colors"
                     title={t.quotes.restoreQuote}
                   >
                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1001,7 +1001,7 @@ export function QuoteEditorPage() {
                 </div>
               ) : quote.quoteStatus === 'draft' ? (
                 <div>
-                  <p className="text-sm text-gray-600 mb-3">{t.quotes.acceptanceDraft}</p>
+                  <p className="text-sm text-theme-secondary mb-3">{t.quotes.acceptanceDraft}</p>
                   <div className="flex items-center gap-2">
                     <Button size="sm" onClick={handleClose}>
                       <svg className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1024,12 +1024,12 @@ export function QuoteEditorPage() {
               ) : quote.quoteStatus === 'closed' ? (
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-gray-600">{t.quotes.acceptanceClosed}</span>
+                    <span className="text-sm text-theme-secondary">{t.quotes.acceptanceClosed}</span>
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
                         onClick={() => reopenQuote(quote.quoteId)}
-                        className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                        className="rounded-md border border-theme-primary p-1.5 text-theme-secondary hover:bg-theme-hover transition-colors"
                         title={t.quotes.reopen}
                       >
                         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1041,7 +1041,7 @@ export function QuoteEditorPage() {
                         <button
                           type="button"
                           onClick={() => setDeleteConfirm(true)}
-                          className="rounded-md border border-gray-200 p-1.5 text-red-600 hover:bg-red-50 transition-colors"
+                          className="rounded-md border border-theme-primary p-1.5 text-red-600 hover:bg-red-50 transition-colors"
                           title={t.common.delete}
                         >
                           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1071,12 +1071,12 @@ export function QuoteEditorPage() {
               ) : quote.quoteStatus === 'started' ? (
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-gray-600">{t.quotes.acceptanceStarted}</span>
+                    <span className="text-sm text-theme-secondary">{t.quotes.acceptanceStarted}</span>
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
                         onClick={() => revokeAcceptance(quote.quoteId)}
-                        className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                        className="rounded-md border border-theme-primary p-1.5 text-theme-secondary hover:bg-theme-hover transition-colors"
                         title={t.quotes.revokeAcceptance}
                       >
                         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1097,12 +1097,12 @@ export function QuoteEditorPage() {
                 </div>
               ) : quote.quoteStatus === 'rejected' ? (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">{t.quotes.acceptanceRejected}</span>
+                  <span className="text-sm text-theme-secondary">{t.quotes.acceptanceRejected}</span>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() => revokeRejection(quote.quoteId)}
-                      className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                      className="rounded-md border border-theme-primary p-1.5 text-theme-secondary hover:bg-theme-hover transition-colors"
                       title={t.quotes.revokeRejection}
                     >
                       <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1114,7 +1114,7 @@ export function QuoteEditorPage() {
                       <button
                         type="button"
                         onClick={() => setDeleteConfirm(true)}
-                        className="rounded-md border border-gray-200 p-1.5 text-red-600 hover:bg-red-50 transition-colors"
+                        className="rounded-md border border-theme-primary p-1.5 text-red-600 hover:bg-red-50 transition-colors"
                         title={t.common.delete}
                       >
                         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1134,7 +1134,7 @@ export function QuoteEditorPage() {
                         <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                       </svg>
                     )}
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-theme-secondary">
                       {remainingAmount <= 0 ? t.invoices.completedAndFullyInvoiced : t.quotes.acceptanceCompleted}
                     </span>
                   </div>
@@ -1142,7 +1142,7 @@ export function QuoteEditorPage() {
                     <button
                       type="button"
                       onClick={() => reopenTreatment(quote.quoteId)}
-                      className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                      className="rounded-md border border-theme-primary p-1.5 text-theme-secondary hover:bg-theme-hover transition-colors"
                       title={t.quotes.reopenTreatment}
                     >
                       <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1169,7 +1169,7 @@ export function QuoteEditorPage() {
                   const sessionTotal = sessionItems.reduce((sum, item) => sum + item.quoteQty * item.quoteUnitPriceGross, 0);
                   return (
                     <div key={sessionNum} className="flex justify-between text-sm">
-                      <span className="text-gray-500">{t.quotes.treatmentNTotal.replace('{n}', String(sessionNum))}</span>
+                      <span className="text-theme-tertiary">{t.quotes.treatmentNTotal.replace('{n}', String(sessionNum))}</span>
                       <span className="font-medium">{formatCurrency(Math.round(sessionTotal))}</span>
                     </div>
                   );
@@ -1177,13 +1177,13 @@ export function QuoteEditorPage() {
               })()}
 
               <div className="flex justify-between">
-                <span className="text-gray-600">{t.quotes.subtotal}</span>
+                <span className="text-theme-secondary">{t.quotes.subtotal}</span>
                 <span className="font-medium">{formatCurrency(totals.subtotal)}</span>
               </div>
 
               {totals.lineDiscounts > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">{t.quotes.lineDiscounts}</span>
+                  <span className="text-theme-tertiary">{t.quotes.lineDiscounts}</span>
                   <span className="text-red-600">-{formatCurrency(totals.lineDiscounts)}</span>
                 </div>
               )}
@@ -1191,7 +1191,7 @@ export function QuoteEditorPage() {
               {/* Global Discount - hidden in non-draft states when value is 0 */}
               {!(quote.globalDiscountValue === 0 && ['closed', 'started', 'completed'].includes(quote.quoteStatus)) && (
               <div className="pt-3 border-t">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-theme-secondary mb-2">
                   {t.quotes.globalDiscount}
                 </label>
                 <div className="flex gap-2">
@@ -1230,7 +1230,7 @@ export function QuoteEditorPage() {
 
               {totals.globalDiscount > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">{t.quotes.globalDiscount}</span>
+                  <span className="text-theme-tertiary">{t.quotes.globalDiscount}</span>
                   <span className="text-red-600">-{formatCurrency(totals.globalDiscount)}</span>
                 </div>
               )}
@@ -1245,11 +1245,11 @@ export function QuoteEditorPage() {
               {invoicedAmount > 0 && (
                 <div className="mt-2 space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">{t.invoices.invoicedAmount}</span>
+                    <span className="text-theme-secondary">{t.invoices.invoicedAmount}</span>
                     <span className="font-medium">{formatCurrency(invoicedAmount)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">{t.invoices.remainingAmount}</span>
+                    <span className="text-theme-secondary">{t.invoices.remainingAmount}</span>
                     <span className={`font-medium ${remainingAmount <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
                       {formatCurrency(remainingAmount)}
                     </span>
@@ -1266,7 +1266,7 @@ export function QuoteEditorPage() {
                 <h3 className="font-semibold">{t.invoices.issuedInvoices}</h3>
                 <button
                   onClick={() => setInvoiceSortAsc((v) => !v)}
-                  className="p-1 text-gray-400 hover:text-dental-600 transition-colors"
+                  className="p-1 text-theme-muted hover:text-dental-600 transition-colors"
                   title={invoiceSortAsc ? 'Z → A' : 'A → Z'}
                 >
                   <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1296,11 +1296,11 @@ export function QuoteEditorPage() {
                       node: (
                         <div key={inv.id} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-gray-500">{formatDate(inv.createdAt)}</span>
+                            <span className="text-theme-tertiary">{formatDate(inv.createdAt)}</span>
                             <Link to={`/invoices/${inv.id}`} className="text-dental-600 hover:text-dental-700 hover:underline font-medium">
                               {inv.szamlazzInvoiceNumber || inv.id.slice(0, 8)}
                             </Link>
-                            <span className="text-xs text-gray-400">[{typeLabel}]</span>
+                            <span className="text-xs text-theme-muted">[{typeLabel}]</span>
                             {inv.status === 'storno' && (
                               <svg className="h-4 w-4 text-red-500 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="10" />
@@ -1309,7 +1309,7 @@ export function QuoteEditorPage() {
                               </svg>
                             )}
                           </div>
-                          <span className={`font-medium ${inv.status === 'storno' ? 'text-gray-400 line-through' : ''}`}>
+                          <span className={`font-medium ${inv.status === 'storno' ? 'text-theme-muted line-through' : ''}`}>
                             {formatCurrency(inv.totalGross, inv.currency)}
                           </span>
                         </div>
@@ -1321,7 +1321,7 @@ export function QuoteEditorPage() {
                         node: (
                           <div key={`${inv.id}-storno`} className="flex items-center justify-between text-sm py-1 border-b last:border-0 bg-red-50">
                             <div className="flex items-center gap-2">
-                              <span className="text-gray-500">{formatDate(inv.createdAt)}</span>
+                              <span className="text-theme-tertiary">{formatDate(inv.createdAt)}</span>
                               <span className="text-red-600 font-medium">{inv.stornoInvoiceNumber}</span>
                               <span className="text-xs text-red-400">[{t.invoices.invoiceTypeStorno}]</span>
                             </div>
@@ -1336,11 +1336,11 @@ export function QuoteEditorPage() {
                 })()}
                 <div className="pt-2 space-y-1">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">{t.invoices.invoicedAmount}</span>
+                    <span className="text-theme-secondary">{t.invoices.invoicedAmount}</span>
                     <span className="font-medium">{formatCurrency(invoicedAmount)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">{t.invoices.remainingAmount}</span>
+                    <span className="text-theme-secondary">{t.invoices.remainingAmount}</span>
                     <span className={`font-semibold ${remainingAmount <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
                       {formatCurrency(remainingAmount)}
                     </span>
@@ -1361,10 +1361,10 @@ export function QuoteEditorPage() {
         <div className="space-y-4">
           {/* Buyer section */}
           <div className="flex items-center justify-between border-b pb-1">
-            <h4 className="text-sm font-semibold text-gray-900">{t.invoices.buyerSection}</h4>
+            <h4 className="text-sm font-semibold text-theme-primary">{t.invoices.buyerSection}</h4>
             <div className="flex gap-1">
-              <button onClick={() => setInvoiceForm((prev) => ({ ...prev, buyerType: 'individual', buyerName: patient ? formatPatientName(patient.lastName, patient.firstName, patient.title) : prev.buyerName }))} className={`px-3 py-1 text-xs rounded-full ${invoiceForm.buyerType === 'individual' ? 'bg-dental-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.invoices.buyerTypeIndividual}</button>
-              <button onClick={() => setInvoiceForm((prev) => ({ ...prev, buyerType: 'company', buyerName: patient?.patientVATName || prev.buyerName }))} className={`px-3 py-1 text-xs rounded-full ${invoiceForm.buyerType === 'company' ? 'bg-dental-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.invoices.buyerTypeCompany}</button>
+              <button onClick={() => setInvoiceForm((prev) => ({ ...prev, buyerType: 'individual', buyerName: patient ? formatPatientName(patient.lastName, patient.firstName, patient.title) : prev.buyerName }))} className={`px-3 py-1 text-xs rounded-full ${invoiceForm.buyerType === 'individual' ? 'bg-dental-600 text-white' : 'bg-theme-hover text-theme-secondary hover:bg-theme-hover'}`}>{t.invoices.buyerTypeIndividual}</button>
+              <button onClick={() => setInvoiceForm((prev) => ({ ...prev, buyerType: 'company', buyerName: patient?.patientVATName || prev.buyerName }))} className={`px-3 py-1 text-xs rounded-full ${invoiceForm.buyerType === 'company' ? 'bg-dental-600 text-white' : 'bg-theme-hover text-theme-secondary hover:bg-theme-hover'}`}>{t.invoices.buyerTypeCompany}</button>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1413,10 +1413,10 @@ export function QuoteEditorPage() {
           )}
 
           {/* Invoice data section */}
-          <h4 className="text-sm font-semibold text-gray-900 border-b pb-1">{t.invoices.invoiceDataSection}</h4>
+          <h4 className="text-sm font-semibold text-theme-primary border-b pb-1">{t.invoices.invoiceDataSection}</h4>
           <div className="grid grid-cols-3 gap-3">
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.issueDate}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.invoices.issueDate}</label>
               <div className="relative">
                 <input
                   value={issueDateText}
@@ -1427,7 +1427,7 @@ export function QuoteEditorPage() {
                     else if (!e.target.value) setInvoiceForm((prev) => ({ ...prev, issueDate: '' }));
                   }}
                   placeholder={getDatePlaceholder()}
-                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary"
                 />
                 <input
                   type="date"
@@ -1441,13 +1441,13 @@ export function QuoteEditorPage() {
                   className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer"
                   tabIndex={-1}
                 />
-                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
             </div>
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.fulfillmentDate}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.invoices.fulfillmentDate}</label>
               <div className="relative">
                 <input
                   value={fulfillmentDateText}
@@ -1458,7 +1458,7 @@ export function QuoteEditorPage() {
                     else if (!e.target.value) setInvoiceForm((prev) => ({ ...prev, fulfillmentDate: '' }));
                   }}
                   placeholder={getDatePlaceholder()}
-                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary"
                 />
                 <input
                   type="date"
@@ -1472,13 +1472,13 @@ export function QuoteEditorPage() {
                   className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer"
                   tabIndex={-1}
                 />
-                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
             </div>
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.dueDate}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.invoices.dueDate}</label>
               <div className="relative">
                 <input
                   value={dueDateText}
@@ -1489,7 +1489,7 @@ export function QuoteEditorPage() {
                     else if (!e.target.value) setInvoiceForm((prev) => ({ ...prev, dueDate: '' }));
                   }}
                   placeholder={getDatePlaceholder()}
-                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary"
                 />
                 <input
                   type="date"
@@ -1503,7 +1503,7 @@ export function QuoteEditorPage() {
                   className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer"
                   tabIndex={-1}
                 />
-                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
@@ -1551,10 +1551,10 @@ export function QuoteEditorPage() {
           {/* Invoice items (read-only qty/price) */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-700">{t.invoices.items}</h3>
+              <h3 className="text-sm font-semibold text-theme-secondary">{t.invoices.items}</h3>
             </div>
             {invoiceItems.length === 0 && invoiceType !== 'advance' ? (
-              <p className="text-sm text-gray-400">{t.quotes.noItems}</p>
+              <p className="text-sm text-theme-muted">{t.quotes.noItems}</p>
             ) : (
               <div className="space-y-2">
                 {invoiceItems.map((item, idx) => {
@@ -1565,7 +1565,7 @@ export function QuoteEditorPage() {
                   return (
                     <div
                       key={idx}
-                      className={`flex items-center gap-2 rounded border border-gray-200 p-2 text-sm ${
+                      className={`flex items-center gap-2 rounded border border-theme-primary p-2 text-sm ${
                         invoiceDraggedIndex === idx ? 'opacity-50' : ''
                       } ${invoiceDragOverIndex === idx ? 'border-dental-500 border-2' : ''}`}
                       draggable
@@ -1584,22 +1584,22 @@ export function QuoteEditorPage() {
                         setInvoiceDragOverIndex(null);
                       }}
                     >
-                      <div className="text-gray-400 cursor-grab">
+                      <div className="text-theme-muted cursor-grab">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
                         </svg>
                       </div>
-                      <span className="text-gray-500 w-6 text-center">{idx + 1}.</span>
+                      <span className="text-theme-tertiary w-6 text-center">{idx + 1}.</span>
                       <span className="flex-1">
                         <span className="font-medium">{item.name}</span>
                         {item.comment && (
-                          <span className="block text-xs text-gray-400">{item.comment}</span>
+                          <span className="block text-xs text-theme-muted">{item.comment}</span>
                         )}
                       </span>
-                      <span className="text-gray-600 w-10 text-center">{item.qty}</span>
-                      <span className="text-gray-500">{item.unit}</span>
-                      <span className="text-gray-600 w-24 text-right">{formatCurrency(item.unitPriceNet)}</span>
-                      <span className="text-gray-500 w-12 text-center">{typeof item.vatRate === 'number' ? `${item.vatRate}%` : item.vatRate}</span>
+                      <span className="text-theme-secondary w-10 text-center">{item.qty}</span>
+                      <span className="text-theme-tertiary">{item.unit}</span>
+                      <span className="text-theme-secondary w-24 text-right">{formatCurrency(item.unitPriceNet)}</span>
+                      <span className="text-theme-tertiary w-12 text-center">{typeof item.vatRate === 'number' ? `${item.vatRate}%` : item.vatRate}</span>
                       <span className="w-24 text-right font-semibold">{formatCurrency(gross)}</span>
                       <button
                         type="button"
@@ -1615,7 +1615,7 @@ export function QuoteEditorPage() {
                 {/* Advance invoice: editable advance item */}
                 {invoiceType === 'advance' && (
                   <div className="flex items-center gap-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm">
-                    <span className="text-gray-500 w-6 text-center">{invoiceItems.length + 1}.</span>
+                    <span className="text-theme-tertiary w-6 text-center">{invoiceItems.length + 1}.</span>
                     <span className="flex-1 font-medium text-amber-800">{t.invoices.advanceItemName}</span>
                     <Input
                       type="number"
@@ -1626,7 +1626,7 @@ export function QuoteEditorPage() {
                       step={1000}
                       className="w-28"
                     />
-                    <span className="text-gray-500">{quote.currency}</span>
+                    <span className="text-theme-tertiary">{quote.currency}</span>
                   </div>
                 )}
 
@@ -1637,7 +1637,7 @@ export function QuoteEditorPage() {
                     .reduce((sum, inv) => sum + (inv.totalGross || 0), 0);
                   return (
                     <div className="flex items-center gap-2 rounded border border-blue-300 bg-blue-50 p-2 text-sm">
-                      <span className="text-gray-500 w-6 text-center">{invoiceItems.length + 1}.</span>
+                      <span className="text-theme-tertiary w-6 text-center">{invoiceItems.length + 1}.</span>
                       <span className="flex-1 font-medium text-blue-800">{t.invoices.advanceItemName}</span>
                       <span className="w-24 text-right font-semibold text-red-600">-{formatCurrency(advanceTotal)}</span>
                     </div>
@@ -1648,7 +1648,7 @@ export function QuoteEditorPage() {
           </div>
 
           {/* Summary section */}
-          <h4 className="text-sm font-semibold text-gray-900 border-b pb-1">{t.invoices.summarySection}</h4>
+          <h4 className="text-sm font-semibold text-theme-primary border-b pb-1">{t.invoices.summarySection}</h4>
           {(() => {
             const itemsGross = invoiceItems.reduce((sum, it) => {
               const net = it.qty * it.unitPriceNet;
@@ -1666,13 +1666,13 @@ export function QuoteEditorPage() {
             }
             const currentRemaining = Math.max(0, totals.total - invoicedAmount - currentTotal);
             return (
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm space-y-1">
+              <div className="rounded-lg border border-theme-primary bg-theme-tertiary p-3 text-sm space-y-1">
                 <div className="flex justify-between">
                   <span className="font-medium">{t.invoices.totalAmount}:</span>
                   <span className="font-semibold">{formatCurrency(currentTotal, quote.currency)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">{t.invoices.quoteRemainingPart}:</span>
+                  <span className="text-theme-secondary">{t.invoices.quoteRemainingPart}:</span>
                   <span className={`font-medium ${currentRemaining <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
                     {currentRemaining <= 0 ? t.invoices.noneRemaining : formatCurrency(currentRemaining, quote.currency)}
                   </span>
@@ -1682,7 +1682,7 @@ export function QuoteEditorPage() {
           })()}
 
           {invoicePreviewTotals && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+            <div className="rounded-lg border border-theme-primary bg-theme-tertiary p-3 text-sm">
               <p>{t.invoices.netTotal}: {formatCurrency(invoicePreviewTotals.net, quote.currency)}</p>
               <p>{t.invoices.vatTotal}: {formatCurrency(invoicePreviewTotals.vat, quote.currency)}</p>
               <p className="font-semibold">{t.invoices.grossTotal}: {formatCurrency(invoicePreviewTotals.gross, quote.currency)}</p>
@@ -1696,7 +1696,7 @@ export function QuoteEditorPage() {
           )}
 
           <details>
-            <summary className="cursor-pointer text-sm font-medium text-gray-700">{t.invoices.xmlPreview}</summary>
+            <summary className="cursor-pointer text-sm font-medium text-theme-secondary">{t.invoices.xmlPreview}</summary>
             <pre className="mt-2 max-h-56 overflow-auto rounded bg-gray-900 p-3 text-xs text-gray-100">
               {invoicePreviewXml || t.invoices.xmlNotAvailable}
             </pre>
@@ -1735,7 +1735,7 @@ export function QuoteEditorPage() {
             <div className="flex-1 relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg
-                  className="h-5 w-5 text-gray-400"
+                  className="h-5 w-5 text-theme-muted"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1754,13 +1754,13 @@ export function QuoteEditorPage() {
                 value={itemSearchQuery}
                 onChange={(e) => setItemSearchQuery(e.target.value)}
                 placeholder={t.quotes.searchCatalog}
-                className="pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent text-base"
+                className="pl-10 pr-10 py-2 border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent text-base"
                 autoFocus
               />
               {itemSearchQuery && (
                 <button
                   onClick={() => setItemSearchQuery('')}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-theme-muted hover:text-theme-secondary"
                 >
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
@@ -1786,12 +1786,12 @@ export function QuoteEditorPage() {
 
           <div className="max-h-96 overflow-y-auto space-y-2">
             {filteredCatalogItems.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">{t.common.noResults}</p>
+              <p className="text-center text-theme-tertiary py-8">{t.common.noResults}</p>
             ) : (
               filteredCatalogItems.map((item) => (
                 <div
                   key={item.catalogItemId}
-                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 cursor-pointer"
+                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-theme-tertiary cursor-pointer"
                   onClick={() => {
                     handleAddItem(item);
                     setIsItemSelectorOpen(false);
@@ -1801,13 +1801,13 @@ export function QuoteEditorPage() {
                 >
                   <div>
                     <p className="font-medium">{getCatalogDisplayName(item, appLanguage)}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-theme-tertiary">
                       {formatCode(item)} | {getCategoryNameById(item.catalogCategoryId, appLanguage)}
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold">{formatCurrency(item.catalogPrice)}</p>
-                    <p className="text-sm text-gray-500">/ {item.catalogUnit}</p>
+                    <p className="text-sm text-theme-tertiary">/ {item.catalogUnit}</p>
                   </div>
                 </div>
               ))
@@ -1827,7 +1827,7 @@ export function QuoteEditorPage() {
               {[...quote.events].reverse().map((event) => (
                 <div key={event.id} className="flex items-center justify-between text-sm py-2 border-b last:border-0">
                   <div className="flex items-center gap-3">
-                    <span className="text-gray-500">{formatDateTime(event.timestamp)}</span>
+                    <span className="text-theme-tertiary">{formatDateTime(event.timestamp)}</span>
                     {event.type === 'invoice_created' ? (
                       <span className="font-medium">
                         {(() => {
@@ -1893,7 +1893,7 @@ export function QuoteEditorPage() {
                       </span>
                     )}
                   </div>
-                  <span className="text-gray-500">{event.doctorName}</span>
+                  <span className="text-theme-tertiary">{event.doctorName}</span>
                 </div>
               ))}
             </div>
@@ -1909,7 +1909,7 @@ export function QuoteEditorPage() {
         size="sm"
       >
         <div className="space-y-4">
-          <p className="text-sm text-gray-700">{invoiceDisabledReason}</p>
+          <p className="text-sm text-theme-secondary">{invoiceDisabledReason}</p>
           <div className="flex justify-end">
             <Button variant="secondary" onClick={() => setInvoiceDisabledModalOpen(false)}>
               {t.common.close}
@@ -1938,7 +1938,7 @@ export function QuoteEditorPage() {
         size="sm"
       >
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">{t.quotes.quoteValidityDescription}</p>
+          <p className="text-sm text-theme-secondary">{t.quotes.quoteValidityDescription}</p>
           <div className="relative">
             <input
               value={validUntilText}
@@ -1950,7 +1950,7 @@ export function QuoteEditorPage() {
                 }
               }}
               placeholder={getDatePlaceholder()}
-              className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+              className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary"
             />
             <input
               type="date"
@@ -1965,7 +1965,7 @@ export function QuoteEditorPage() {
               tabIndex={-1}
             />
             <svg
-              className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none"
+              className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -1980,7 +1980,7 @@ export function QuoteEditorPage() {
             </svg>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">{t.quotes.quoteValidityAdjust}</span>
+            <span className="text-sm text-theme-secondary">{t.quotes.quoteValidityAdjust}</span>
             {[30, 60, 90, 120].map((days) => {
               const newDate = new Date();
               newDate.setDate(newDate.getDate() + days);
@@ -1992,7 +1992,7 @@ export function QuoteEditorPage() {
                     editQuote(quote.quoteId, { validUntil: isoDate });
                     setValidUntilText(formatBirthDateForDisplay(isoDate));
                   }}
-                  className="px-3 py-1 text-sm font-medium rounded-lg border border-gray-300 hover:bg-dental-50 hover:border-dental-400 transition-colors"
+                  className="px-3 py-1 text-sm font-medium rounded-lg border border-theme-secondary hover:bg-dental-50 hover:border-dental-400 transition-colors"
                 >
                   {days}
                 </button>
@@ -2053,7 +2053,7 @@ function QuoteItemRow({
   return (
     <div
       className={`p-4 rounded-lg border transition-all ${
-        invoicedInvoiceNumber ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'
+        invoicedInvoiceNumber ? 'bg-blue-50 border-blue-200' : 'bg-theme-tertiary'
       } ${isDragging ? 'opacity-50 scale-95' : ''
       } ${isDragOver ? 'border-dental-500 border-2' : ''} ${isEditable ? 'cursor-move' : ''}`}
       draggable={isEditable}
@@ -2064,13 +2064,13 @@ function QuoteItemRow({
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3 flex-1">
           {isEditable && (
-            <div className="text-gray-400 mt-1 cursor-grab">
+            <div className="text-theme-muted mt-1 cursor-grab">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
               </svg>
             </div>
           )}
-          <span className="text-gray-400 font-medium mt-1">{index + 1}.</span>
+          <span className="text-theme-muted font-medium mt-1">{index + 1}.</span>
           <div className="flex-1">
             <p className="font-medium mb-2">{item.quoteName}</p>
 
@@ -2078,12 +2078,12 @@ function QuoteItemRow({
               <div className="flex flex-wrap items-center gap-3">
 
                 <div className="flex items-center gap-6 mr-14">
-                  <span className="text-gray-500">{t.quotes.unitPrice}:</span>
+                  <span className="text-theme-tertiary">{t.quotes.unitPrice}:</span>
                   <span className="font-medium">{formatCurrency(item.quoteUnitPriceGross)}</span>
                 </div>
 
                 <div className="flex items-center gap-2 mr-4">
-                  <span className="text-gray-500">{t.quotes.quantity}:</span>
+                  <span className="text-theme-tertiary">{t.quotes.quantity}:</span>
                   {isEditable ? (
                     <Input
                       type="number"
@@ -2095,12 +2095,12 @@ function QuoteItemRow({
                   ) : (
                     <span className="font-medium">{item.quoteQty}</span>
                   )}
-                  <span className="text-gray-500">{item.quoteUnit}</span>
+                  <span className="text-theme-tertiary">{item.quoteUnit}</span>
                 </div>
 
                 {isEditable && lineDiscountPreset !== 'none' && item.quoteUnitPriceGross > 0 && (
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-500">{t.quotes.discountLabel}</span>
+                    <span className="text-theme-tertiary">{t.quotes.discountLabel}</span>
                     <Input
                       type="number"
                       value={item.quoteLineDiscountValue || ''}
@@ -2139,13 +2139,13 @@ function QuoteItemRow({
                 )}
 
                 {!isEditable && item.treatmentSession && expectedTreatments > 1 && (
-                  <span className="text-gray-500">
+                  <span className="text-theme-tertiary">
                     {t.quotes.treatmentLabel} <span className="font-medium">{item.treatmentSession}.</span>
                   </span>
                 )}
 
                 {item.toothNum && (
-                  <span className="text-gray-500">
+                  <span className="text-theme-tertiary">
                     {t.quotes.toothLabel} <span className="font-medium">{item.toothNum}</span>
                   </span>
                 )}
@@ -2153,9 +2153,9 @@ function QuoteItemRow({
 
               {/* Treated Area Selector (third row) */}
               <div className="flex items-center gap-2">
-                <span className="text-gray-500">{t.quotes.treatedArea}</span>
+                <span className="text-theme-tertiary">{t.quotes.treatedArea}</span>
                 {item.quoteUnit === 'alkalom' && (
-                  <span className="font-medium text-gray-700">{t.quotes.fullMouth}</span>
+                  <span className="font-medium text-theme-secondary">{t.quotes.fullMouth}</span>
                 )}
                 {item.quoteUnit === 'db' && (
                   isEditable ? (
@@ -2234,7 +2234,7 @@ function QuoteItemRow({
               {/* Treatment Session Selector (fourth row) */}
               {isEditable && expectedTreatments > 1 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-500">{t.quotes.treatmentSessionNumber}</span>
+                  <span className="text-theme-tertiary">{t.quotes.treatmentSessionNumber}</span>
                   <Select
                     value={String(item.treatmentSession || 1)}
                     onChange={(e) => onUpdate({ treatmentSession: parseInt(e.target.value) })}

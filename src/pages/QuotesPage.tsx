@@ -174,7 +174,7 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
       closed: 'bg-blue-100 text-blue-800',
       rejected: 'bg-red-100 text-red-800',
       started: 'bg-green-100 text-green-800',
-      completed: 'bg-gray-100 text-gray-600',
+      completed: 'bg-theme-hover text-theme-secondary',
     };
     return styles[status];
   };
@@ -216,7 +216,7 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
 
     if (status === 'draft') {
       btns.push(
-        <IconBtn key="edit" onClick={() => navigate(quote.quoteType === 'visual' ? `/patients/${quote.patientId}/visual-quotes/${quote.quoteId}` : `/patients/${quote.patientId}/quotes/${quote.quoteId}`)} title={t.common.edit} className="text-gray-600 hover:bg-gray-100">
+        <IconBtn key="edit" onClick={() => navigate(quote.quoteType === 'visual' ? `/patients/${quote.patientId}/visual-quotes/${quote.quoteId}` : `/patients/${quote.patientId}/quotes/${quote.quoteId}`)} title={t.common.edit} className="text-theme-secondary hover:bg-theme-hover">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
@@ -295,7 +295,7 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
 
   const ThSortable = ({ column, children, align }: { column: SortColumn; children: React.ReactNode; align?: string }) => (
     <th
-      className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none ${align === 'right' ? 'text-right' : 'text-left'}`}
+      className={`px-4 py-3 text-xs font-medium text-theme-tertiary uppercase tracking-wider cursor-pointer hover:text-theme-secondary select-none ${align === 'right' ? 'text-right' : 'text-left'}`}
       onClick={() => handleSort(column)}
     >
       {children}
@@ -309,9 +309,9 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{pageTitle}</h1>
+          <h1 className="text-2xl font-bold text-theme-primary">{pageTitle}</h1>
           {!showDeleted && (
-            <p className="text-gray-500 mt-1">
+            <p className="text-theme-tertiary mt-1">
               {draftQuotes.length} {t.quotes.filterDraft}, {inProgressQuotes.length} {t.quotes.filterInProgress},{' '}
               {completedQuotes.length} {t.quotes.filterCompleted}
             </p>
@@ -335,7 +335,7 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   filterTab === tab
                     ? 'bg-dental-100 text-dental-700'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    : 'text-theme-secondary hover:bg-theme-hover'
                 }`}
               >
                 {tab === 'all' ? t.quotes.filterAll : tab === 'draft' ? t.quotes.filterDraft : tab === 'in_progress' ? t.quotes.filterInProgress : t.quotes.filterCompleted}
@@ -357,7 +357,7 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
             ) : (
               <EmptyState
                 icon={
-                  <svg className="w-12 h-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-12 h-12 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 }
@@ -371,10 +371,10 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-theme-tertiary border-b border-theme-primary">
                 <tr>
                   <ThSortable column="quoteName">{t.quotes.quoteName}</ThSortable>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                  <th className="px-4 py-3 text-center text-xs font-medium text-theme-tertiary uppercase tracking-wider w-12">
                     {t.quotes.quoteType}
                   </th>
                   <ThSortable column="patient">{t.quotes.patient}</ThSortable>
@@ -383,22 +383,22 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
                   <ThSortable column="createdAt">{t.quotes.createdAt}</ThSortable>
                   <ThSortable column="validUntil">{t.quotes.validUntil}</ThSortable>
                   <ThSortable column="total" align="right">{t.quotes.total}</ThSortable>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                     {t.common.actions}
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-theme-primary">
                 {paginatedQuotes.map((quote) => (
                   <tr key={quote.quoteId} className={
-                    quote.quoteStatus === 'draft' ? 'bg-yellow-50 hover:bg-yellow-100'
-                    : quote.quoteStatus === 'rejected' ? 'bg-red-50 hover:bg-red-100'
-                    : quote.quoteStatus === 'completed' ? 'bg-blue-50 hover:bg-blue-100'
-                    : 'hover:bg-gray-50'
+                    quote.quoteStatus === 'draft' ? 'bg-yellow-50 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:hover:bg-yellow-900/40'
+                    : quote.quoteStatus === 'rejected' ? 'bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40'
+                    : quote.quoteStatus === 'completed' ? 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40'
+                    : 'hover:bg-theme-tertiary'
                   }>
                     <td className="px-4 py-3">
                       <div className="flex flex-col">
-                        <span className="text-xs text-gray-400">{quote.quoteNumber}</span>
+                        <span className="text-xs text-theme-muted">{quote.quoteNumber}</span>
                         <Link
                           to={quote.quoteType === 'visual'
                             ? `/patients/${quote.patientId}/visual-quotes/${quote.quoteId}`
@@ -424,12 +424,12 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
+                    <td className="px-4 py-3 text-sm text-theme-secondary">
                       <Link to={`/patients/${quote.patientId}`} className="hover:text-dental-600">
                         {getPatientName(quote.patientId)}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
+                    <td className="px-4 py-3 text-sm text-theme-secondary">
                       {getDoctorName(quote.doctorId)}
                     </td>
                     <td className="px-4 py-3">
@@ -440,13 +440,13 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
                         {getStatusLabel(quote.quoteStatus, quote.isDeleted)}
                       </button>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
+                    <td className="px-4 py-3 text-sm text-theme-tertiary">
                       {formatDate(quote.createdAt)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
+                    <td className="px-4 py-3 text-sm text-theme-tertiary">
                       {formatDate(quote.validUntil)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                    <td className="px-4 py-3 text-sm text-theme-primary text-right font-medium">
                       {formatCurrency(getQuoteTotal(quote))}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -462,25 +462,25 @@ export function QuotesPage({ showDeleted }: { showDeleted?: boolean }) {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-              <div className="text-sm text-gray-500">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-theme-primary">
+              <div className="text-sm text-theme-tertiary">
                 {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filteredQuotes.length)} / {filteredQuotes.length}
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1 rounded border text-sm disabled:opacity-40 hover:bg-gray-50"
+                  className="px-3 py-1 rounded border text-sm disabled:opacity-40 hover:bg-theme-tertiary"
                 >
                   &laquo;
                 </button>
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-theme-secondary">
                   {currentPage} / {totalPages}
                 </span>
                 <button
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="px-3 py-1 rounded border text-sm disabled:opacity-40 hover:bg-gray-50"
+                  className="px-3 py-1 rounded border text-sm disabled:opacity-40 hover:bg-theme-tertiary"
                 >
                   &raquo;
                 </button>

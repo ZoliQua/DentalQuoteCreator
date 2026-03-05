@@ -41,8 +41,8 @@ export function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t.nav.dashboard}</h1>
-        <p className="text-gray-500 mt-1">{t.dashboard.subtitle}</p>
+        <h1 className="text-2xl font-bold text-theme-primary">{t.nav.dashboard}</h1>
+        <p className="text-theme-tertiary mt-1">{t.dashboard.subtitle}</p>
       </div>
 
       {/* Stats Cards */}
@@ -66,8 +66,8 @@ export function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm text-gray-500">{t.patients.title}</p>
-                <p className="text-2xl font-bold text-gray-900">{activePatients.length}</p>
+                <p className="text-sm text-theme-tertiary">{t.patients.title}</p>
+                <p className="text-2xl font-bold text-theme-primary">{activePatients.length}</p>
               </div>
             </div>
           </CardContent>
@@ -92,8 +92,8 @@ export function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm text-gray-500">{t.quotes.statusDraft}</p>
-                <p className="text-2xl font-bold text-gray-900">{draftQuotes.length}</p>
+                <p className="text-sm text-theme-tertiary">{t.quotes.statusDraft}</p>
+                <p className="text-2xl font-bold text-theme-primary">{draftQuotes.length}</p>
               </div>
             </div>
           </CardContent>
@@ -118,8 +118,8 @@ export function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm text-gray-500">{t.dashboard.draftValue}</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(draftTotal)}</p>
+                <p className="text-sm text-theme-tertiary">{t.dashboard.draftValue}</p>
+                <p className="text-2xl font-bold text-theme-primary">{formatCurrency(draftTotal)}</p>
               </div>
             </div>
           </CardContent>
@@ -130,13 +130,13 @@ export function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardContent>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.quickActions}</h2>
+            <h2 className="text-lg font-semibold text-theme-primary mb-4">{t.dashboard.quickActions}</h2>
             <div className="space-y-3">
               {hasPermission('patients.create') && (
                 <button
                   type="button"
                   onClick={() => setIsNewPatientOpen(true)}
-                  className="flex w-full items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-dental-50 transition-colors"
+                  className="flex w-full items-center gap-3 p-3 rounded-lg bg-theme-tertiary hover:bg-dental-50 transition-colors"
                 >
                   <svg
                     className="w-5 h-5 text-dental-600"
@@ -151,13 +151,13 @@ export function DashboardPage() {
                       d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
                     />
                   </svg>
-                  <span className="text-gray-700">{t.patients.newPatient}</span>
+                  <span className="text-theme-secondary">{t.patients.newPatient}</span>
                 </button>
               )}
               {hasPermission('pricelist.view') && (
                 <Link
                   to="/catalog"
-                  className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-dental-50 transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-lg bg-theme-tertiary hover:bg-dental-50 transition-colors"
                 >
                   <svg
                     className="w-5 h-5 text-dental-600"
@@ -172,12 +172,12 @@ export function DashboardPage() {
                       d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
                     />
                   </svg>
-                  <span className="text-gray-700">{t.catalog.title}</span>
+                  <span className="text-theme-secondary">{t.catalog.title}</span>
                 </Link>
               )}
               <Link
                 to="/data"
-                className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-dental-50 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-lg bg-theme-tertiary hover:bg-dental-50 transition-colors"
               >
                 <svg
                   className="w-5 h-5 text-dental-600"
@@ -192,7 +192,7 @@ export function DashboardPage() {
                     d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
                   />
                 </svg>
-                <span className="text-gray-700">{t.dataManagement.exportButton}</span>
+                <span className="text-theme-secondary">{t.dataManagement.exportButton}</span>
               </Link>
             </div>
           </CardContent>
@@ -202,7 +202,7 @@ export function DashboardPage() {
         <Card>
           <CardContent>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">{t.dashboard.recentPatients}</h2>
+              <h2 className="text-lg font-semibold text-theme-primary">{t.dashboard.recentPatients}</h2>
               <Link to="/patients" className="text-sm text-dental-600 hover:text-dental-700">
                 {t.dashboard.viewAll}
               </Link>
@@ -213,16 +213,16 @@ export function DashboardPage() {
                   <Link
                     key={patient.patientId}
                     to={`/patients/${patient.patientId}`}
-                    className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-dental-50 transition-colors"
+                    className="flex items-center justify-between p-3 rounded-lg bg-theme-tertiary hover:bg-dental-50 transition-colors"
                   >
                     <div>
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-theme-primary">
                         {patient.lastName} {patient.firstName}
                       </p>
-                      <p className="text-sm text-gray-500">{formatDate(patient.birthDate)}</p>
+                      <p className="text-sm text-theme-tertiary">{formatDate(patient.birthDate)}</p>
                     </div>
                     <svg
-                      className="w-5 h-5 text-gray-400"
+                      className="w-5 h-5 text-theme-muted"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -238,7 +238,7 @@ export function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 text-center py-4">{t.patients.noPatients}</p>
+              <p className="text-theme-tertiary text-center py-4">{t.patients.noPatients}</p>
             )}
           </CardContent>
         </Card>
@@ -248,11 +248,11 @@ export function DashboardPage() {
       {recentQuotes.length > 0 && (
         <Card>
           <CardContent>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">{t.dashboard.recentQuotes}</h2>
+            <h2 className="text-lg font-semibold text-theme-primary mb-4">{t.dashboard.recentQuotes}</h2>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="text-left text-sm text-gray-500 border-b">
+                  <tr className="text-left text-sm text-theme-tertiary border-b">
                     <th className="pb-3 font-medium">{t.quotes.quoteId}</th>
                     <th className="pb-3 font-medium">{t.quotes.patient}</th>
                     <th className="pb-3 font-medium">{t.quotes.status}</th>
@@ -288,7 +288,7 @@ export function DashboardPage() {
                               quote.quoteStatus === 'draft'
                                 ? 'bg-yellow-100 text-yellow-800'
                                 : quote.quoteStatus === 'completed'
-                                ? 'bg-gray-100 text-gray-600'
+                                ? 'bg-theme-hover text-theme-secondary'
                                 : quote.quoteStatus === 'rejected'
                                 ? 'bg-red-100 text-red-800'
                                 : 'bg-green-100 text-green-800'
@@ -301,7 +301,7 @@ export function DashboardPage() {
                              t.quotes.statusCompleted}
                           </span>
                         </td>
-                        <td className="py-3 text-gray-500">{formatDate(quote.createdAt)}</td>
+                        <td className="py-3 text-theme-tertiary">{formatDate(quote.createdAt)}</td>
                         <td className="py-3 text-right font-medium">{formatCurrency(total)}</td>
                       </tr>
                     );

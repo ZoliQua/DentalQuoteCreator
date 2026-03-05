@@ -12,10 +12,8 @@ export default defineConfig({
         __dirname,
         './src/modules/odontogram/engine/src/App.tsx'
       ),
-      '@dq-importer': path.resolve(
-        __dirname,
-        './submodules/dq-importer/src'
-      ),
+      '@dq-importer': path.resolve(__dirname, './src/modules/dq-importer'),
+      '@dq-calendar': path.resolve(__dirname, './src/modules/dq-calendar'),
     },
   },
   server: {

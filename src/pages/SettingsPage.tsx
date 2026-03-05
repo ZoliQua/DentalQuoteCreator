@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useSettings } from '../context/SettingsContext';
+import { useSettings, type ThemeMode } from '../context/SettingsContext';
 import { useQuotes } from '../hooks';
 import { Settings, Doctor, DateFormat, PdfFontFamily } from '../types';
 import { Button, Card, CardContent, CardHeader, Input, TextArea, Select, ConfirmModal, Modal, PageTabBar } from '../components/common';
@@ -34,6 +34,8 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
     setAppLanguage,
     odontogramNumbering,
     setOdontogramNumbering,
+    theme,
+    setTheme,
   } = useSettings();
   const { getQuoteStatistics } = useQuotes();
   const [formData, setFormDataRaw] = useState<Settings>(settings);
@@ -499,8 +501,8 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.settings.title}</h1>
-          <p className="text-gray-500 mt-1">{t.settings.subtitle}</p>
+          <h1 className="text-2xl font-bold text-theme-primary">{t.settings.title}</h1>
+          <p className="text-theme-tertiary mt-1">{t.settings.subtitle}</p>
         </div>
         {section && section !== 'neak' && (
           <div className="flex items-center gap-3">
@@ -532,13 +534,13 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
               <Link
                 key={card.key}
                 to={card.to}
-                className="block rounded-lg border border-gray-200 bg-white p-5 hover:border-dental-300 hover:shadow-md transition-all"
+                className="block rounded-lg border border-theme-primary bg-theme-secondary p-5 hover:border-dental-300 hover:shadow-md transition-all"
               >
                 <div className="flex items-start gap-4">
                   <div className="flex-shrink-0">{card.icon}</div>
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-900">{card.title}</h3>
-                    <p className="text-xs text-gray-500 mt-1">{card.description}</p>
+                    <h3 className="text-sm font-semibold text-theme-primary">{card.title}</h3>
+                    <p className="text-xs text-theme-tertiary mt-1">{card.description}</p>
                   </div>
                 </div>
               </Link>
@@ -552,7 +554,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             <Card>
               <CardHeader>
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
@@ -584,13 +586,23 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                     label: `${formatDateTimeWithPattern(today, format)}`,
                   }))}
                 />
+                <Select
+                  label={t.settings.themeLabel}
+                  value={theme}
+                  onChange={(e) => setTheme(e.target.value as ThemeMode)}
+                  options={[
+                    { value: 'light', label: t.settings.themeLight },
+                    { value: 'dark', label: t.settings.themeDark },
+                    { value: 'system', label: t.settings.themeSystem },
+                  ]}
+                />
               </CardContent>
             </Card>
 
             <Card className="mt-6">
               <CardHeader>
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6m-6 0a2 2 0 00-2 2v2a2 2 0 002 2h6a2 2 0 002-2V5a2 2 0 00-2-2m-6 0v2m6-2v2M7 11h10m-9 4h8m-7 4h6" />
                   </svg>
                   {t.settings.odontogramSettings}
@@ -620,7 +632,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             <Card>
               <CardHeader>
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
                   {t.settings.clinicSettings}
@@ -634,7 +646,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                     onChange={(e) => handleClinicChange('name', e.target.value)}
                   />
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-secondary mb-1">
                       {t.settings.clinicTaxNumber}
                     </label>
                     <div className="flex gap-1">
@@ -643,7 +655,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                         value={formData.clinic.taxNumber || ''}
                         onChange={(e) => handleClinicChange('taxNumber', e.target.value)}
                         placeholder={t.settings.taxNumberPlaceholder}
-                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
+                        className="flex-1 rounded-lg border border-theme-secondary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
                       />
                       {taxDigits.length >= 8 && (
                         <button
@@ -699,13 +711,13 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
 
                 {/* Logo section */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">{t.settings.clinicLogo}</label>
+                  <label className="block text-sm font-medium text-theme-secondary mb-2">{t.settings.clinicLogo}</label>
                   <div className="flex items-center gap-4">
-                    <div className="w-32 h-16 border border-gray-200 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden">
+                    <div className="w-32 h-16 border border-theme-primary rounded-lg flex items-center justify-center bg-theme-tertiary overflow-hidden">
                       {formData.clinic.logo ? (
                         <img src={formData.clinic.logo} alt="Logo" className="max-w-full max-h-full object-contain" />
                       ) : (
-                        <span className="text-xs text-gray-400">{t.settings.clinicLogoNone}</span>
+                        <span className="text-xs text-theme-muted">{t.settings.clinicLogoNone}</span>
                       )}
                     </div>
                     <div className="flex flex-col gap-2">
@@ -737,7 +749,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                         checked={formData.clinic.showLogoOnQuote ?? false}
                         onChange={(e) => handleClinicChange('showLogoOnQuote', e.target.checked)}
                       />
-                      <span className="text-sm text-gray-700">{t.settings.showLogoOnQuote}</span>
+                      <span className="text-sm text-theme-secondary">{t.settings.showLogoOnQuote}</span>
                     </label>
                   )}
                 </div>
@@ -748,7 +760,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                     {t.settings.doctorsSettings}
@@ -808,7 +820,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
           <Card>
             <CardHeader>
               <h2 className="text-lg font-semibold flex items-center gap-2">
-                <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 {t.settings.patientSettings}
@@ -825,7 +837,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                 }))}
               />
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-theme-secondary mb-2">
                   {t.settings.patientTypes}
                 </label>
                 <div className="space-y-2">
@@ -858,7 +870,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                         className={`p-2 rounded-lg transition-colors ${
                           index === 0
                             ? 'text-amber-500 cursor-default'
-                            : 'text-gray-300 hover:text-amber-400 hover:bg-amber-50'
+                            : 'text-theme-muted hover:text-amber-400 hover:bg-amber-50'
                         }`}
                         title={index === 0 ? t.settings.defaultPatientType : t.settings.setDefaultPatientType}
                       >
@@ -932,7 +944,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             <Card>
               <CardHeader>
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                   {t.settings.quoteSettings}
@@ -1008,11 +1020,11 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-theme-secondary mb-1">
                       {t.settings.quoteCounter}
                     </label>
                     <div className="flex items-center gap-2">
-                      <span className="text-2xl font-bold text-gray-900">{formData.quote.counter}</span>
+                      <span className="text-2xl font-bold text-theme-primary">{formData.quote.counter}</span>
                       <Button
                         variant="danger"
                         size="sm"
@@ -1021,7 +1033,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                         {t.settings.resetCounter}
                       </Button>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">{t.settings.quoteCounterHelp}</p>
+                    <p className="text-xs text-theme-tertiary mt-1">{t.settings.quoteCounterHelp}</p>
                   </div>
                 </div>
 
@@ -1043,11 +1055,11 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
 
                 {/* Statistics */}
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">{t.settings.quoteStatistics}</h3>
+                  <h3 className="text-sm font-medium text-theme-secondary mb-3">{t.settings.quoteStatistics}</h3>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <div className="flex justify-between items-center py-1 border-b">
-                        <span className="text-gray-600">{t.settings.statTotal}</span>
+                        <span className="text-theme-secondary">{t.settings.statTotal}</span>
                         <span className="font-semibold">{quoteStats.total}</span>
                       </div>
                       <div className="flex justify-between items-center py-1 border-b">
@@ -1063,7 +1075,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                         <span className="font-semibold">{quoteStats.started}</span>
                       </div>
                       <div className="flex justify-between items-center py-1 border-b">
-                        <span className="text-gray-600">{t.settings.statCompleted}</span>
+                        <span className="text-theme-secondary">{t.settings.statCompleted}</span>
                         <span className="font-semibold">{quoteStats.completed}</span>
                       </div>
                       <div className="flex justify-between items-center py-1 border-b">
@@ -1071,8 +1083,8 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                         <span className="font-semibold">{quoteStats.rejected}</span>
                       </div>
                       <div className="flex justify-between items-center py-1">
-                        <span className="text-gray-400">{t.settings.statDeleted}</span>
-                        <span className="font-semibold text-gray-400">{quoteStats.deleted}</span>
+                        <span className="text-theme-muted">{t.settings.statDeleted}</span>
+                        <span className="font-semibold text-theme-muted">{quoteStats.deleted}</span>
                       </div>
                     </div>
 
@@ -1117,7 +1129,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                             })()}
                           </svg>
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <div className="w-full h-full flex items-center justify-center text-theme-muted">
                             {t.settings.noQuotesYet}
                           </div>
                         )}
@@ -1131,14 +1143,14 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             <Card className="mt-6">
               <CardHeader>
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                   </svg>
                   {t.settings.pdfSettings}
                 </h2>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex border-b border-gray-200">
+                <div className="flex border-b border-theme-primary">
                   {(['hu', 'en', 'de'] as const).map((lang) => (
                     <button
                       key={lang}
@@ -1147,7 +1159,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                       className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                         pdfLangTab === lang
                           ? 'border-dental-500 text-dental-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          : 'border-transparent text-theme-tertiary hover:text-theme-secondary hover:border-theme-secondary'
                       }`}
                     >
                       {lang === 'hu' ? 'Magyar' : lang === 'en' ? 'English' : 'Deutsch'}
@@ -1180,7 +1192,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             <Card>
               <CardHeader>
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
                   {t.settings.invoiceSettings}
@@ -1232,7 +1244,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             <Card className="mt-6">
               <CardHeader>
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                   {t.settings.szamlazzSettings}
@@ -1249,18 +1261,18 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                   ]}
                 />
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.settings.agentKeyLive}</label>
+                  <label className="block text-sm font-medium text-theme-secondary mb-1">{t.settings.agentKeyLive}</label>
                   <div className="flex gap-1">
                     <input
                       type={showAgentKeyLive ? 'text' : 'password'}
                       value={formData.invoice.agentKeyLive || ''}
                       onChange={(e) => handleInvoiceChange('agentKeyLive', e.target.value)}
-                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
+                      className="flex-1 rounded-lg border border-theme-secondary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
                     />
                     <button
                       type="button"
                       onClick={() => setShowAgentKeyLive(!showAgentKeyLive)}
-                      className="px-3 py-2 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
+                      className="px-3 py-2 rounded-lg border border-theme-secondary text-theme-tertiary hover:bg-theme-tertiary"
                     >
                       {showAgentKeyLive ? (
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
@@ -1271,18 +1283,18 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.settings.agentKeyTest}</label>
+                  <label className="block text-sm font-medium text-theme-secondary mb-1">{t.settings.agentKeyTest}</label>
                   <div className="flex gap-1">
                     <input
                       type={showAgentKeyTest ? 'text' : 'password'}
                       value={formData.invoice.agentKeyTest || ''}
                       onChange={(e) => handleInvoiceChange('agentKeyTest', e.target.value)}
-                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
+                      className="flex-1 rounded-lg border border-theme-secondary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
                     />
                     <button
                       type="button"
                       onClick={() => setShowAgentKeyTest(!showAgentKeyTest)}
-                      className="px-3 py-2 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
+                      className="px-3 py-2 rounded-lg border border-theme-secondary text-theme-tertiary hover:bg-theme-tertiary"
                     >
                       {showAgentKeyTest ? (
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
@@ -1298,7 +1310,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             <Card className="mt-6">
               <CardHeader>
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                   {t.settings.szamlazzApiTest}
@@ -1359,15 +1371,15 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                       </span>
                     </div>
                     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                      <dt className="text-gray-500">{t.settings.szamlazzApiMode}:</dt>
+                      <dt className="text-theme-tertiary">{t.settings.szamlazzApiMode}:</dt>
                       <dd className={apiTestResult.success ? 'text-green-800' : 'text-red-800'}>{apiTestResult.mode === 'live' ? t.settings.invoiceModeLive : t.settings.invoiceModeTest}</dd>
                       {apiTestResult.httpStatus && (
                         <>
-                          <dt className="text-gray-500">HTTP:</dt>
+                          <dt className="text-theme-tertiary">HTTP:</dt>
                           <dd className={apiTestResult.success ? 'text-green-800' : 'text-red-800'}>{apiTestResult.httpStatus}</dd>
                         </>
                       )}
-                      <dt className="text-gray-500">{t.settings.szamlazzApiStatus}:</dt>
+                      <dt className="text-theme-tertiary">{t.settings.szamlazzApiStatus}:</dt>
                       <dd className={apiTestResult.success ? 'text-green-800' : 'text-red-800'}>{apiTestResult.message}</dd>
                     </dl>
                   </div>
@@ -1384,7 +1396,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             <Card>
               <CardHeader>
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                   {t.settings.neakOjoteTitle}
@@ -1397,18 +1409,18 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                   onChange={(e) => setNeakSettings({ ...neakSettings, neakWssUser: e.target.value })}
                 />
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.settings.neakOjotePassword}</label>
+                  <label className="block text-sm font-medium text-theme-secondary mb-1">{t.settings.neakOjotePassword}</label>
                   <div className="flex gap-1">
                     <input
                       type={showNeakPassword ? 'text' : 'password'}
                       value={neakSettings.neakWssPassword}
                       onChange={(e) => setNeakSettings({ ...neakSettings, neakWssPassword: e.target.value })}
-                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
+                      className="flex-1 rounded-lg border border-theme-secondary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
                     />
                     <button
                       type="button"
                       onClick={() => setShowNeakPassword(!showNeakPassword)}
-                      className="px-3 py-2 rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50"
+                      className="px-3 py-2 rounded-lg border border-theme-secondary text-theme-tertiary hover:bg-theme-tertiary"
                     >
                       {showNeakPassword ? (
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
@@ -1451,7 +1463,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             <Card className="mt-6">
               <CardHeader>
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                   {t.settings.neakApiTestTitle}
@@ -1520,7 +1532,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
               <CardHeader>
                 <div className="flex items-center justify-between w-full">
                   <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
                     {t.settings.neakDepartmentsTitle}
@@ -1533,12 +1545,12 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
               </CardHeader>
               <CardContent>
                 {neakDepartments.length === 0 ? (
-                  <p className="text-sm text-gray-500 py-4 text-center">{t.common.noResults}</p>
+                  <p className="text-sm text-theme-tertiary py-4 text-center">{t.common.noResults}</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200">
+                        <tr className="border-b border-theme-primary">
                           {[
                             { col: 'neakDepartmentNameHu', label: t.settings.neakDepartmentNameHu },
                             { col: 'neakDepartmentCode', label: t.settings.neakDepartmentCode },
@@ -1548,7 +1560,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                           ].map(({ col, label }) => (
                             <th
                               key={col}
-                              className="text-left py-2 px-3 font-medium text-gray-600 cursor-pointer hover:text-dental-700 select-none"
+                              className="text-left py-2 px-3 font-medium text-theme-secondary cursor-pointer hover:text-dental-700 select-none"
                               onClick={() => {
                                 if (deptSortColumn === col) setDeptSortDir(deptSortDir === 'asc' ? 'desc' : 'asc');
                                 else { setDeptSortColumn(col); setDeptSortDir('asc'); }
@@ -1576,7 +1588,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                             return deptSortDir === 'asc' ? cmp : -cmp;
                           })
                           .map((dept) => (
-                            <tr key={dept.id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <tr key={dept.id} className="border-b border-theme-primary hover:bg-theme-tertiary">
                               <td className="py-2 px-3">{dept.neakDepartmentNameHu}</td>
                               <td className="py-2 px-3 font-mono">{dept.neakDepartmentCode}</td>
                               <td className="py-2 px-3">{dept.neakDepartmentHours}</td>
@@ -1625,7 +1637,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                   onChange={(e) => setNewDept({ ...newDept, neakDepartmentNameDe: e.target.value })}
                 />
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.settings.neakDepartmentCode}</label>
+                  <label className="block text-sm font-medium text-theme-secondary mb-1">{t.settings.neakDepartmentCode}</label>
                   <input
                     type="text"
                     value={newDept.neakDepartmentCode}
@@ -1635,7 +1647,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                     }}
                     pattern="[0-9]{9}"
                     maxLength={9}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500 font-mono"
+                    className="w-full rounded-lg border border-theme-secondary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500 font-mono"
                     placeholder="000000000"
                   />
                 </div>
@@ -1655,7 +1667,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                   })}
                 />
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.settings.neakDepartmentPrefix}</label>
+                  <label className="block text-sm font-medium text-theme-secondary mb-1">{t.settings.neakDepartmentPrefix}</label>
                   <input
                     type="text"
                     value={newDept.neakDepartmentPrefix}
@@ -1665,7 +1677,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                     }}
                     pattern="[A-Z]{0,2}"
                     maxLength={2}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500 font-mono uppercase"
+                    className="w-full rounded-lg border border-theme-secondary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-dental-500 font-mono uppercase"
                     placeholder="AB"
                   />
                 </div>
@@ -1741,7 +1753,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
           <Card>
             <CardHeader>
               <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                   {t.calendar.settingsTitle}
@@ -1804,15 +1816,15 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                           calendar: { ...formData.calendar, showWeekends: e.target.checked },
                         })
                       }
-                      className="rounded border-gray-300"
+                      className="rounded border-theme-secondary"
                     />
-                    <span className="text-sm text-gray-700">{t.calendar.showWeekends}</span>
+                    <span className="text-sm text-theme-secondary">{t.calendar.showWeekends}</span>
                   </label>
                 </div>
 
                 {/* Working hours */}
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">{t.calendar.workingHours}</h3>
+                  <h3 className="text-sm font-medium text-theme-secondary mb-2">{t.calendar.workingHours}</h3>
                   <div className="space-y-2">
                     {(() => {
                       const rawHours = formData.calendar?.workingHours?.length ? formData.calendar.workingHours : [
@@ -1861,37 +1873,37 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                               type="checkbox"
                               checked={wh.isWorkday}
                               onChange={(e) => updateWh('isWorkday', e.target.checked)}
-                              className="rounded border-gray-300"
+                              className="rounded border-theme-secondary"
                             />
-                            <span className={wh.isWorkday ? 'font-medium' : 'text-gray-400'}>{names[wh.dayOfWeek]}</span>
+                            <span className={wh.isWorkday ? 'font-medium' : 'text-theme-muted'}>{names[wh.dayOfWeek]}</span>
                           </label>
                           <input
                             type="time"
                             value={wh.startTime}
                             onChange={(e) => updateWh('startTime', e.target.value)}
-                            className={`px-2 py-1 border border-gray-300 rounded text-sm ${!wh.isWorkday ? 'opacity-40' : ''}`}
+                            className={`px-2 py-1 border border-theme-secondary rounded text-sm ${!wh.isWorkday ? 'opacity-40' : ''}`}
                           />
-                          <span className="text-gray-400">–</span>
+                          <span className="text-theme-muted">–</span>
                           <input
                             type="time"
                             value={wh.endTime}
                             onChange={(e) => updateWh('endTime', e.target.value)}
-                            className={`px-2 py-1 border border-gray-300 rounded text-sm ${!wh.isWorkday ? 'opacity-40' : ''}`}
+                            className={`px-2 py-1 border border-theme-secondary rounded text-sm ${!wh.isWorkday ? 'opacity-40' : ''}`}
                           />
-                          <span className="text-gray-300 ml-2">|</span>
-                          <span className="text-xs text-gray-400">{t.calendar.breakStart}:</span>
+                          <span className="text-theme-muted ml-2">|</span>
+                          <span className="text-xs text-theme-muted">{t.calendar.breakStart}:</span>
                           <input
                             type="time"
                             value={wh.breakStartTime || ''}
                             onChange={(e) => updateWh('breakStartTime', e.target.value || undefined)}
-                            className={`px-2 py-1 border border-gray-300 rounded text-sm w-24 ${!wh.isWorkday ? 'opacity-40' : ''}`}
+                            className={`px-2 py-1 border border-theme-secondary rounded text-sm w-24 ${!wh.isWorkday ? 'opacity-40' : ''}`}
                           />
-                          <span className="text-xs text-gray-400">{t.calendar.breakEnd}:</span>
+                          <span className="text-xs text-theme-muted">{t.calendar.breakEnd}:</span>
                           <input
                             type="time"
                             value={wh.breakEndTime || ''}
                             onChange={(e) => updateWh('breakEndTime', e.target.value || undefined)}
-                            className={`px-2 py-1 border border-gray-300 rounded text-sm w-24 ${!wh.isWorkday ? 'opacity-40' : ''}`}
+                            className={`px-2 py-1 border border-theme-secondary rounded text-sm w-24 ${!wh.isWorkday ? 'opacity-40' : ''}`}
                           />
                         </div>
                       );
@@ -1907,7 +1919,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                   </svg>
                   {t.calendar.chairsTitle}
@@ -1921,24 +1933,24 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-theme-primary">
+                  <thead className="bg-theme-tertiary">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.chairNumber}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.chairName}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.status}</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.common.actions}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">{t.calendar.chairNumber}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">{t.calendar.chairName}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">{t.calendar.status}</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-theme-tertiary uppercase">{t.common.actions}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-theme-primary">
                     {chairs.map((chair) => {
                       const name = appLanguage === 'en' && chair.chairNameEn ? chair.chairNameEn : appLanguage === 'de' && chair.chairNameDe ? chair.chairNameDe : chair.chairNameHu;
                       return (
                         <tr key={chair.chairId} className={chair.isActive ? '' : 'opacity-50'}>
-                          <td className="px-4 py-3 text-sm text-gray-600">{chair.chairNr}</td>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{name}</td>
+                          <td className="px-4 py-3 text-sm text-theme-secondary">{chair.chairNr}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-theme-primary">{name}</td>
                           <td className="px-4 py-3 text-sm">
-                            <span className={`px-2 py-0.5 rounded text-xs ${chair.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                            <span className={`px-2 py-0.5 rounded text-xs ${chair.isActive ? 'bg-green-100 text-green-800' : 'bg-theme-hover text-theme-secondary'}`}>
                               {chair.isActive ? t.common.active : t.common.inactive}
                             </span>
                           </td>
@@ -1976,8 +1988,8 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
               <Input label={`${t.calendar.chairName} (DE)`} value={chairForm.chairNameDe} onChange={(e) => setChairForm({ ...chairForm, chairNameDe: e.target.value })} />
               <div className="flex items-end pb-1">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={chairForm.isActive} onChange={(e) => setChairForm({ ...chairForm, isActive: e.target.checked })} className="rounded border-gray-300" />
-                  <span className="text-sm text-gray-700">{t.common.active}</span>
+                  <input type="checkbox" checked={chairForm.isActive} onChange={(e) => setChairForm({ ...chairForm, isActive: e.target.checked })} className="rounded border-theme-secondary" />
+                  <span className="text-sm text-theme-secondary">{t.common.active}</span>
                 </label>
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -2000,7 +2012,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                   </svg>
                   {t.calendar.typesTitle}
@@ -2014,29 +2026,29 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-theme-primary">
+                  <thead className="bg-theme-tertiary">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.typeColor}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.typeName}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.typeDefaultDuration}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t.calendar.status}</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t.common.actions}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">{t.calendar.typeColor}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">{t.calendar.typeName}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">{t.calendar.typeDefaultDuration}</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase">{t.calendar.status}</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-theme-tertiary uppercase">{t.common.actions}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-theme-primary">
                     {appointmentTypes.map((type) => {
                       const name = appLanguage === 'en' && type.nameEn ? type.nameEn : appLanguage === 'de' && type.nameDe ? type.nameDe : type.nameHu;
                       return (
                         <tr key={type.typeId} className={type.isActive ? '' : 'opacity-50'}>
-                          <td className="px-4 py-3"><div className="w-6 h-6 rounded-full border border-gray-200" style={{ backgroundColor: type.color }} /></td>
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          <td className="px-4 py-3"><div className="w-6 h-6 rounded-full border border-theme-primary" style={{ backgroundColor: type.color }} /></td>
+                          <td className="px-4 py-3 text-sm font-medium text-theme-primary">
                             {name}
-                            {type.isSystem && <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{t.calendar.typeSystem}</span>}
+                            {type.isSystem && <span className="ml-2 text-xs bg-theme-hover text-theme-secondary px-2 py-0.5 rounded">{t.calendar.typeSystem}</span>}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{type.defaultDurationMin} {t.calendar.minutes}</td>
+                          <td className="px-4 py-3 text-sm text-theme-secondary">{type.defaultDurationMin} {t.calendar.minutes}</td>
                           <td className="px-4 py-3 text-sm">
-                            <span className={`px-2 py-0.5 rounded text-xs ${type.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                            <span className={`px-2 py-0.5 rounded text-xs ${type.isActive ? 'bg-green-100 text-green-800' : 'bg-theme-hover text-theme-secondary'}`}>
                               {type.isActive ? t.common.active : t.common.inactive}
                             </span>
                           </td>
@@ -2073,10 +2085,10 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
               <Input label={`${t.calendar.typeName} (DE)`} value={typeForm.nameDe} onChange={(e) => setTypeForm({ ...typeForm, nameDe: e.target.value })} />
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.calendar.typeColor}</label>
+                  <label className="block text-sm font-medium text-theme-secondary mb-1">{t.calendar.typeColor}</label>
                   <div className="flex items-center gap-2">
-                    <input type="color" value={typeForm.color} onChange={(e) => setTypeForm({ ...typeForm, color: e.target.value })} className="w-10 h-10 rounded border border-gray-300 cursor-pointer" />
-                    <input type="text" value={typeForm.color} onChange={(e) => setTypeForm({ ...typeForm, color: e.target.value })} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                    <input type="color" value={typeForm.color} onChange={(e) => setTypeForm({ ...typeForm, color: e.target.value })} className="w-10 h-10 rounded border border-theme-secondary cursor-pointer" />
+                    <input type="text" value={typeForm.color} onChange={(e) => setTypeForm({ ...typeForm, color: e.target.value })} className="flex-1 px-3 py-2 border border-theme-secondary rounded-lg text-sm" />
                   </div>
                 </div>
                 <Input label={`${t.calendar.typeDefaultDuration} (${t.calendar.minutes})`} type="number" value={String(typeForm.defaultDurationMin)} onChange={(e) => setTypeForm({ ...typeForm, defaultDurationMin: Number(e.target.value) || 30 })} />
@@ -2085,8 +2097,8 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
                 <Input label="Sort order" type="number" value={String(typeForm.sortOrder)} onChange={(e) => setTypeForm({ ...typeForm, sortOrder: Number(e.target.value) || 0 })} />
                 <div className="flex items-end pb-1">
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={typeForm.isActive} onChange={(e) => setTypeForm({ ...typeForm, isActive: e.target.checked })} className="rounded border-gray-300" />
-                    <span className="text-sm text-gray-700">{t.common.active}</span>
+                    <input type="checkbox" checked={typeForm.isActive} onChange={(e) => setTypeForm({ ...typeForm, isActive: e.target.checked })} className="rounded border-theme-secondary" />
+                    <span className="text-sm text-theme-secondary">{t.common.active}</span>
                   </label>
                 </div>
               </div>
@@ -2133,7 +2145,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
         title={t.settings.unsavedChangesTitle}
         size="sm"
       >
-        <p className="text-gray-600 mb-6">{t.settings.unsavedChangesMessage}</p>
+        <p className="text-theme-secondary mb-6">{t.settings.unsavedChangesMessage}</p>
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setPendingNavTarget(null)}>
             {t.common.cancel}

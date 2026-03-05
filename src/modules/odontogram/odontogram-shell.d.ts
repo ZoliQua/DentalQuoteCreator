@@ -10,6 +10,8 @@ declare module '@odontogram-shell' {
     onLanguageChange?: (lang: OdontogramLanguage) => void;
     numberingSystem?: OdontogramNumberingSystem;
     onNumberingChange?: (system: OdontogramNumberingSystem) => void;
+    darkMode?: boolean;
+    onDarkModeChange?: (dark: boolean) => void;
   };
 
   const OdontogramShell: ComponentType<OdontogramShellProps>;

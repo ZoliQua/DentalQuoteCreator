@@ -17,6 +17,9 @@ export interface Appointment {
   updatedAt: string;
   createdByUserId?: string;
   googleEventId?: string;
+  recurrenceRule?: string;
+  recurrenceParentId?: string;
+  isRecurrenceException?: boolean;
   patient?: { patientId: string; lastName: string; firstName: string };
   appointmentType?: AppointmentType;
 }

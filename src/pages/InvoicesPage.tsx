@@ -244,7 +244,7 @@ export function InvoicesPage() {
 
   const SortHeader = ({ col, children, className }: { col: SortKey; children: React.ReactNode; className?: string }) => (
     <th
-      className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-700 ${className || 'text-left'}`}
+      className={`px-4 py-3 text-xs font-medium text-theme-tertiary uppercase tracking-wider cursor-pointer select-none hover:text-theme-secondary ${className || 'text-left'}`}
       onClick={() => handleSort(col)}
     >
       <span className="inline-flex items-center gap-1">
@@ -613,8 +613,8 @@ export function InvoicesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t.invoices.title}</h1>
-          <p className="text-gray-500 mt-1">{t.invoices.subtitle}</p>
+          <h1 className="text-2xl font-bold text-theme-primary">{t.invoices.title}</h1>
+          <p className="text-theme-tertiary mt-1">{t.invoices.subtitle}</p>
         </div>
         {hasPermission('invoices.issue') && (<Button onClick={handleOpenNewInvoice}>{t.invoices.newInvoice}</Button>)}
       </div>
@@ -655,10 +655,10 @@ export function InvoicesPage() {
       <Card>
         <div className="overflow-x-auto">
           {sortedRows.length === 0 ? (
-            <div className="p-8 text-center text-sm text-gray-500">{t.invoices.noInvoices}</div>
+            <div className="p-8 text-center text-sm text-theme-tertiary">{t.invoices.noInvoices}</div>
           ) : (
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-theme-tertiary border-b border-theme-primary">
                 <tr>
                   <SortHeader col="issueDate">{t.invoices.issueDate}</SortHeader>
                   <SortHeader col="invoiceNumber">{t.invoices.invoiceNumber}</SortHeader>
@@ -668,12 +668,12 @@ export function InvoicesPage() {
                   <SortHeader col="paymentMethod">{t.invoices.paymentMethod}</SortHeader>
                   <SortHeader col="amount" className="text-right">{t.invoices.amount}</SortHeader>
                   <SortHeader col="status" className="text-center">{t.invoices.status}</SortHeader>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                     {t.common.actions}
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-theme-primary">
                 {sortedRows.map((row) => {
                   const inv = row.invoice;
                   const isStornoed = !row.isStornoRow && inv.status === 'storno';
@@ -682,7 +682,7 @@ export function InvoicesPage() {
                   if (row.isStornoRow) {
                     return (
                       <tr key={row.key} className="bg-red-50/60 hover:bg-red-50">
-                        <td className="px-4 py-3 text-sm text-gray-500">
+                        <td className="px-4 py-3 text-sm text-theme-tertiary">
                           {formatDate(inv.createdAt)}
                         </td>
                         <td className="px-4 py-3 text-sm font-medium text-red-700">
@@ -690,7 +690,7 @@ export function InvoicesPage() {
                             {row.displayNumber}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-700">
+                        <td className="px-4 py-3 text-sm text-theme-secondary">
                           {inv.patientId && inv.patientId !== 'ad-hoc' ? (
                             <Link to={`/patients/${inv.patientId}`} className="text-dental-600 hover:text-dental-700 hover:underline">
                               {inv.patientName}
@@ -700,10 +700,10 @@ export function InvoicesPage() {
                         <td className="px-4 py-3 text-sm text-red-600 font-medium">
                           {t.invoices.invoiceTypeStorno}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-500">
+                        <td className="px-4 py-3 text-sm text-theme-tertiary">
                           {formatDate(inv.dueDate)}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-500">
+                        <td className="px-4 py-3 text-sm text-theme-tertiary">
                           {paymentLabel(inv.paymentMethod)}
                         </td>
                         <td className="px-4 py-3 text-sm text-right font-semibold text-red-600">
@@ -725,7 +725,7 @@ export function InvoicesPage() {
                                   const blob = new Blob([arr], { type: 'application/pdf' });
                                   window.open(URL.createObjectURL(blob), '_blank');
                                 }}
-                                className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                                className="rounded p-1.5 text-theme-tertiary hover:bg-theme-hover hover:text-theme-secondary"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -749,31 +749,31 @@ export function InvoicesPage() {
 
                   // Normal invoice row
                   return (
-                    <tr key={row.key} className={isStornoed ? 'bg-red-50/40 hover:bg-red-50/60' : 'hover:bg-gray-50'}>
-                      <td className="px-4 py-3 text-sm text-gray-500">
+                    <tr key={row.key} className={isStornoed ? 'bg-red-50/40 hover:bg-red-50/60' : 'hover:bg-theme-tertiary'}>
+                      <td className="px-4 py-3 text-sm text-theme-tertiary">
                         {formatDate(inv.createdAt)}
                       </td>
-                      <td className={`px-4 py-3 text-sm font-medium ${isStornoed ? 'line-through' : ''} text-gray-900`}>
+                      <td className={`px-4 py-3 text-sm font-medium ${isStornoed ? 'line-through' : ''} text-theme-primary`}>
                         {inv.szamlazzInvoiceNumber ? (
                           <Link to={`/invoices/${inv.id}`} className="text-dental-600 hover:text-dental-700 hover:underline">
                             {inv.szamlazzInvoiceNumber}
                           </Link>
                         ) : '-'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">
+                      <td className="px-4 py-3 text-sm text-theme-secondary">
                         {inv.patientId && inv.patientId !== 'ad-hoc' ? (
                           <Link to={`/patients/${inv.patientId}`} className="text-dental-600 hover:text-dental-700 hover:underline">
                             {inv.patientName}
                           </Link>
                         ) : inv.patientName}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
+                      <td className="px-4 py-3 text-sm text-theme-tertiary">
                         {invoiceTypeLabel(row)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
+                      <td className="px-4 py-3 text-sm text-theme-tertiary">
                         {formatDate(inv.dueDate)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
+                      <td className="px-4 py-3 text-sm text-theme-tertiary">
                         {paymentLabel(inv.paymentMethod)}
                       </td>
                       <td className={`px-4 py-3 text-sm text-right font-semibold ${isStornoed ? 'line-through' : ''}`}>
@@ -801,7 +801,7 @@ export function InvoicesPage() {
                               type="button"
                               title={t.invoices.pdf}
                               onClick={() => openPdf(inv)}
-                              className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                              className="rounded p-1.5 text-theme-tertiary hover:bg-theme-hover hover:text-theme-secondary"
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -848,38 +848,38 @@ export function InvoicesPage() {
       {/* Payment method summary */}
       {paymentSummary.entries.length > 0 && (
         <Card>
-          <div className="px-4 py-3 border-b border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900">{t.invoices.summaryByPaymentMethod}</h3>
+          <div className="px-4 py-3 border-b border-theme-primary">
+            <h3 className="text-sm font-semibold text-theme-primary">{t.invoices.summaryByPaymentMethod}</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-theme-tertiary border-b border-theme-primary">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t.invoices.paymentMethod}</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.summaryInvoiceCount}</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.amount}</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.summaryStornoCount}</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.storno}</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.summaryNetIncome}</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-theme-tertiary uppercase">{t.invoices.paymentMethod}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-theme-tertiary uppercase">{t.invoices.summaryInvoiceCount}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-theme-tertiary uppercase">{t.invoices.amount}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-theme-tertiary uppercase">{t.invoices.summaryStornoCount}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-theme-tertiary uppercase">{t.invoices.storno}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-theme-tertiary uppercase">{t.invoices.summaryNetIncome}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-theme-primary">
                 {paymentSummary.entries.map((entry) => (
-                  <tr key={entry.method} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 text-sm font-medium text-gray-900">{paymentLabel(entry.method)}</td>
-                    <td className="px-4 py-2 text-sm text-right text-gray-700">{entry.sentCount}</td>
-                    <td className="px-4 py-2 text-sm text-right text-gray-700">{formatCurrency(entry.sent)}</td>
+                  <tr key={entry.method} className="hover:bg-theme-tertiary">
+                    <td className="px-4 py-2 text-sm font-medium text-theme-primary">{paymentLabel(entry.method)}</td>
+                    <td className="px-4 py-2 text-sm text-right text-theme-secondary">{entry.sentCount}</td>
+                    <td className="px-4 py-2 text-sm text-right text-theme-secondary">{formatCurrency(entry.sent)}</td>
                     <td className="px-4 py-2 text-sm text-right text-red-600">{entry.stornoCount}</td>
                     <td className="px-4 py-2 text-sm text-right text-red-600">-{formatCurrency(entry.storno)}</td>
-                    <td className="px-4 py-2 text-sm text-right font-semibold text-gray-900">{formatCurrency(entry.net)}</td>
+                    <td className="px-4 py-2 text-sm text-right font-semibold text-theme-primary">{formatCurrency(entry.net)}</td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-gray-50 border-t-2 border-gray-300">
+              <tfoot className="bg-theme-tertiary border-t-2 border-theme-secondary">
                 <tr>
-                  <td className="px-4 py-2 text-sm font-bold text-gray-900">{t.invoices.summaryTotal}</td>
-                  <td className="px-4 py-2 text-sm text-right font-bold text-gray-900">{paymentSummary.totalSentCount}</td>
-                  <td className="px-4 py-2 text-sm text-right font-bold text-gray-900">{formatCurrency(paymentSummary.totalSent)}</td>
+                  <td className="px-4 py-2 text-sm font-bold text-theme-primary">{t.invoices.summaryTotal}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-theme-primary">{paymentSummary.totalSentCount}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-theme-primary">{formatCurrency(paymentSummary.totalSent)}</td>
                   <td className="px-4 py-2 text-sm text-right font-bold text-red-600">{paymentSummary.totalStornoCount}</td>
                   <td className="px-4 py-2 text-sm text-right font-bold text-red-600">-{formatCurrency(paymentSummary.totalStorno)}</td>
                   <td className="px-4 py-2 text-sm text-right font-bold text-green-700">{formatCurrency(paymentSummary.totalNet)}</td>
@@ -893,38 +893,38 @@ export function InvoicesPage() {
       {/* Patient summary */}
       {patientSummary.entries.length > 0 && (
         <Card>
-          <div className="px-4 py-3 border-b border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900">{t.invoices.summaryByPatient}</h3>
+          <div className="px-4 py-3 border-b border-theme-primary">
+            <h3 className="text-sm font-semibold text-theme-primary">{t.invoices.summaryByPatient}</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-theme-tertiary border-b border-theme-primary">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t.invoices.patientName}</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.summaryInvoiceCount}</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.amount}</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.summaryStornoCount}</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.storno}</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">{t.invoices.summaryNetIncome}</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-theme-tertiary uppercase">{t.invoices.patientName}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-theme-tertiary uppercase">{t.invoices.summaryInvoiceCount}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-theme-tertiary uppercase">{t.invoices.amount}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-theme-tertiary uppercase">{t.invoices.summaryStornoCount}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-theme-tertiary uppercase">{t.invoices.storno}</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-theme-tertiary uppercase">{t.invoices.summaryNetIncome}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-theme-primary">
                 {patientSummary.entries.map((entry) => (
-                  <tr key={entry.name} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 text-sm font-medium text-gray-900">{entry.name}</td>
-                    <td className="px-4 py-2 text-sm text-right text-gray-700">{entry.sentCount}</td>
-                    <td className="px-4 py-2 text-sm text-right text-gray-700">{formatCurrency(entry.sent)}</td>
+                  <tr key={entry.name} className="hover:bg-theme-tertiary">
+                    <td className="px-4 py-2 text-sm font-medium text-theme-primary">{entry.name}</td>
+                    <td className="px-4 py-2 text-sm text-right text-theme-secondary">{entry.sentCount}</td>
+                    <td className="px-4 py-2 text-sm text-right text-theme-secondary">{formatCurrency(entry.sent)}</td>
                     <td className="px-4 py-2 text-sm text-right text-red-600">{entry.stornoCount}</td>
                     <td className="px-4 py-2 text-sm text-right text-red-600">-{formatCurrency(entry.storno)}</td>
-                    <td className="px-4 py-2 text-sm text-right font-semibold text-gray-900">{formatCurrency(entry.net)}</td>
+                    <td className="px-4 py-2 text-sm text-right font-semibold text-theme-primary">{formatCurrency(entry.net)}</td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-gray-50 border-t-2 border-gray-300">
+              <tfoot className="bg-theme-tertiary border-t-2 border-theme-secondary">
                 <tr>
-                  <td className="px-4 py-2 text-sm font-bold text-gray-900">{t.invoices.summaryTotal}</td>
-                  <td className="px-4 py-2 text-sm text-right font-bold text-gray-900">{patientSummary.totalSentCount}</td>
-                  <td className="px-4 py-2 text-sm text-right font-bold text-gray-900">{formatCurrency(patientSummary.totalSent)}</td>
+                  <td className="px-4 py-2 text-sm font-bold text-theme-primary">{t.invoices.summaryTotal}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-theme-primary">{patientSummary.totalSentCount}</td>
+                  <td className="px-4 py-2 text-sm text-right font-bold text-theme-primary">{formatCurrency(patientSummary.totalSent)}</td>
                   <td className="px-4 py-2 text-sm text-right font-bold text-red-600">{patientSummary.totalStornoCount}</td>
                   <td className="px-4 py-2 text-sm text-right font-bold text-red-600">-{formatCurrency(patientSummary.totalStorno)}</td>
                   <td className="px-4 py-2 text-sm text-right font-bold text-green-700">{formatCurrency(patientSummary.totalNet)}</td>
@@ -970,10 +970,10 @@ export function InvoicesPage() {
           />
 
           <div className="flex items-center justify-between border-b pb-1">
-            <h4 className="text-sm font-semibold text-gray-900">{t.invoices.buyerSection}</h4>
+            <h4 className="text-sm font-semibold text-theme-primary">{t.invoices.buyerSection}</h4>
             <div className="flex gap-1">
-              <button onClick={() => { const patient = patients.find((p) => p.patientId === newInvoiceForm.patientId); setNewInvoiceForm((prev) => ({ ...prev, buyerType: 'individual', buyerName: patient ? formatPatientName(patient.lastName, patient.firstName, patient.title) : prev.buyerName })); }} className={`px-3 py-1 text-xs rounded-full ${newInvoiceForm.buyerType === 'individual' ? 'bg-dental-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.invoices.buyerTypeIndividual}</button>
-              <button onClick={() => { const patient = patients.find((p) => p.patientId === newInvoiceForm.patientId); setNewInvoiceForm((prev) => ({ ...prev, buyerType: 'company', buyerName: patient?.patientVATName || prev.buyerName })); }} className={`px-3 py-1 text-xs rounded-full ${newInvoiceForm.buyerType === 'company' ? 'bg-dental-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.invoices.buyerTypeCompany}</button>
+              <button onClick={() => { const patient = patients.find((p) => p.patientId === newInvoiceForm.patientId); setNewInvoiceForm((prev) => ({ ...prev, buyerType: 'individual', buyerName: patient ? formatPatientName(patient.lastName, patient.firstName, patient.title) : prev.buyerName })); }} className={`px-3 py-1 text-xs rounded-full ${newInvoiceForm.buyerType === 'individual' ? 'bg-dental-600 text-white' : 'bg-theme-hover text-theme-secondary hover:bg-theme-hover'}`}>{t.invoices.buyerTypeIndividual}</button>
+              <button onClick={() => { const patient = patients.find((p) => p.patientId === newInvoiceForm.patientId); setNewInvoiceForm((prev) => ({ ...prev, buyerType: 'company', buyerName: patient?.patientVATName || prev.buyerName })); }} className={`px-3 py-1 text-xs rounded-full ${newInvoiceForm.buyerType === 'company' ? 'bg-dental-600 text-white' : 'bg-theme-hover text-theme-secondary hover:bg-theme-hover'}`}>{t.invoices.buyerTypeCompany}</button>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1048,7 +1048,7 @@ export function InvoicesPage() {
               ]}
             />
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.issueDate}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.invoices.issueDate}</label>
               <div className="relative">
                 <input
                   value={issueDateText}
@@ -1059,7 +1059,7 @@ export function InvoicesPage() {
                     else if (!e.target.value) setNewInvoiceForm((prev) => ({ ...prev, issueDate: '' }));
                   }}
                   placeholder={getDatePlaceholder()}
-                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary"
                 />
                 <input
                   type="date"
@@ -1073,13 +1073,13 @@ export function InvoicesPage() {
                   className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer"
                   tabIndex={-1}
                 />
-                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
             </div>
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.fulfillmentDate}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.invoices.fulfillmentDate}</label>
               <div className="relative">
                 <input
                   value={fulfillmentDateText}
@@ -1090,7 +1090,7 @@ export function InvoicesPage() {
                     else if (!e.target.value) setNewInvoiceForm((prev) => ({ ...prev, fulfillmentDate: '' }));
                   }}
                   placeholder={getDatePlaceholder()}
-                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary"
                 />
                 <input
                   type="date"
@@ -1104,13 +1104,13 @@ export function InvoicesPage() {
                   className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer"
                   tabIndex={-1}
                 />
-                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
             </div>
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.dueDate}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.invoices.dueDate}</label>
               <div className="relative">
                 <input
                   value={dueDateText}
@@ -1121,7 +1121,7 @@ export function InvoicesPage() {
                     else if (!e.target.value) setNewInvoiceForm((prev) => ({ ...prev, dueDate: '' }));
                   }}
                   placeholder={getDatePlaceholder()}
-                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                  className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary"
                 />
                 <input
                   type="date"
@@ -1135,7 +1135,7 @@ export function InvoicesPage() {
                   className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer"
                   tabIndex={-1}
                 />
-                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
@@ -1152,7 +1152,7 @@ export function InvoicesPage() {
           {/* Items */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-700">{t.invoices.items}</h3>
+              <h3 className="text-sm font-semibold text-theme-secondary">{t.invoices.items}</h3>
               <Button
                 variant="secondary"
                 onClick={() => setShowCatalogPicker(true)}
@@ -1161,7 +1161,7 @@ export function InvoicesPage() {
               </Button>
             </div>
             {newInvoiceItems.length === 0 ? (
-              <p className="text-sm text-gray-400">{t.invoices.noInvoices}</p>
+              <p className="text-sm text-theme-muted">{t.invoices.noInvoices}</p>
             ) : (
               <div className="space-y-2">
                 {newInvoiceItems.map((item, idx) => {
@@ -1172,7 +1172,7 @@ export function InvoicesPage() {
                   return (
                     <div
                       key={idx}
-                      className="flex items-center gap-2 rounded border border-gray-200 p-2 text-sm"
+                      className="flex items-center gap-2 rounded border border-theme-primary p-2 text-sm"
                     >
                       <span className="flex-1 font-medium">{item.name}</span>
                       <Input
@@ -1182,7 +1182,7 @@ export function InvoicesPage() {
                         min={1}
                         className="w-16"
                       />
-                      <span className="text-gray-500">{item.unit}</span>
+                      <span className="text-theme-tertiary">{item.unit}</span>
                       <Input
                         type="number"
                         value={item.unitPriceNet}
@@ -1191,7 +1191,7 @@ export function InvoicesPage() {
                         }
                         className="w-24"
                       />
-                      <span className="text-gray-500">{typeof item.vatRate === 'number' ? `${item.vatRate}%` : item.vatRate}</span>
+                      <span className="text-theme-tertiary">{typeof item.vatRate === 'number' ? `${item.vatRate}%` : item.vatRate}</span>
                       <span className="w-24 text-right font-semibold">
                         {formatCurrency(gross)}
                       </span>
@@ -1210,7 +1210,7 @@ export function InvoicesPage() {
           </div>
 
           {newInvoicePreviewTotals && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+            <div className="rounded-lg border border-theme-primary bg-theme-tertiary p-3 text-sm">
               <p>
                 {t.invoices.netTotal}: {formatCurrency(newInvoicePreviewTotals.net)}
               </p>
@@ -1230,7 +1230,7 @@ export function InvoicesPage() {
           )}
 
           <details>
-            <summary className="cursor-pointer text-sm font-medium text-gray-700">
+            <summary className="cursor-pointer text-sm font-medium text-theme-secondary">
               {t.invoices.xmlPreview}
             </summary>
             <pre className="mt-2 max-h-56 overflow-auto rounded bg-gray-900 p-3 text-xs text-gray-100">
@@ -1283,12 +1283,12 @@ export function InvoicesPage() {
             {filteredCatalog.map((item) => (
               <div
                 key={item.catalogItemId}
-                className="flex items-center justify-between rounded border p-2 hover:bg-gray-50 cursor-pointer"
+                className="flex items-center justify-between rounded border p-2 hover:bg-theme-tertiary cursor-pointer"
                 onClick={() => addCatalogItem(item)}
               >
                 <div>
                   <p className="text-sm font-medium">{item.catalogName}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-theme-tertiary">
                     {formatCode(item)} | {item.catalogUnit}
                   </p>
                 </div>

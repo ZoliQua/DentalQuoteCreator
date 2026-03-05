@@ -4,6 +4,8 @@ import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual, cre
 import { promisify } from 'util';
 import { Prisma, UserRole } from '@prisma/client';
 import { prisma } from './db.js';
+import rruleLib from 'rrule';
+const { RRule } = rruleLib;
 
 function parseUserAgent(ua: string) {
   let browser = '';
@@ -46,6 +48,11 @@ const createNeakCheckId = (): string => 'NC' + randomBytes(5).toString('hex');
 const createVisitorLogId = (): string => 'VL' + randomBytes(4).toString('hex');
 const createAppointmentId = (): string => 'APT' + randomBytes(4).toString('hex');
 const createAppointmentTypeId = (): string => 'atype' + randomBytes(3).toString('hex');
+/** Format a Date as RRULE DTSTART value (YYYYMMDDTHHmmss) */
+const formatRRuleDt = (d: Date): string => {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+};
 const createChairId = (nr: number): string => `chair-${String(nr).padStart(2, '0')}`;
 
 const MAX_ID_RETRIES = 5;
@@ -2917,26 +2924,63 @@ server.post('/appointments', async (request, reply) => {
   if (!user) return;
   const body = request.body as JsonRecord;
   const appointmentId = createAppointmentId();
+  const recurrenceRule = body.recurrenceRule ? String(body.recurrenceRule) : null;
+
+  const baseData = {
+    patientId: body.patientId ? String(body.patientId) : null,
+    chairIndex: Number(body.chairIndex) || 0,
+    title: String(body.title || ''),
+    description: body.description ? String(body.description) : null,
+    appointmentTypeId: body.appointmentTypeId ? String(body.appointmentTypeId) : null,
+    status: String(body.status || 'scheduled'),
+    color: body.color ? String(body.color) : null,
+    notes: body.notes ? String(body.notes) : null,
+    createdByUserId: user.id,
+  };
+
+  const startDt = new Date(String(body.startDateTime));
+  const endDt = new Date(String(body.endDateTime));
+  const durationMs = endDt.getTime() - startDt.getTime();
+
+  // Create the parent appointment
   const appointment = await prisma.appointment.create({
     data: {
+      ...baseData,
       appointmentId,
-      patientId: body.patientId ? String(body.patientId) : null,
-      chairIndex: Number(body.chairIndex) || 0,
-      startDateTime: new Date(String(body.startDateTime)),
-      endDateTime: new Date(String(body.endDateTime)),
-      title: String(body.title || ''),
-      description: body.description ? String(body.description) : null,
-      appointmentTypeId: body.appointmentTypeId ? String(body.appointmentTypeId) : null,
-      status: String(body.status || 'scheduled'),
-      color: body.color ? String(body.color) : null,
-      notes: body.notes ? String(body.notes) : null,
-      createdByUserId: user.id,
+      startDateTime: startDt,
+      endDateTime: endDt,
+      recurrenceRule,
     },
     include: {
       patient: { select: { patientId: true, lastName: true, firstName: true } },
       appointmentType: true,
     },
   });
+
+  // If recurrence rule is set, generate child instances
+  if (recurrenceRule) {
+    try {
+      const rule = RRule.fromString(`DTSTART:${formatRRuleDt(startDt)}\n${recurrenceRule}`);
+      const maxDate = new Date(startDt.getTime() + 365 * 24 * 60 * 60 * 1000); // max 1 year
+      const dates = rule.between(startDt, maxDate, true);
+      // Skip the first date (it's the parent) and limit to 365 instances
+      const childDates = dates.slice(1, 366);
+
+      if (childDates.length > 0) {
+        const childData = childDates.map(date => ({
+          appointmentId: createAppointmentId(),
+          ...baseData,
+          startDateTime: date,
+          endDateTime: new Date(date.getTime() + durationMs),
+          recurrenceParentId: appointmentId,
+        }));
+        await prisma.appointment.createMany({ data: childData });
+      }
+    } catch (e) {
+      server.log.warn('Failed to expand RRULE: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
   return appointment;
 });
 
@@ -2945,6 +2989,8 @@ server.patch('/appointments/:appointmentId', async (request, reply) => {
   if (!user) return;
   const { appointmentId } = request.params as { appointmentId: string };
   const body = request.body as JsonRecord;
+  const scope = String(body.scope || 'single'); // single | future | all
+
   const data: Record<string, unknown> = {};
   if (body.patientId !== undefined) data.patientId = body.patientId ? String(body.patientId) : null;
   if (body.chairIndex !== undefined) data.chairIndex = Number(body.chairIndex);
@@ -2956,9 +3002,84 @@ server.patch('/appointments/:appointmentId', async (request, reply) => {
   if (body.status !== undefined) data.status = String(body.status);
   if (body.color !== undefined) data.color = body.color ? String(body.color) : null;
   if (body.notes !== undefined) data.notes = body.notes ? String(body.notes) : null;
-  return prisma.appointment.update({
+
+  if (scope === 'single') {
+    // Mark as exception if it's a recurrence child
+    const existing = await prisma.appointment.findUnique({ where: { appointmentId } });
+    if (existing?.recurrenceParentId) {
+      data.isRecurrenceException = true;
+    }
+    return prisma.appointment.update({
+      where: { appointmentId },
+      data,
+      include: {
+        patient: { select: { patientId: true, lastName: true, firstName: true } },
+        appointmentType: true,
+      },
+    });
+  }
+
+  // For scope=future or scope=all, find the parent and siblings
+  const current = await prisma.appointment.findUnique({ where: { appointmentId } });
+  if (!current) return reply.code(404).send({ message: 'Not found' });
+
+  const parentId = current.recurrenceParentId || current.appointmentId;
+
+  // Build filter for which siblings to update
+  const siblingWhere: Record<string, unknown> = { isArchived: false };
+  if (scope === 'future') {
+    siblingWhere.OR = [
+      { appointmentId, },
+      { recurrenceParentId: parentId, startDateTime: { gte: current.startDateTime } },
+    ];
+    // Also update parent if this IS the parent
+    if (!current.recurrenceParentId) {
+      siblingWhere.OR = [
+        { appointmentId: parentId },
+        { recurrenceParentId: parentId, startDateTime: { gte: current.startDateTime } },
+      ];
+    }
+  } else {
+    // scope=all — update parent + all children
+    siblingWhere.OR = [
+      { appointmentId: parentId },
+      { recurrenceParentId: parentId },
+    ];
+  }
+
+  // For time-based fields, compute the delta and apply to each sibling
+  // For non-time fields, apply directly
+  const nonTimeData: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (k !== 'startDateTime' && k !== 'endDateTime') {
+      nonTimeData[k] = v;
+    }
+  }
+
+  if (Object.keys(nonTimeData).length > 0) {
+    await prisma.appointment.updateMany({ where: siblingWhere, data: nonTimeData });
+  }
+
+  // If time fields changed, apply delta to each sibling individually
+  if (data.startDateTime || data.endDateTime) {
+    const siblings = await prisma.appointment.findMany({ where: siblingWhere });
+    const startDelta = data.startDateTime
+      ? (data.startDateTime as Date).getTime() - current.startDateTime.getTime()
+      : 0;
+    const endDelta = data.endDateTime
+      ? (data.endDateTime as Date).getTime() - current.endDateTime.getTime()
+      : 0;
+
+    for (const sib of siblings) {
+      const timeUpdate: Record<string, unknown> = {};
+      if (startDelta) timeUpdate.startDateTime = new Date(sib.startDateTime.getTime() + startDelta);
+      if (endDelta) timeUpdate.endDateTime = new Date(sib.endDateTime.getTime() + endDelta);
+      await prisma.appointment.update({ where: { appointmentId: sib.appointmentId }, data: timeUpdate });
+    }
+  }
+
+  return prisma.appointment.findUnique({
     where: { appointmentId },
-    data,
     include: {
       patient: { select: { patientId: true, lastName: true, firstName: true } },
       appointmentType: true,
@@ -2970,10 +3091,40 @@ server.delete('/appointments/:appointmentId', async (request, reply) => {
   const user = await requirePermission(request, reply, 'calendar.delete');
   if (!user) return;
   const { appointmentId } = request.params as { appointmentId: string };
-  await prisma.appointment.update({
-    where: { appointmentId },
-    data: { isArchived: true },
-  });
+  const query = request.query as Record<string, string>;
+  const scope = query.scope || 'single'; // single | future | all
+
+  const current = await prisma.appointment.findUnique({ where: { appointmentId } });
+  if (!current) return reply.code(404).send({ message: 'Not found' });
+
+  if (scope === 'single') {
+    await prisma.appointment.update({ where: { appointmentId }, data: { isArchived: true } });
+  } else {
+    const parentId = current.recurrenceParentId || current.appointmentId;
+    const archiveWhere: Record<string, unknown> = { isArchived: false };
+
+    if (scope === 'future') {
+      archiveWhere.OR = [
+        { appointmentId },
+        { recurrenceParentId: parentId, startDateTime: { gte: current.startDateTime } },
+      ];
+      if (!current.recurrenceParentId) {
+        archiveWhere.OR = [
+          { appointmentId: parentId },
+          { recurrenceParentId: parentId, startDateTime: { gte: current.startDateTime } },
+        ];
+      }
+    } else {
+      // scope=all — archive parent + all children
+      archiveWhere.OR = [
+        { appointmentId: parentId },
+        { recurrenceParentId: parentId },
+      ];
+    }
+
+    await prisma.appointment.updateMany({ where: archiveWhere, data: { isArchived: true } });
+  }
+
   return { success: true };
 });
 
@@ -4708,6 +4859,34 @@ const runPendingMigrations = async () => {
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Appointment_status_idx" ON "Appointment"("status")`);
   } catch (e) {
     server.log.warn('Appointment migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Add recurrence columns to Appointment if they don't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Appointment' AND column_name = 'recurrenceRule') THEN
+          ALTER TABLE "Appointment" ADD COLUMN "recurrenceRule" TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Appointment' AND column_name = 'recurrenceParentId') THEN
+          ALTER TABLE "Appointment" ADD COLUMN "recurrenceParentId" TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Appointment' AND column_name = 'isRecurrenceException') THEN
+          ALTER TABLE "Appointment" ADD COLUMN "isRecurrenceException" BOOLEAN NOT NULL DEFAULT false;
+        END IF;
+      END $$
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Appointment_recurrenceParentId_idx" ON "Appointment"("recurrenceParentId")`);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Appointment_recurrenceParentId_fkey') THEN
+          ALTER TABLE "Appointment" ADD CONSTRAINT "Appointment_recurrenceParentId_fkey"
+            FOREIGN KEY ("recurrenceParentId") REFERENCES "Appointment"("appointmentId") ON DELETE SET NULL ON UPDATE CASCADE;
+        END IF;
+      END $$
+    `);
+  } catch (e) {
+    server.log.warn('Appointment recurrence migration skipped: ' + (e instanceof Error ? e.message : String(e)));
   }
 
   // Seed default appointment types

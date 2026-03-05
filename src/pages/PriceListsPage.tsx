@@ -109,7 +109,7 @@ export function PriceListsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <p className="text-gray-500">
+        <p className="text-theme-tertiary">
           {activePriceLists.length} {t.common.active}{deletedCount > 0 ? `, ${deletedCount} ${t.common.deleted}` : ''}
         </p>
         <div className="flex items-center gap-2">
@@ -117,7 +117,7 @@ export function PriceListsPage() {
             <button
               onClick={() => setShowDeleted(false)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                !showDeleted ? 'bg-dental-100 text-dental-700' : 'text-gray-600 hover:bg-gray-100'
+                !showDeleted ? 'bg-dental-100 text-dental-700' : 'text-theme-secondary hover:bg-theme-hover'
               }`}
             >
               {t.common.active}
@@ -126,7 +126,7 @@ export function PriceListsPage() {
               <button
                 onClick={() => setShowDeleted(true)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  showDeleted ? 'bg-dental-100 text-dental-700' : 'text-gray-600 hover:bg-gray-100'
+                  showDeleted ? 'bg-dental-100 text-dental-700' : 'text-theme-secondary hover:bg-theme-hover'
                 }`}
               >
                 {t.common.deleted}
@@ -161,7 +161,7 @@ export function PriceListsPage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="text-left text-sm text-gray-500 border-b">
+                  <tr className="text-left text-sm text-theme-tertiary border-b">
                     <th className="pb-3 font-medium">{t.priceList.nameHu}</th>
                     <th className="pb-3 font-medium">{t.priceList.nameEn}</th>
                     <th className="pb-3 font-medium">{t.priceList.nameDe}</th>
@@ -175,10 +175,10 @@ export function PriceListsPage() {
                   {displayList.map((item) => (
                     <tr key={item.priceListId} className="border-b last:border-0">
                       <td className="py-3 font-medium">{item.priceListNameHu}</td>
-                      <td className="py-3 text-gray-600">{item.priceListNameEn}</td>
-                      <td className="py-3 text-gray-600">{item.priceListNameDe}</td>
+                      <td className="py-3 text-theme-secondary">{item.priceListNameEn}</td>
+                      <td className="py-3 text-theme-secondary">{item.priceListNameDe}</td>
                       <td className="py-3 text-center">
-                        <span className={`text-sm ${item.isNeak ? 'text-green-600' : 'text-gray-400'}`}>
+                        <span className={`text-sm ${item.isNeak ? 'text-green-600' : 'text-theme-muted'}`}>
                           {item.isNeak ? '✓' : '−'}
                         </span>
                       </td>
@@ -190,7 +190,7 @@ export function PriceListsPage() {
                         ) : hasPermission('pricelist.update') ? (
                           <button
                             onClick={() => setDefaultPriceList(item.priceListId)}
-                            className="text-xs text-gray-400 hover:text-dental-600"
+                            className="text-xs text-theme-muted hover:text-dental-600"
                           >
                             {t.priceList.setDefault}
                           </button>
@@ -198,7 +198,7 @@ export function PriceListsPage() {
                       </td>
                       <td className="py-3 text-center">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          item.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                          item.isActive ? 'bg-green-100 text-green-800' : 'bg-theme-hover text-theme-secondary'
                         }`}>
                           {item.isActive ? t.common.active : 'Inaktív'}
                         </span>
@@ -221,7 +221,7 @@ export function PriceListsPage() {
                                 <button
                                   onClick={() => openEditModal(item)}
                                   title={t.common.edit}
-                                  className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100"
+                                  className="p-1.5 rounded-lg text-theme-secondary hover:bg-theme-hover"
                                 >
                                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -277,7 +277,7 @@ export function PriceListsPage() {
             onChange={(e) => setFormData({ ...formData, priceListNameDe: e.target.value })}
           />
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
+            <label className="flex items-center gap-2 text-sm text-theme-secondary">
               <input
                 type="checkbox"
                 checked={formData.isActive}
@@ -286,7 +286,7 @@ export function PriceListsPage() {
               />
               {t.priceList.isActive}
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
+            <label className="flex items-center gap-2 text-sm text-theme-secondary">
               <input
                 type="checkbox"
                 checked={formData.isNeak}
@@ -295,7 +295,7 @@ export function PriceListsPage() {
               />
               {t.priceList.isNeak}
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
+            <label className="flex items-center gap-2 text-sm text-theme-secondary">
               <input
                 type="checkbox"
                 checked={formData.isDefault}
@@ -304,7 +304,7 @@ export function PriceListsPage() {
               />
               {t.priceList.isDefault}
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
+            <label className="flex items-center gap-2 text-sm text-theme-secondary">
               <input
                 type="checkbox"
                 checked={formData.isUserLocked}

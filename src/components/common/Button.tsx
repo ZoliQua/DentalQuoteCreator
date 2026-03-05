@@ -18,10 +18,10 @@ export function Button({
 
   const variantClasses = {
     primary: 'bg-dental-600 text-white hover:bg-dental-700 focus:ring-dental-500',
-    secondary: 'bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-500',
+    secondary: 'bg-theme-btn-secondary text-theme-btn-secondary-text hover:bg-theme-btn-secondary-hover focus:ring-gray-500',
     danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
     success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500',
-    ghost: 'bg-transparent text-gray-600 hover:bg-gray-100 focus:ring-gray-500',
+    ghost: 'bg-transparent text-theme-secondary hover:bg-theme-ghost-hover focus:ring-gray-500',
   };
 
   const sizeClasses = {

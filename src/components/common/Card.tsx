@@ -12,7 +12,7 @@ export function Card({ children, className = '', onClick, hoverable = false }: C
 
   return (
     <div
-      className={`bg-white rounded-xl shadow-sm border border-gray-200 ${hoverClass} ${className}`}
+      className={`bg-theme-secondary rounded-xl shadow-sm border border-theme-primary ${hoverClass} ${className}`}
       onClick={onClick}
     >
       {children}
@@ -27,7 +27,7 @@ interface CardHeaderProps {
 
 export function CardHeader({ children, className = '' }: CardHeaderProps) {
   return (
-    <div className={`px-6 py-4 border-b border-gray-200 ${className}`}>
+    <div className={`px-6 py-4 border-b border-theme-primary ${className}`}>
       {children}
     </div>
   );
@@ -50,7 +50,7 @@ interface CardFooterProps {
 
 export function CardFooter({ children, className = '' }: CardFooterProps) {
   return (
-    <div className={`px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl ${className}`}>
+    <div className={`px-6 py-4 border-t border-theme-primary bg-theme-tertiary rounded-b-xl ${className}`}>
       {children}
     </div>
   );

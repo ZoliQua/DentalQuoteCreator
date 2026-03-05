@@ -117,7 +117,7 @@ export function PatientsPage({ showDeleted }: { showDeleted?: boolean }) {
 
   const ThSortable = ({ column, children }: { column: PatientSortColumn; children: React.ReactNode }) => (
     <th
-      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+      className="px-4 py-3 text-left text-xs font-medium text-theme-tertiary uppercase tracking-wider cursor-pointer hover:text-theme-secondary select-none"
       onClick={() => handleSort(column)}
     >
       {children}
@@ -130,7 +130,7 @@ export function PatientsPage({ showDeleted }: { showDeleted?: boolean }) {
     const isNeak = patientType.toLowerCase().includes('neak');
     return (
       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-        isNeak ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'
+        isNeak ? 'bg-blue-100 text-blue-800' : 'bg-theme-hover text-theme-secondary'
       }`}>
         {isNeak ? t.patients.tagNeak : t.patients.tagPrivate}
       </span>
@@ -179,8 +179,8 @@ export function PatientsPage({ showDeleted }: { showDeleted?: boolean }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{pageTitle}</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-theme-primary">{pageTitle}</h1>
+          <p className="text-theme-tertiary mt-1">
             {filteredPatients.length} {showDeleted ? t.common.archived : t.common.active}
           </p>
         </div>
@@ -227,7 +227,7 @@ export function PatientsPage({ showDeleted }: { showDeleted?: boolean }) {
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-theme-tertiary border-b border-theme-primary">
                 <tr>
                   <ThSortable column="patientId">{t.patients.patientDisplayId}</ThSortable>
                   <ThSortable column="name">{t.patients.name}</ThSortable>
@@ -235,15 +235,15 @@ export function PatientsPage({ showDeleted }: { showDeleted?: boolean }) {
                   <ThSortable column="phone">{t.patients.phone}</ThSortable>
                   <ThSortable column="insuranceNum">TAJ</ThSortable>
                   <ThSortable column="tag">{t.patients.tag}</ThSortable>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-theme-tertiary uppercase tracking-wider">
                     {t.common.actions}
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-theme-primary">
                 {paginatedPatients.map((patient) => (
-                  <tr key={patient.patientId} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-500 font-mono">
+                  <tr key={patient.patientId} className="hover:bg-theme-tertiary">
+                    <td className="px-4 py-3 text-sm text-theme-tertiary font-mono">
                       {patient.patientId}
                     </td>
                     <td className="px-4 py-3">
@@ -254,13 +254,13 @@ export function PatientsPage({ showDeleted }: { showDeleted?: boolean }) {
                         {formatPatientName(patient.lastName, patient.firstName, patient.title)}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
+                    <td className="px-4 py-3 text-sm text-theme-secondary">
                       {formatDate(patient.birthDate)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
+                    <td className="px-4 py-3 text-sm text-theme-secondary">
                       {patient.phone || '-'}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
+                    <td className="px-4 py-3 text-sm text-theme-secondary">
                       {patient.insuranceNum || '-'}
                     </td>
                     <td className="px-4 py-3">
@@ -283,7 +283,7 @@ export function PatientsPage({ showDeleted }: { showDeleted?: boolean }) {
                               <button
                                 onClick={() => setEditingPatient(patient)}
                                 title={t.common.edit}
-                                className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                                className="p-1.5 rounded-lg text-theme-secondary hover:bg-theme-hover transition-colors"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -297,7 +297,7 @@ export function PatientsPage({ showDeleted }: { showDeleted?: boolean }) {
                               <button
                                 onClick={() => setEditingPatient(patient)}
                                 title={t.common.edit}
-                                className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                                className="p-1.5 rounded-lg text-theme-secondary hover:bg-theme-hover transition-colors"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -327,25 +327,25 @@ export function PatientsPage({ showDeleted }: { showDeleted?: boolean }) {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-              <div className="text-sm text-gray-500">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-theme-primary">
+              <div className="text-sm text-theme-tertiary">
                 {(currentPage - 1) * perPage + 1}–{Math.min(currentPage * perPage, filteredPatients.length)} / {filteredPatients.length}
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1 rounded border text-sm disabled:opacity-40 hover:bg-gray-50"
+                  className="px-3 py-1 rounded border text-sm disabled:opacity-40 hover:bg-theme-tertiary"
                 >
                   &laquo;
                 </button>
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-theme-secondary">
                   {currentPage} / {totalPages}
                 </span>
                 <button
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="px-3 py-1 rounded border text-sm disabled:opacity-40 hover:bg-gray-50"
+                  className="px-3 py-1 rounded border text-sm disabled:opacity-40 hover:bg-theme-tertiary"
                 >
                   &raquo;
                 </button>
@@ -642,13 +642,13 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
         {/* Row 1: Title, Last Name, First Name */}
         <div className="flex gap-4">
           <div className="w-20 shrink-0 min-w-0">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
               {t.patients.titleLabel}
             </label>
             <select
               value={formData.title || ''}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full min-w-0 px-1 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300 text-sm"
+              className="w-full min-w-0 px-1 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary text-sm"
             >
               {titleOptions.map((v) => (
                 <option key={v} value={v}>{v || '—'}</option>
@@ -700,7 +700,7 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
         {/* Row 3: Birth Date, Birth Place */}
         <div className="grid grid-cols-2 gap-4">
           <div className="w-full">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
               {t.patients.birthDate}
               <span className="text-red-500 ml-1">*</span>
             </label>
@@ -710,7 +710,7 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
                 onChange={(e) => handleBirthDateTextChange(e.target.value)}
                 placeholder={getDatePlaceholder()}
                 className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors ${
-                  errors.birthDate ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
+                  errors.birthDate ? 'border-red-500 focus:ring-red-500' : 'border-theme-secondary'
                 }`}
               />
               <input
@@ -727,7 +727,7 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
                 tabIndex={-1}
               />
               <svg
-                className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -765,7 +765,7 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
             ]}
           />
           <div className="w-full">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-theme-secondary mb-1">
               {t.patients.insuranceNum}
             </label>
             <div className="flex gap-1">
@@ -779,7 +779,7 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
                 className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
                   (() => {
                     const state = getTajValidationState(formData.insuranceNum || '', formData.neakDocumentType);
-                    if (state === 'empty') return 'border-gray-300 focus:ring-dental-500';
+                    if (state === 'empty') return 'border-theme-secondary focus:ring-dental-500';
                     if (state === 'incomplete') return 'border-yellow-300 bg-yellow-50 focus:ring-yellow-500';
                     if (state === 'valid') return 'border-green-500 bg-green-50 focus:ring-green-500';
                     return 'border-red-500 bg-red-50 focus:ring-red-500';
@@ -791,7 +791,7 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
                 <button
                   type="button"
                   onClick={() => setNeakModalOpen(true)}
-                  className="shrink-0 rounded-lg border border-gray-300 p-2 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
+                  className="shrink-0 rounded-lg border border-theme-secondary p-2 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
                   title={t.neak.checkButton}
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -815,16 +815,16 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
 
         {/* Address Section */}
         <div className="border-t pt-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.addressSection}</h3>
+          <h3 className="text-sm font-semibold text-theme-secondary mb-3">{t.patients.addressSection}</h3>
 
           {/* Row 4: Country + flag, Zip, City */}
           <div className="grid grid-cols-[1fr_8rem_1fr] gap-4 items-end">
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.patients.country}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.patients.country}</label>
               <div className="flex items-center gap-2">
                 {formData.isForeignAddress ? (
                   <select
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors"
+                    className="flex-1 px-3 py-2 border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors"
                     value={formData.country || ''}
                     onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                   >
@@ -837,7 +837,7 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
                   </select>
                 ) : (
                   <input
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 transition-colors"
+                    className="flex-1 px-3 py-2 border border-theme-secondary rounded-lg bg-theme-tertiary transition-colors"
                     value={countryName(formData.country)}
                     readOnly
                   />
@@ -905,16 +905,16 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
 
         {/* Contact Section */}
         <div className="border-t pt-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.contactInfo}</h3>
+          <h3 className="text-sm font-semibold text-theme-secondary mb-3">{t.patients.contactInfo}</h3>
 
           {/* Row 6: Phone, Email */}
           <div className="grid grid-cols-2 gap-4">
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.patients.phone}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.patients.phone}</label>
               <div className="flex items-center gap-2">
                 <input
                   type="tel"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors"
+                  className="flex-1 px-3 py-2 border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors"
                   value={formData.phone || (formData.isHungarianPhone ? '+36 ' : '+')}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -942,7 +942,7 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
                   className={`px-2 py-2 rounded-lg border transition-colors text-lg leading-none ${
                     formData.isHungarianPhone
                       ? 'border-green-500 bg-green-50'
-                      : 'border-gray-300 bg-gray-100 grayscale opacity-50'
+                      : 'border-theme-secondary bg-theme-hover grayscale opacity-50'
                   }`}
                   title="Magyar telefonszám"
                 >
@@ -962,7 +962,7 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
 
         {/* Billing Section */}
         <div className="border-t pt-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.billingSection}</h3>
+          <h3 className="text-sm font-semibold text-theme-secondary mb-3">{t.patients.billingSection}</h3>
           <div className="grid grid-cols-2 gap-4">
             <Input
               label={t.patients.patientVATName}
@@ -970,7 +970,7 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
               onChange={(e) => setFormData({ ...formData, patientVATName: e.target.value })}
             />
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
                 {t.patients.patientVATNumber}
               </label>
               <div className="flex gap-1">
@@ -978,14 +978,14 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
                   value={formData.patientVATNumber || ''}
                   onChange={(e) => { setFormData({ ...formData, patientVATNumber: e.target.value }); setVatResult(null); }}
                   placeholder="12345678-1-42"
-                  className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                  className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary"
                 />
                 {(formData.patientVATNumber?.replace(/\D/g, '').length ?? 0) >= 8 && (
                   <button
                     type="button"
                     onClick={handleVatCheck}
                     disabled={vatChecking}
-                    className="shrink-0 rounded-lg border border-gray-300 p-2 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors disabled:opacity-50"
+                    className="shrink-0 rounded-lg border border-theme-secondary p-2 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors disabled:opacity-50"
                     title={t.patients.vatCheckButton}
                   >
                     {vatChecking ? (
@@ -1018,7 +1018,7 @@ export function PatientFormModal({ isOpen, onClose, onSubmit, patient, title }: 
 
         {/* Patient Characteristics Section */}
         <div className="border-t pt-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">{t.patients.characteristicsSection}</h3>
+          <h3 className="text-sm font-semibold text-theme-secondary mb-3">{t.patients.characteristicsSection}</h3>
           <div className="grid grid-cols-2 gap-4">
             <Select
               label={t.patients.patientDiscount}

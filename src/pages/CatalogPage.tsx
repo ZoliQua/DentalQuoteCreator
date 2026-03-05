@@ -103,7 +103,7 @@ export function CatalogPage() {
 
   const ThSortable = ({ column, children, align }: { column: CatalogSortColumn; children: React.ReactNode; align?: string }) => (
     <th
-      className={`pb-3 font-medium cursor-pointer hover:text-gray-700 select-none ${align === 'right' ? 'text-right' : 'text-left'}`}
+      className={`pb-3 font-medium cursor-pointer hover:text-theme-secondary select-none ${align === 'right' ? 'text-right' : 'text-left'}`}
       onClick={() => handleSort(column)}
     >
       {children}
@@ -390,7 +390,7 @@ export function CatalogPage() {
             ]}
             className="w-64"
           />
-          <p className="text-gray-500">
+          <p className="text-theme-tertiary">
             {isNeakPriceList ? (
               <>
                 {neakCatalog.filter(i => i.isActive && !i.isDeleted && priceListCategoryIds.has(i.catalogCategoryId)).length} {t.common.active}, {neakCatalog.filter(i => !i.isActive && !i.isDeleted && priceListCategoryIds.has(i.catalogCategoryId)).length} {t.catalog.inactiveItems}
@@ -445,7 +445,7 @@ export function CatalogPage() {
           <button
             onClick={() => { setShowInactive(false); setShowDeleted(false); }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              !showInactive && !showDeleted ? 'bg-dental-100 text-dental-700' : 'text-gray-600 hover:bg-gray-100'
+              !showInactive && !showDeleted ? 'bg-dental-100 text-dental-700' : 'text-theme-secondary hover:bg-theme-hover'
             }`}
           >
             {t.common.active}
@@ -454,7 +454,7 @@ export function CatalogPage() {
           <button
             onClick={() => { setShowInactive(true); setShowDeleted(false); }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              showInactive && !showDeleted ? 'bg-dental-100 text-dental-700' : 'text-gray-600 hover:bg-gray-100'
+              showInactive && !showDeleted ? 'bg-dental-100 text-dental-700' : 'text-theme-secondary hover:bg-theme-hover'
             }`}
           >
             {t.common.inactive}
@@ -464,7 +464,7 @@ export function CatalogPage() {
           <button
             onClick={() => { setShowDeleted(true); setShowInactive(false); }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              showDeleted ? 'bg-red-100 text-red-700' : 'text-gray-600 hover:bg-gray-100'
+              showDeleted ? 'bg-red-100 text-red-700' : 'text-theme-secondary hover:bg-theme-hover'
             }`}
           >
             {t.common.deleted}
@@ -507,7 +507,7 @@ export function CatalogPage() {
               <Card key={category}>
                 <CardContent>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">{getCategoryNameById(category, appLanguage)}</h3>
+                    <h3 className="text-lg font-semibold text-theme-primary">{getCategoryNameById(category, appLanguage)}</h3>
                     {!isNeakPriceList && hasPermission('catalog.create') && (
                     <Button
                       size="sm"
@@ -522,7 +522,7 @@ export function CatalogPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="text-left text-sm text-gray-500 border-b">
+                      <tr className="text-left text-sm text-theme-tertiary border-b">
                         <ThSortable column="catalogCode">{t.catalog.code}</ThSortable>
                         <ThSortable column="catalogName">{t.catalog.name}</ThSortable>
                         <ThSortable column="catalogUnit">{t.catalog.unit}</ThSortable>
@@ -547,15 +547,15 @@ export function CatalogPage() {
                         <tr key={item.catalogItemId} className="border-b last:border-0">
                           <td className="py-3 font-mono text-sm">{formatCode(item)}</td>
                           <td className="py-3">
-                            <span className={!item.isActive ? 'text-gray-400 line-through' : ''}>
+                            <span className={!item.isActive ? 'text-theme-muted line-through' : ''}>
                               {getCatalogDisplayName(item, appLanguage)}
                             </span>
                           </td>
-                          <td className="py-3 text-gray-500">{item.catalogUnit}</td>
+                          <td className="py-3 text-theme-tertiary">{item.catalogUnit}</td>
                           {isNeakPriceList ? (
                             <>
                               <td className="py-3 text-right font-medium">{item.neakPoints ?? 0}</td>
-                              <td className="py-3 text-right text-gray-600">{item.neakMinimumTimeMin ?? 0}</td>
+                              <td className="py-3 text-right text-theme-secondary">{item.neakMinimumTimeMin ?? 0}</td>
                             </>
                           ) : (
                             <>
@@ -612,7 +612,7 @@ export function CatalogPage() {
                               {isNeakPriceList ? (
                                 <>
                                   {hasPermission('catalog.update') && (
-                                    <IconBtn onClick={() => setEditingItem(item)} title={t.common.edit} className="text-gray-600 hover:bg-gray-100">
+                                    <IconBtn onClick={() => setEditingItem(item)} title={t.common.edit} className="text-theme-secondary hover:bg-theme-hover">
                                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                       </svg>
@@ -645,7 +645,7 @@ export function CatalogPage() {
                               ) : (
                                 <>
                                   {hasPermission('catalog.update') && (
-                                    <IconBtn onClick={() => setEditingItem(item)} title={t.common.edit} className="text-gray-600 hover:bg-gray-100">
+                                    <IconBtn onClick={() => setEditingItem(item)} title={t.common.edit} className="text-theme-secondary hover:bg-theme-hover">
                                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                       </svg>
@@ -680,7 +680,7 @@ export function CatalogPage() {
                         </tr>
                       ))}
                       {inlineItem && (
-                        <tr className="border-b last:border-0 bg-gray-50">
+                        <tr className="border-b last:border-0 bg-theme-tertiary">
                           <td className="py-3 font-mono text-sm">
                             {(() => {
                               const pfx = prefixLookup.byId[inlineItem.catalogCategoryId as string] || '';
@@ -694,7 +694,7 @@ export function CatalogPage() {
                               onChange={(e) =>
                                 updateInlineItem(category, { catalogName: e.target.value })
                               }
-                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-dental-500 focus:ring-dental-500"
+                              className="w-full rounded-md border border-theme-secondary px-2 py-1 text-sm focus:border-dental-500 focus:ring-dental-500"
                               placeholder="Megnevezés"
                             />
                           </td>
@@ -706,7 +706,7 @@ export function CatalogPage() {
                                   catalogUnit: e.target.value as CatalogItemFormData['catalogUnit'],
                                 })
                               }
-                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-dental-500 focus:ring-dental-500"
+                              className="w-full rounded-md border border-theme-secondary px-2 py-1 text-sm focus:border-dental-500 focus:ring-dental-500"
                             >
                               {CATALOG_UNITS.map((unit) => (
                                 <option key={unit} value={unit}>
@@ -725,7 +725,7 @@ export function CatalogPage() {
                                   catalogPrice: Number(e.target.value) || 0,
                                 })
                               }
-                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-right focus:border-dental-500 focus:ring-dental-500"
+                              className="w-full rounded-md border border-theme-secondary px-2 py-1 text-sm text-right focus:border-dental-500 focus:ring-dental-500"
                               placeholder="Ár"
                             />
                           </td>
@@ -739,7 +739,7 @@ export function CatalogPage() {
                                   catalogTechnicalPrice: Number(e.target.value) || 0,
                                 })
                               }
-                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm text-right focus:border-dental-500 focus:ring-dental-500"
+                              className="w-full rounded-md border border-theme-secondary px-2 py-1 text-sm text-right focus:border-dental-500 focus:ring-dental-500"
                               placeholder={t.catalog.technicalPrice}
                             />
                           </td>
@@ -1037,7 +1037,7 @@ function CatalogItemFormModal({
                 onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                 className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
               />
-              <label htmlFor="isActiveNeak" className="text-sm text-gray-700">
+              <label htmlFor="isActiveNeak" className="text-sm text-theme-secondary">
                 Aktív (megjelenik az árlistában)
               </label>
             </div>
@@ -1094,7 +1094,7 @@ function CatalogItemFormModal({
             <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
               <div className="md:col-span-5">
                 <div className="w-full">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-theme-secondary mb-1">
                     {t.catalog.price}
                     <span className="text-red-500 ml-1">*</span>
                   </label>
@@ -1117,13 +1117,13 @@ function CatalogItemFormModal({
                         setCatalogPriceInput(formatGroupedNumber(next));
                         setFormData({ ...formData, catalogPrice: next });
                       }}
-                      className="w-full px-3 py-2 pr-10 text-right tabular-nums border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+                      className="w-full px-3 py-2 pr-10 text-right tabular-nums border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary"
                       required
                     />
                     <div className="absolute inset-y-0 right-1 flex flex-col justify-center gap-0.5">
                       <button
                         type="button"
-                        className="h-4 w-6 rounded text-gray-500 hover:bg-gray-100"
+                        className="h-4 w-6 rounded text-theme-tertiary hover:bg-theme-hover"
                         onClick={() => {
                           const step = formData.catalogPriceCurrency === 'HUF' ? 1000 : 10;
                           const next = Math.max(0, formData.catalogPrice + step);
@@ -1138,7 +1138,7 @@ function CatalogItemFormModal({
                       </button>
                       <button
                         type="button"
-                        className="h-4 w-6 rounded text-gray-500 hover:bg-gray-100"
+                        className="h-4 w-6 rounded text-theme-tertiary hover:bg-theme-hover"
                         onClick={() => {
                           const step = formData.catalogPriceCurrency === 'HUF' ? 1000 : 10;
                           const next = Math.max(0, formData.catalogPrice - step);
@@ -1214,7 +1214,7 @@ function CatalogItemFormModal({
             />
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-theme-secondary mb-2">
                 {t.catalog.applicability}
               </label>
               <div className="flex flex-wrap gap-4">
@@ -1229,7 +1229,7 @@ function CatalogItemFormModal({
                     : formData.isQuadrant ? 'quadrant'
                     : 'tooth';
                   return (
-                    <label key={opt.value} className="flex items-center gap-2 text-sm text-gray-700">
+                    <label key={opt.value} className="flex items-center gap-2 text-sm text-theme-secondary">
                       <input
                         type="radio"
                         name="applicability"
@@ -1251,7 +1251,7 @@ function CatalogItemFormModal({
 
             {formData.isArch && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-theme-secondary mb-1">
                   {t.catalog.maxTeethPerArch ?? 'Max fog / állcsont'}
                 </label>
                 <input
@@ -1261,16 +1261,16 @@ function CatalogItemFormModal({
                   min={1}
                   max={14}
                   placeholder="—"
-                  className="w-24 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500"
+                  className="w-24 px-3 py-2 text-sm border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-theme-secondary mb-2">
                 {t.catalog.restrictions ?? 'Korlátozás'}
               </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
+              <label className="flex items-center gap-2 text-sm text-theme-secondary">
                 <input
                   type="checkbox"
                   checked={formData.milkToothOnly ?? false}
@@ -1282,7 +1282,7 @@ function CatalogItemFormModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-theme-secondary mb-1">
                 {t.catalog.allowedTeeth ?? 'Engedélyezett fogak'}
               </label>
               <input
@@ -1298,7 +1298,7 @@ function CatalogItemFormModal({
                   }
                 }}
                 placeholder="14, 15, 24, 25, ..."
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500"
+                className="w-full px-3 py-2 text-sm border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500"
               />
             </div>
 
@@ -1310,7 +1310,7 @@ function CatalogItemFormModal({
                 onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                 className="w-4 h-4 text-dental-600 rounded focus:ring-dental-500"
               />
-              <label htmlFor="isActive" className="text-sm text-gray-700">
+              <label htmlFor="isActive" className="text-sm text-theme-secondary">
                 Aktív (megjelenik az árlistában)
               </label>
             </div>

@@ -97,8 +97,8 @@ function SidebarCards({
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2 mb-3 pb-3 border-b">
-            <span className="text-sm text-gray-500">{t.quotes.quoteValidity}:</span>
-            <span className="text-base font-semibold text-gray-900">
+            <span className="text-sm text-theme-tertiary">{t.quotes.quoteValidity}:</span>
+            <span className="text-base font-semibold text-theme-primary">
               {formatDate(quote.validUntil)}
             </span>
             {(() => {
@@ -106,13 +106,13 @@ function SidebarCards({
               const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00');
               const diff = Math.round((valid.getTime() - today.getTime()) / 86400000);
               return diff > 0
-                ? <span className="text-xs text-gray-500">({diff} {t.quotes.quoteValidityDays})</span>
+                ? <span className="text-xs text-theme-tertiary">({diff} {t.quotes.quoteValidityDays})</span>
                 : <span className="text-xs text-red-500 font-medium">({t.quotes.quoteValidityExpired})</span>;
             })()}
             {quote.quoteStatus === 'draft' && (
             <button
               onClick={onEditValidUntil}
-              className="p-1 text-gray-400 hover:text-dental-600 transition-colors"
+              className="p-1 text-theme-muted hover:text-dental-600 transition-colors"
               title={t.common.edit}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -123,11 +123,11 @@ function SidebarCards({
           </div>
           {quote.isDeleted ? (
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">{t.quotes.acceptanceDeleted}</span>
+              <span className="text-sm text-theme-secondary">{t.quotes.acceptanceDeleted}</span>
               <button
                 type="button"
                 onClick={() => restoreQuote(quote.quoteId)}
-                className="rounded-md border border-gray-200 p-1.5 text-green-600 hover:bg-green-50 transition-colors"
+                className="rounded-md border border-theme-primary p-1.5 text-green-600 hover:bg-green-50 transition-colors"
                 title={t.quotes.restoreQuote}
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -138,7 +138,7 @@ function SidebarCards({
             </div>
           ) : quote.quoteStatus === 'draft' ? (
             <div>
-              <p className="text-sm text-gray-600 mb-3">{t.quotes.acceptanceDraft}</p>
+              <p className="text-sm text-theme-secondary mb-3">{t.quotes.acceptanceDraft}</p>
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={() => closeQuote(quote.quoteId)}>
                   <svg className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -161,12 +161,12 @@ function SidebarCards({
           ) : quote.quoteStatus === 'closed' ? (
             <div>
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-gray-600">{t.quotes.acceptanceClosed}</span>
+                <span className="text-sm text-theme-secondary">{t.quotes.acceptanceClosed}</span>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() => reopenQuote(quote.quoteId)}
-                    className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                    className="rounded-md border border-theme-primary p-1.5 text-theme-secondary hover:bg-theme-hover transition-colors"
                     title={t.quotes.reopen}
                   >
                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -178,7 +178,7 @@ function SidebarCards({
                     <button
                       type="button"
                       onClick={() => setDeleteConfirm(true)}
-                      className="rounded-md border border-gray-200 p-1.5 text-red-600 hover:bg-red-50 transition-colors"
+                      className="rounded-md border border-theme-primary p-1.5 text-red-600 hover:bg-red-50 transition-colors"
                       title={t.common.delete}
                     >
                       <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -208,12 +208,12 @@ function SidebarCards({
           ) : quote.quoteStatus === 'started' ? (
             <div>
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-gray-600">{t.quotes.acceptanceStarted}</span>
+                <span className="text-sm text-theme-secondary">{t.quotes.acceptanceStarted}</span>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() => revokeAcceptance(quote.quoteId)}
-                    className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                    className="rounded-md border border-theme-primary p-1.5 text-theme-secondary hover:bg-theme-hover transition-colors"
                     title={t.quotes.revokeAcceptance}
                   >
                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -234,12 +234,12 @@ function SidebarCards({
             </div>
           ) : quote.quoteStatus === 'rejected' ? (
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">{t.quotes.acceptanceRejected}</span>
+              <span className="text-sm text-theme-secondary">{t.quotes.acceptanceRejected}</span>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => revokeRejection(quote.quoteId)}
-                  className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                  className="rounded-md border border-theme-primary p-1.5 text-theme-secondary hover:bg-theme-hover transition-colors"
                   title={t.quotes.revokeRejection}
                 >
                   <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -251,7 +251,7 @@ function SidebarCards({
                   <button
                     type="button"
                     onClick={() => setDeleteConfirm(true)}
-                    className="rounded-md border border-gray-200 p-1.5 text-red-600 hover:bg-red-50 transition-colors"
+                    className="rounded-md border border-theme-primary p-1.5 text-red-600 hover:bg-red-50 transition-colors"
                     title={t.common.delete}
                   >
                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -271,7 +271,7 @@ function SidebarCards({
                     <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                   </svg>
                 )}
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-theme-secondary">
                   {remainingAmount <= 0 ? t.invoices.completedAndFullyInvoiced : t.quotes.acceptanceCompleted}
                 </span>
               </div>
@@ -279,7 +279,7 @@ function SidebarCards({
                 <button
                   type="button"
                   onClick={() => reopenTreatment(quote.quoteId)}
-                  className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                  className="rounded-md border border-theme-primary p-1.5 text-theme-secondary hover:bg-theme-hover transition-colors"
                   title={t.quotes.reopenTreatment}
                 >
                   <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -306,7 +306,7 @@ function SidebarCards({
               const sessionTotal = sessionItems.reduce((sum, item) => sum + item.quoteQty * item.quoteUnitPriceGross, 0);
               return (
                 <div key={sessionNum} className="flex justify-between text-sm">
-                  <span className="text-gray-500">{t.quotes.treatmentNTotal.replace('{n}', String(sessionNum))}</span>
+                  <span className="text-theme-tertiary">{t.quotes.treatmentNTotal.replace('{n}', String(sessionNum))}</span>
                   <span className="font-medium">{formatCurrency(Math.round(sessionTotal))}</span>
                 </div>
               );
@@ -314,18 +314,18 @@ function SidebarCards({
           })()}
 
           <div className="flex justify-between">
-            <span className="text-gray-600">{t.quotes.subtotal}</span>
+            <span className="text-theme-secondary">{t.quotes.subtotal}</span>
             <span className="font-medium">{formatCurrency(totals.subtotal)}</span>
           </div>
           {totals.lineDiscounts > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">{t.quotes.lineDiscounts}</span>
+              <span className="text-theme-tertiary">{t.quotes.lineDiscounts}</span>
               <span className="text-red-600">-{formatCurrency(totals.lineDiscounts)}</span>
             </div>
           )}
           {!(quote.globalDiscountValue === 0 && ['closed', 'started', 'completed'].includes(quote.quoteStatus)) && (
           <div className="pt-3 border-t">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-theme-secondary mb-2">
               {t.quotes.globalDiscount}
             </label>
             <div className="flex gap-2">
@@ -359,7 +359,7 @@ function SidebarCards({
           )}
           {totals.globalDiscount > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">{t.quotes.globalDiscount}</span>
+              <span className="text-theme-tertiary">{t.quotes.globalDiscount}</span>
               <span className="text-red-600">-{formatCurrency(totals.globalDiscount)}</span>
             </div>
           )}
@@ -374,11 +374,11 @@ function SidebarCards({
           {invoicedAmount > 0 && (
             <div className="mt-2 space-y-1 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600">{t.invoices.invoicedAmount}</span>
+                <span className="text-theme-secondary">{t.invoices.invoicedAmount}</span>
                 <span className="font-medium">{formatCurrency(invoicedAmount)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">{t.invoices.remainingAmount}</span>
+                <span className="text-theme-secondary">{t.invoices.remainingAmount}</span>
                 <span className={`font-medium ${remainingAmount <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
                   {formatCurrency(remainingAmount)}
                 </span>
@@ -395,7 +395,7 @@ function SidebarCards({
             <h3 className="font-semibold">{t.invoices.issuedInvoices}</h3>
             <button
               onClick={() => setInvoiceSortAsc((v) => !v)}
-              className="p-1 text-gray-400 hover:text-dental-600 transition-colors"
+              className="p-1 text-theme-muted hover:text-dental-600 transition-colors"
               title={invoiceSortAsc ? 'Z → A' : 'A → Z'}
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -425,11 +425,11 @@ function SidebarCards({
                   node: (
                     <div key={inv.id} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-500">{formatDate(inv.createdAt)}</span>
+                        <span className="text-theme-tertiary">{formatDate(inv.createdAt)}</span>
                         <Link to={`/invoices/${inv.id}`} className="text-dental-600 hover:text-dental-700 hover:underline font-medium">
                           {inv.szamlazzInvoiceNumber || inv.id.slice(0, 8)}
                         </Link>
-                        <span className="text-xs text-gray-400">[{typeLabel}]</span>
+                        <span className="text-xs text-theme-muted">[{typeLabel}]</span>
                         {inv.status === 'storno' && (
                           <svg className="h-4 w-4 text-red-500 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="10" />
@@ -438,7 +438,7 @@ function SidebarCards({
                           </svg>
                         )}
                       </div>
-                      <span className={`font-medium ${inv.status === 'storno' ? 'text-gray-400 line-through' : ''}`}>
+                      <span className={`font-medium ${inv.status === 'storno' ? 'text-theme-muted line-through' : ''}`}>
                         {formatCurrency(inv.totalGross, inv.currency)}
                       </span>
                     </div>
@@ -450,7 +450,7 @@ function SidebarCards({
                     node: (
                       <div key={`${inv.id}-storno`} className="flex items-center justify-between text-sm py-1 border-b last:border-0 bg-red-50">
                         <div className="flex items-center gap-2">
-                          <span className="text-gray-500">{formatDate(inv.createdAt)}</span>
+                          <span className="text-theme-tertiary">{formatDate(inv.createdAt)}</span>
                           <span className="text-red-600 font-medium">{inv.stornoInvoiceNumber}</span>
                           <span className="text-xs text-red-400">[{t.invoices.invoiceTypeStorno}]</span>
                         </div>
@@ -465,11 +465,11 @@ function SidebarCards({
             })()}
             <div className="pt-2 space-y-1">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">{t.invoices.invoicedAmount}</span>
+                <span className="text-theme-secondary">{t.invoices.invoicedAmount}</span>
                 <span className="font-medium">{formatCurrency(invoicedAmount)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">{t.invoices.remainingAmount}</span>
+                <span className="text-theme-secondary">{t.invoices.remainingAmount}</span>
                 <span className={`font-semibold ${remainingAmount <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
                   {formatCurrency(remainingAmount)}
                 </span>
@@ -1307,7 +1307,7 @@ export function VisualQuoteEditorPage() {
   if (!patient || !quote) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-gray-900">{t.quotes.notFound}</h2>
+        <h2 className="text-xl font-semibold text-theme-primary">{t.quotes.notFound}</h2>
         <Link to="/patients" className="text-dental-600 hover:text-dental-700 mt-4 inline-block">
           {t.quotes.backToPatients}
         </Link>
@@ -1322,7 +1322,7 @@ export function VisualQuoteEditorPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+          <div className="flex items-center gap-2 text-sm text-theme-tertiary mb-2">
             <Link to="/patients" className="hover:text-dental-600">{t.patients.title}</Link>
             <span>/</span>
             <Link to={`/patients/${patient.patientId}`} className="hover:text-dental-600">
@@ -1337,11 +1337,11 @@ export function VisualQuoteEditorPage() {
                 <input
                   value={quote.quoteName}
                   onChange={(e) => editQuote(quote.quoteId, { quoteName: e.target.value })}
-                  className="text-2xl font-bold text-gray-900 bg-transparent border-b border-dashed border-gray-300 focus:border-dental-500 focus:outline-none w-64"
+                  className="text-2xl font-bold text-theme-primary bg-transparent border-b border-dashed border-theme-secondary focus:border-dental-500 focus:outline-none w-64"
                   placeholder={t.quotes.quoteName}
                 />
               ) : (
-                <h1 className="text-2xl font-bold text-gray-900">{quote.quoteName}</h1>
+                <h1 className="text-2xl font-bold text-theme-primary">{quote.quoteName}</h1>
               )}
             </div>
             <Badge variant="warning">{t.quotes.newQuoteVisual}</Badge>
@@ -1440,19 +1440,19 @@ export function VisualQuoteEditorPage() {
           {popup && (
             <div
               ref={popupRef}
-              className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-4 w-64"
+              className="absolute z-50 bg-theme-secondary border border-theme-secondary rounded-lg shadow-lg p-4 w-64"
               style={{
                 left: Math.min(popup.x - 128, (odontogramContainerRef.current?.clientWidth ?? 600) - 270),
                 top: popup.y + 8,
               }}
             >
-              <h4 className="text-sm font-semibold text-gray-900 mb-3">
+              <h4 className="text-sm font-semibold text-theme-primary mb-3">
                 {t.visualEditor.toothParams} — {popup.toothNum}
               </h4>
 
               {popup.needsSurfaces && (
                 <div className="mb-3">
-                  <p className="text-xs font-medium text-gray-600 mb-2">
+                  <p className="text-xs font-medium text-theme-secondary mb-2">
                     {t.visualEditor.selectSurfaces} (max {popup.maxSurfaces})
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -1464,7 +1464,7 @@ export function VisualQuoteEditorPage() {
                         className={`px-2 py-1 text-xs rounded-md border transition-colors ${
                           popup.selectedSurfaces.includes(surface)
                             ? 'bg-dental-500 text-white border-dental-500'
-                            : 'bg-white text-gray-700 border-gray-300 hover:border-dental-400'
+                            : 'bg-theme-secondary text-theme-secondary border-theme-secondary hover:border-dental-400'
                         }`}
                       >
                         {SURFACE_ABBREVIATIONS[surface as SurfaceName]} — {t.visualEditor.surfaces[surface as SurfaceName]}
@@ -1476,7 +1476,7 @@ export function VisualQuoteEditorPage() {
 
               {popup.needsMaterial && (
                 <div className="mb-3">
-                  <p className="text-xs font-medium text-gray-600 mb-2">
+                  <p className="text-xs font-medium text-theme-secondary mb-2">
                     {t.visualEditor.selectMaterial}
                   </p>
                   <div className="flex gap-2">
@@ -1488,7 +1488,7 @@ export function VisualQuoteEditorPage() {
                         className={`px-3 py-1 text-xs rounded-md border transition-colors ${
                           popup.selectedMaterial === material
                             ? 'bg-dental-500 text-white border-dental-500'
-                            : 'bg-white text-gray-700 border-gray-300 hover:border-dental-400'
+                            : 'bg-theme-secondary text-theme-secondary border-theme-secondary hover:border-dental-400'
                         }`}
                       >
                         {t.visualEditor.materials[material as keyof typeof t.visualEditor.materials]}
@@ -1528,7 +1528,7 @@ export function VisualQuoteEditorPage() {
               <CardContent className="space-y-3">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-4 w-4 text-theme-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                   </div>
@@ -1537,13 +1537,13 @@ export function VisualQuoteEditorPage() {
                     value={itemSearchQuery}
                     onChange={(e) => setItemSearchQuery(e.target.value)}
                     placeholder={t.quotes.searchCatalog}
-                    className="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent"
+                    className="w-full pl-9 pr-8 py-2 text-sm border border-theme-secondary rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent"
                   />
                   {itemSearchQuery && (
                     <button
                       type="button"
                       onClick={() => setItemSearchQuery('')}
-                      className="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 hover:text-gray-600"
+                      className="absolute inset-y-0 right-0 flex items-center pr-2 text-theme-muted hover:text-theme-secondary"
                     >
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1562,7 +1562,7 @@ export function VisualQuoteEditorPage() {
                 />
                 <div className="max-h-80 overflow-y-auto space-y-1">
                   {filteredCatalogItems.length === 0 ? (
-                    <p className="text-center text-gray-500 py-4 text-sm">{t.common.noResults}</p>
+                    <p className="text-center text-theme-tertiary py-4 text-sm">{t.common.noResults}</p>
                   ) : (
                     filteredCatalogItems.map((item) => {
                       // GYER category items require milk teeth on the odontogram
@@ -1581,17 +1581,17 @@ export function VisualQuoteEditorPage() {
                         }}
                         className={`w-full text-left p-2 rounded-lg border text-sm transition-colors ${
                           isGyerDisabled
-                            ? 'opacity-40 cursor-not-allowed border-gray-200'
+                            ? 'opacity-40 cursor-not-allowed border-theme-primary'
                             : activeCatalogItem?.catalogItemId === item.catalogItemId
                             ? 'border-dental-400 bg-dental-50'
-                            : 'border-gray-200 hover:bg-gray-50'
+                            : 'border-theme-primary hover:bg-theme-tertiary'
                         }`}
                         title={isGyerDisabled ? (t.visualEditor.requiresMilkTeeth ?? 'Tejfogazat szükséges') : undefined}
                       >
                         <div className="flex items-center justify-between">
                           <div className="min-w-0 flex-1">
-                            <p className="font-medium text-gray-900 truncate">{getCatalogDisplayName(item, appLanguage)}</p>
-                            <p className="text-xs text-gray-500">{formatCode(item)}</p>
+                            <p className="font-medium text-theme-primary truncate">{getCatalogDisplayName(item, appLanguage)}</p>
+                            <p className="text-xs text-theme-tertiary">{formatCode(item)}</p>
                           </div>
                           <div className="text-right shrink-0 ml-2">
                             <p className="font-semibold text-sm">{formatCurrency(item.catalogPrice)}</p>
@@ -1637,13 +1637,13 @@ export function VisualQuoteEditorPage() {
       <Card>
         <CardHeader className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{t.visualEditor.mergedItems}</h2>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-theme-tertiary">
             {t.quotes.itemsCount.replace('{count}', String(quote.items.length))}
           </span>
         </CardHeader>
         <CardContent>
           {mergedItems.length === 0 ? (
-            <p className="text-gray-500 text-sm py-4 text-center">
+            <p className="text-theme-tertiary text-sm py-4 text-center">
               {t.quotes.noItems}
             </p>
           ) : (
@@ -1659,7 +1659,7 @@ export function VisualQuoteEditorPage() {
                     onDrop={() => handleSessionDrop(sessionNum)}
                   >
                     {showLabel && (
-                      <h3 className="text-sm font-semibold text-gray-600 mb-2">
+                      <h3 className="text-sm font-semibold text-theme-secondary mb-2">
                         {sessionNum}. {t.quotes.treatmentSession}
                       </h3>
                     )}
@@ -1673,7 +1673,7 @@ export function VisualQuoteEditorPage() {
                         <div
                           key={`${sessionNum}-${merged.catalogItemId}`}
                           className={`rounded-lg border transition-all ${
-                            isInvoiced ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'
+                            isInvoiced ? 'bg-blue-50 border-blue-200' : 'bg-theme-tertiary'
                           } ${
                             draggedItem?.catalogItemId === merged.catalogItemId && draggedItem?.fromSession === sessionNum ? 'opacity-50' : ''
                           }`}
@@ -1683,7 +1683,7 @@ export function VisualQuoteEditorPage() {
                         >
                           <div className="p-3 flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <span className="text-sm text-gray-500 font-mono w-6 text-right shrink-0">
+                              <span className="text-sm text-theme-tertiary font-mono w-6 text-right shrink-0">
                                 {index + 1}.
                               </span>
                               {quote.quoteStatus === 'draft' && sessionItems.length > 1 && (
@@ -1692,7 +1692,7 @@ export function VisualQuoteEditorPage() {
                                     type="button"
                                     onClick={() => handleMoveInSession(merged.catalogItemId, sessionNum, 'up')}
                                     disabled={index === 0}
-                                    className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                                    className="p-0.5 text-theme-muted hover:text-theme-secondary disabled:opacity-20 disabled:cursor-not-allowed"
                                   >
                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
@@ -1702,7 +1702,7 @@ export function VisualQuoteEditorPage() {
                                     type="button"
                                     onClick={() => handleMoveInSession(merged.catalogItemId, sessionNum, 'down')}
                                     disabled={index === sessionItems.length - 1}
-                                    className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed"
+                                    className="p-0.5 text-theme-muted hover:text-theme-secondary disabled:opacity-20 disabled:cursor-not-allowed"
                                   >
                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -1711,25 +1711,25 @@ export function VisualQuoteEditorPage() {
                                 </div>
                               )}
                               {quote.quoteStatus === 'draft' && showLabel && (
-                                <div className="text-gray-400 cursor-grab shrink-0">
+                                <div className="text-theme-muted cursor-grab shrink-0">
                                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
                                   </svg>
                                 </div>
                               )}
                               <div className="min-w-0 flex-1">
-                                <p className="font-medium text-gray-900">
+                                <p className="font-medium text-theme-primary">
                                   {catalogLookup.get(merged.catalogItemId)
                                     ? getCatalogDisplayName(catalogLookup.get(merged.catalogItemId)!, appLanguage)
                                     : merged.quoteName}
                                 </p>
                                 {merged.treatedAreaText && (
-                                  <p className="text-sm text-gray-500 truncate">{merged.treatedAreaText}</p>
+                                  <p className="text-sm text-theme-tertiary truncate">{merged.treatedAreaText}</p>
                                 )}
                               </div>
                             </div>
                             <div className="flex items-center gap-4 shrink-0">
-                              <span className="text-sm text-gray-500">
+                              <span className="text-sm text-theme-tertiary">
                                 &times;{merged.totalQty}
                               </span>
                               <span className="font-semibold w-24 text-right">
@@ -1750,7 +1750,7 @@ export function VisualQuoteEditorPage() {
                                         type="button"
                                         onClick={() => handleFullMouthQtyChange(merged.catalogItemId, -1)}
                                         disabled={merged.totalQty <= 1}
-                                        className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                        className="rounded-md border border-theme-primary p-1.5 text-theme-secondary hover:bg-theme-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                                       >
                                         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                                           <line x1="5" y1="12" x2="19" y2="12" />
@@ -1759,7 +1759,7 @@ export function VisualQuoteEditorPage() {
                                       <button
                                         type="button"
                                         onClick={() => handleFullMouthQtyChange(merged.catalogItemId, 1)}
-                                        className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                                        className="rounded-md border border-theme-primary p-1.5 text-theme-secondary hover:bg-theme-hover transition-colors"
                                       >
                                         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                                           <line x1="12" y1="5" x2="12" y2="19" />
@@ -1775,7 +1775,7 @@ export function VisualQuoteEditorPage() {
                                           expandedMergedItem === merged.catalogItemId ? null : merged.catalogItemId
                                         )
                                       }
-                                      className="rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 transition-colors"
+                                      className="rounded-md border border-theme-primary p-1.5 text-theme-secondary hover:bg-theme-hover transition-colors"
                                       title={t.visualEditor.editTeeth}
                                     >
                                       <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1787,7 +1787,7 @@ export function VisualQuoteEditorPage() {
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveMergedGroup(merged.catalogItemId)}
-                                    className="rounded-md border border-gray-200 p-1.5 text-red-600 hover:bg-red-50 transition-colors"
+                                    className="rounded-md border border-theme-primary p-1.5 text-red-600 hover:bg-red-50 transition-colors"
                                     title={t.common.delete}
                                   >
                                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -1803,7 +1803,7 @@ export function VisualQuoteEditorPage() {
 
                           {/* Expanded individual items */}
                           {expandedMergedItem === merged.catalogItemId && (
-                            <div className="border-t border-gray-200 px-3 py-2 space-y-1 bg-white rounded-b-lg">
+                            <div className="border-t border-theme-primary px-3 py-2 space-y-1 bg-theme-secondary rounded-b-lg">
                               {merged.items.flatMap((item) => {
                                 if (item.toothNum && item.toothNum.includes(',')) {
                                   return item.toothNum.split(',').map(tn => tn.trim()).map((tooth) => (
@@ -1812,9 +1812,9 @@ export function VisualQuoteEditorPage() {
                                       className="flex items-center justify-between text-sm py-1"
                                     >
                                       <div className="flex items-center gap-2">
-                                        <span className="text-gray-700">{tooth}</span>
+                                        <span className="text-theme-secondary">{tooth}</span>
                                         {item.treatedArea && (
-                                          <span className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">
+                                          <span className="text-xs bg-theme-hover px-1.5 py-0.5 rounded">
                                             {item.treatedArea}
                                           </span>
                                         )}
@@ -1841,11 +1841,11 @@ export function VisualQuoteEditorPage() {
                                     className="flex items-center justify-between text-sm py-1"
                                   >
                                     <div className="flex items-center gap-2">
-                                      <span className="text-gray-700">
+                                      <span className="text-theme-secondary">
                                         {item.toothNum || item.treatedArea || '-'}
                                       </span>
                                       {surfaceText && (
-                                        <span className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">
+                                        <span className="text-xs bg-theme-hover px-1.5 py-0.5 rounded">
                                           {surfaceText}
                                         </span>
                                       )}
@@ -1872,7 +1872,7 @@ export function VisualQuoteEditorPage() {
                         );
                       })}
                       {sessionItems.length === 0 && showLabel && (
-                        <p className="text-gray-400 text-sm py-2 text-center">{t.quotes.noItems}</p>
+                        <p className="text-theme-muted text-sm py-2 text-center">{t.quotes.noItems}</p>
                       )}
                     </div>
                   </div>
@@ -1890,7 +1890,7 @@ export function VisualQuoteEditorPage() {
             <CardContent>
               <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-gray-700">{t.quotes.doctor}:</label>
+                  <label className="text-sm font-medium text-theme-secondary">{t.quotes.doctor}:</label>
                   {quote.quoteStatus === 'draft' ? (
                     <Select
                       value={quote.doctorId || (settings.doctors.length > 0 ? settings.doctors[0].id : '')}
@@ -1902,11 +1902,11 @@ export function VisualQuoteEditorPage() {
                       className="w-44"
                     />
                   ) : (
-                    <span className="text-sm font-semibold text-gray-900">{doctorName || '-'}</span>
+                    <span className="text-sm font-semibold text-theme-primary">{doctorName || '-'}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-gray-700">{t.quotes.expectedTreatments}</label>
+                  <label className="text-sm font-medium text-theme-secondary">{t.quotes.expectedTreatments}</label>
                   {quote.quoteStatus === 'draft' ? (
                     <Select
                       value={String(quote.expectedTreatments || 1)}
@@ -1933,11 +1933,11 @@ export function VisualQuoteEditorPage() {
                       className="w-32"
                     />
                   ) : (
-                    <span className="text-sm font-semibold text-gray-900">{quote.expectedTreatments || 1} {t.quotes.treatmentSession}</span>
+                    <span className="text-sm font-semibold text-theme-primary">{quote.expectedTreatments || 1} {t.quotes.treatmentSession}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-gray-700">{t.quotes.quoteLang}</label>
+                  <label className="text-sm font-medium text-theme-secondary">{t.quotes.quoteLang}</label>
                   {quote.quoteStatus === 'draft' ? (
                     <Select
                       value={effectiveQuoteLang}
@@ -1950,7 +1950,7 @@ export function VisualQuoteEditorPage() {
                       className="w-28"
                     />
                   ) : (
-                    <span className="text-sm font-semibold text-gray-900">{effectiveQuoteLang === 'hu' ? 'Magyar' : effectiveQuoteLang === 'en' ? 'English' : 'Deutsch'}</span>
+                    <span className="text-sm font-semibold text-theme-primary">{effectiveQuoteLang === 'hu' ? 'Magyar' : effectiveQuoteLang === 'en' ? 'English' : 'Deutsch'}</span>
                   )}
                 </div>
               </div>
@@ -2018,7 +2018,7 @@ export function VisualQuoteEditorPage() {
               {[...quote.events].reverse().map((event) => (
                 <div key={event.id} className="flex items-center justify-between text-sm py-2 border-b last:border-0">
                   <div className="flex items-center gap-3">
-                    <span className="text-gray-500">{formatDateTime(event.timestamp)}</span>
+                    <span className="text-theme-tertiary">{formatDateTime(event.timestamp)}</span>
                     {event.type === 'invoice_created' ? (
                       <span className="font-medium">
                         {(() => {
@@ -2084,7 +2084,7 @@ export function VisualQuoteEditorPage() {
                       </span>
                     )}
                   </div>
-                  <span className="text-gray-500">{event.doctorName}</span>
+                  <span className="text-theme-tertiary">{event.doctorName}</span>
                 </div>
               ))}
             </div>
@@ -2102,10 +2102,10 @@ export function VisualQuoteEditorPage() {
         <div className="space-y-4">
           {/* Buyer section */}
           <div className="flex items-center justify-between border-b pb-1">
-            <h4 className="text-sm font-semibold text-gray-900">{t.invoices.buyerSection}</h4>
+            <h4 className="text-sm font-semibold text-theme-primary">{t.invoices.buyerSection}</h4>
             <div className="flex gap-1">
-              <button onClick={() => setInvoiceForm((prev) => ({ ...prev, buyerType: 'individual', buyerName: patient ? formatPatientName(patient.lastName, patient.firstName, patient.title) : prev.buyerName }))} className={`px-3 py-1 text-xs rounded-full ${invoiceForm.buyerType === 'individual' ? 'bg-dental-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.invoices.buyerTypeIndividual}</button>
-              <button onClick={() => setInvoiceForm((prev) => ({ ...prev, buyerType: 'company', buyerName: patient?.patientVATName || prev.buyerName }))} className={`px-3 py-1 text-xs rounded-full ${invoiceForm.buyerType === 'company' ? 'bg-dental-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.invoices.buyerTypeCompany}</button>
+              <button onClick={() => setInvoiceForm((prev) => ({ ...prev, buyerType: 'individual', buyerName: patient ? formatPatientName(patient.lastName, patient.firstName, patient.title) : prev.buyerName }))} className={`px-3 py-1 text-xs rounded-full ${invoiceForm.buyerType === 'individual' ? 'bg-dental-600 text-white' : 'bg-theme-hover text-theme-secondary hover:bg-theme-hover'}`}>{t.invoices.buyerTypeIndividual}</button>
+              <button onClick={() => setInvoiceForm((prev) => ({ ...prev, buyerType: 'company', buyerName: patient?.patientVATName || prev.buyerName }))} className={`px-3 py-1 text-xs rounded-full ${invoiceForm.buyerType === 'company' ? 'bg-dental-600 text-white' : 'bg-theme-hover text-theme-secondary hover:bg-theme-hover'}`}>{t.invoices.buyerTypeCompany}</button>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -2126,30 +2126,30 @@ export function VisualQuoteEditorPage() {
           )}
 
           {/* Invoice data section */}
-          <h4 className="text-sm font-semibold text-gray-900 border-b pb-1">{t.invoices.invoiceDataSection}</h4>
+          <h4 className="text-sm font-semibold text-theme-primary border-b pb-1">{t.invoices.invoiceDataSection}</h4>
           <div className="grid grid-cols-3 gap-3">
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.issueDate}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.invoices.issueDate}</label>
               <div className="relative">
-                <input value={issueDateText} onChange={(e) => { setIssueDateText(e.target.value); const parsed = parseBirthDateFromDisplay(e.target.value); if (parsed) setInvoiceForm((prev) => ({ ...prev, issueDate: parsed })); else if (!e.target.value) setInvoiceForm((prev) => ({ ...prev, issueDate: '' })); }} placeholder={getDatePlaceholder()} className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300" />
+                <input value={issueDateText} onChange={(e) => { setIssueDateText(e.target.value); const parsed = parseBirthDateFromDisplay(e.target.value); if (parsed) setInvoiceForm((prev) => ({ ...prev, issueDate: parsed })); else if (!e.target.value) setInvoiceForm((prev) => ({ ...prev, issueDate: '' })); }} placeholder={getDatePlaceholder()} className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary" />
                 <input type="date" value={invoiceForm.issueDate} onChange={(e) => { if (e.target.value) { setInvoiceForm((prev) => ({ ...prev, issueDate: e.target.value })); setIssueDateText(formatBirthDateForDisplay(e.target.value)); } }} className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer" tabIndex={-1} />
-                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               </div>
             </div>
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.fulfillmentDate}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.invoices.fulfillmentDate}</label>
               <div className="relative">
-                <input value={fulfillmentDateText} onChange={(e) => { setFulfillmentDateText(e.target.value); const parsed = parseBirthDateFromDisplay(e.target.value); if (parsed) setInvoiceForm((prev) => ({ ...prev, fulfillmentDate: parsed })); else if (!e.target.value) setInvoiceForm((prev) => ({ ...prev, fulfillmentDate: '' })); }} placeholder={getDatePlaceholder()} className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300" />
+                <input value={fulfillmentDateText} onChange={(e) => { setFulfillmentDateText(e.target.value); const parsed = parseBirthDateFromDisplay(e.target.value); if (parsed) setInvoiceForm((prev) => ({ ...prev, fulfillmentDate: parsed })); else if (!e.target.value) setInvoiceForm((prev) => ({ ...prev, fulfillmentDate: '' })); }} placeholder={getDatePlaceholder()} className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary" />
                 <input type="date" value={invoiceForm.fulfillmentDate} onChange={(e) => { if (e.target.value) { setInvoiceForm((prev) => ({ ...prev, fulfillmentDate: e.target.value })); setFulfillmentDateText(formatBirthDateForDisplay(e.target.value)); } }} className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer" tabIndex={-1} />
-                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               </div>
             </div>
             <div className="w-full">
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t.invoices.dueDate}</label>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.invoices.dueDate}</label>
               <div className="relative">
-                <input value={dueDateText} onChange={(e) => { setDueDateText(e.target.value); const parsed = parseBirthDateFromDisplay(e.target.value); if (parsed) setInvoiceForm((prev) => ({ ...prev, dueDate: parsed })); else if (!e.target.value) setInvoiceForm((prev) => ({ ...prev, dueDate: '' })); }} placeholder={getDatePlaceholder()} className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300" />
+                <input value={dueDateText} onChange={(e) => { setDueDateText(e.target.value); const parsed = parseBirthDateFromDisplay(e.target.value); if (parsed) setInvoiceForm((prev) => ({ ...prev, dueDate: parsed })); else if (!e.target.value) setInvoiceForm((prev) => ({ ...prev, dueDate: '' })); }} placeholder={getDatePlaceholder()} className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary" />
                 <input type="date" value={invoiceForm.dueDate} onChange={(e) => { if (e.target.value) { setInvoiceForm((prev) => ({ ...prev, dueDate: e.target.value })); setDueDateText(formatBirthDateForDisplay(e.target.value)); } }} className="absolute inset-y-0 right-0 w-10 opacity-0 cursor-pointer" tabIndex={-1} />
-                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               </div>
             </div>
           </div>
@@ -2184,9 +2184,9 @@ export function VisualQuoteEditorPage() {
 
           {/* Invoice items (read-only qty/price) */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">{t.invoices.items}</h3>
+            <h3 className="text-sm font-semibold text-theme-secondary mb-2">{t.invoices.items}</h3>
             {invoiceItems.length === 0 && invoiceType !== 'advance' ? (
-              <p className="text-sm text-gray-400">{t.quotes.noItems}</p>
+              <p className="text-sm text-theme-muted">{t.quotes.noItems}</p>
             ) : (
               <div className="space-y-2">
                 {invoiceItems.map((item, idx) => {
@@ -2197,7 +2197,7 @@ export function VisualQuoteEditorPage() {
                   return (
                     <div
                       key={idx}
-                      className={`flex items-center gap-2 rounded border border-gray-200 p-2 text-sm ${
+                      className={`flex items-center gap-2 rounded border border-theme-primary p-2 text-sm ${
                         invoiceDraggedIndex === idx ? 'opacity-50' : ''
                       } ${invoiceDragOverIndex === idx ? 'border-dental-500 border-2' : ''}`}
                       draggable
@@ -2216,20 +2216,20 @@ export function VisualQuoteEditorPage() {
                         setInvoiceDragOverIndex(null);
                       }}
                     >
-                      <div className="text-gray-400 cursor-grab">
+                      <div className="text-theme-muted cursor-grab">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" /></svg>
                       </div>
-                      <span className="text-gray-500 w-6 text-center">{idx + 1}.</span>
+                      <span className="text-theme-tertiary w-6 text-center">{idx + 1}.</span>
                       <span className="flex-1">
                         <span className="font-medium">{item.name}</span>
                         {item.comment && (
-                          <span className="block text-xs text-gray-400">{item.comment}</span>
+                          <span className="block text-xs text-theme-muted">{item.comment}</span>
                         )}
                       </span>
-                      <span className="text-gray-600 w-10 text-center">{item.qty}</span>
-                      <span className="text-gray-500">{item.unit}</span>
-                      <span className="text-gray-600 w-24 text-right">{formatCurrency(item.unitPriceNet)}</span>
-                      <span className="text-gray-500 w-12 text-center">{typeof item.vatRate === 'number' ? `${item.vatRate}%` : item.vatRate}</span>
+                      <span className="text-theme-secondary w-10 text-center">{item.qty}</span>
+                      <span className="text-theme-tertiary">{item.unit}</span>
+                      <span className="text-theme-secondary w-24 text-right">{formatCurrency(item.unitPriceNet)}</span>
+                      <span className="text-theme-tertiary w-12 text-center">{typeof item.vatRate === 'number' ? `${item.vatRate}%` : item.vatRate}</span>
                       <span className="w-24 text-right font-semibold">{formatCurrency(gross)}</span>
                       <button type="button" onClick={() => setInvoiceItems((prev) => prev.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700">&times;</button>
                     </div>
@@ -2239,7 +2239,7 @@ export function VisualQuoteEditorPage() {
                 {/* Advance invoice: editable advance item */}
                 {invoiceType === 'advance' && (
                   <div className="flex items-center gap-2 rounded border border-amber-300 bg-amber-50 p-2 text-sm">
-                    <span className="text-gray-500 w-6 text-center">{invoiceItems.length + 1}.</span>
+                    <span className="text-theme-tertiary w-6 text-center">{invoiceItems.length + 1}.</span>
                     <span className="flex-1 font-medium text-amber-800">{t.invoices.advanceItemName}</span>
                     <Input
                       type="number"
@@ -2250,7 +2250,7 @@ export function VisualQuoteEditorPage() {
                       step={1000}
                       className="w-28"
                     />
-                    <span className="text-gray-500">{quote.currency}</span>
+                    <span className="text-theme-tertiary">{quote.currency}</span>
                   </div>
                 )}
 
@@ -2261,7 +2261,7 @@ export function VisualQuoteEditorPage() {
                     .reduce((sum, inv) => sum + (inv.totalGross || 0), 0);
                   return (
                     <div className="flex items-center gap-2 rounded border border-blue-300 bg-blue-50 p-2 text-sm">
-                      <span className="text-gray-500 w-6 text-center">{invoiceItems.length + 1}.</span>
+                      <span className="text-theme-tertiary w-6 text-center">{invoiceItems.length + 1}.</span>
                       <span className="flex-1 font-medium text-blue-800">{t.invoices.advanceItemName}</span>
                       <span className="w-24 text-right font-semibold text-red-600">-{formatCurrency(advanceTotal)}</span>
                     </div>
@@ -2272,7 +2272,7 @@ export function VisualQuoteEditorPage() {
           </div>
 
           {/* Summary section */}
-          <h4 className="text-sm font-semibold text-gray-900 border-b pb-1">{t.invoices.summarySection}</h4>
+          <h4 className="text-sm font-semibold text-theme-primary border-b pb-1">{t.invoices.summarySection}</h4>
           {(() => {
             const itemsGross = invoiceItems.reduce((sum, it) => {
               const net = it.qty * it.unitPriceNet;
@@ -2290,13 +2290,13 @@ export function VisualQuoteEditorPage() {
             }
             const currentRemaining = Math.max(0, totals.total - invoicedAmount - currentTotal);
             return (
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm space-y-1">
+              <div className="rounded-lg border border-theme-primary bg-theme-tertiary p-3 text-sm space-y-1">
                 <div className="flex justify-between">
                   <span className="font-medium">{t.invoices.totalAmount}:</span>
                   <span className="font-semibold">{formatCurrency(currentTotal, quote.currency)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">{t.invoices.quoteRemainingPart}:</span>
+                  <span className="text-theme-secondary">{t.invoices.quoteRemainingPart}:</span>
                   <span className={`font-medium ${currentRemaining <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
                     {currentRemaining <= 0 ? t.invoices.noneRemaining : formatCurrency(currentRemaining, quote.currency)}
                   </span>
@@ -2306,7 +2306,7 @@ export function VisualQuoteEditorPage() {
           })()}
 
           {invoicePreviewTotals && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+            <div className="rounded-lg border border-theme-primary bg-theme-tertiary p-3 text-sm">
               <p>{t.invoices.netTotal}: {formatCurrency(invoicePreviewTotals.net, quote.currency)}</p>
               <p>{t.invoices.vatTotal}: {formatCurrency(invoicePreviewTotals.vat, quote.currency)}</p>
               <p className="font-semibold">{t.invoices.grossTotal}: {formatCurrency(invoicePreviewTotals.gross, quote.currency)}</p>
@@ -2318,7 +2318,7 @@ export function VisualQuoteEditorPage() {
           )}
 
           <details>
-            <summary className="cursor-pointer text-sm font-medium text-gray-700">{t.invoices.xmlPreview}</summary>
+            <summary className="cursor-pointer text-sm font-medium text-theme-secondary">{t.invoices.xmlPreview}</summary>
             <pre className="mt-2 max-h-56 overflow-auto rounded bg-gray-900 p-3 text-xs text-gray-100">{invoicePreviewXml || t.invoices.xmlNotAvailable}</pre>
           </details>
 
@@ -2339,7 +2339,7 @@ export function VisualQuoteEditorPage() {
         size="sm"
       >
         <div className="space-y-4">
-          <p className="text-sm text-gray-700">{invoiceDisabledReason}</p>
+          <p className="text-sm text-theme-secondary">{invoiceDisabledReason}</p>
           <div className="flex justify-end">
             <Button variant="secondary" onClick={() => setInvoiceDisabledModalOpen(false)}>{t.common.close}</Button>
           </div>
@@ -2365,7 +2365,7 @@ export function VisualQuoteEditorPage() {
         size="sm"
       >
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">{t.quotes.quoteValidityDescription}</p>
+          <p className="text-sm text-theme-secondary">{t.quotes.quoteValidityDescription}</p>
           <div className="relative">
             <input
               value={validUntilText}
@@ -2377,7 +2377,7 @@ export function VisualQuoteEditorPage() {
                 }
               }}
               placeholder={getDatePlaceholder()}
-              className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-gray-300"
+              className="w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-dental-500 focus:border-transparent transition-colors border-theme-secondary"
             />
             <input
               type="date"
@@ -2392,7 +2392,7 @@ export function VisualQuoteEditorPage() {
               tabIndex={-1}
             />
             <svg
-              className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none"
+              className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-theme-muted pointer-events-none"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -2407,7 +2407,7 @@ export function VisualQuoteEditorPage() {
             </svg>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">{t.quotes.quoteValidityAdjust}</span>
+            <span className="text-sm text-theme-secondary">{t.quotes.quoteValidityAdjust}</span>
             {[30, 60, 90, 120].map((days) => {
               const newDate = new Date();
               newDate.setDate(newDate.getDate() + days);
@@ -2419,7 +2419,7 @@ export function VisualQuoteEditorPage() {
                     editQuote(quote.quoteId, { validUntil: isoDate });
                     setValidUntilText(formatBirthDateForDisplay(isoDate));
                   }}
-                  className="px-3 py-1 text-sm font-medium rounded-lg border border-gray-300 hover:bg-dental-50 hover:border-dental-400 transition-colors"
+                  className="px-3 py-1 text-sm font-medium rounded-lg border border-theme-secondary hover:bg-dental-50 hover:border-dental-400 transition-colors"
                 >
                   {days}
                 </button>
@@ -2436,12 +2436,12 @@ export function VisualQuoteEditorPage() {
 
       {pdfLoading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl px-8 py-6 shadow-xl flex flex-col items-center gap-4">
+          <div className="bg-white dark:bg-gray-950 border border-gray-300 dark:border-gray-600 rounded-xl px-8 py-6 shadow-xl flex flex-col items-center gap-4">
             <svg className="animate-spin h-8 w-8 text-dental-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            <p className="text-gray-700 font-medium text-center">{t.quotes.pdfGenerating}</p>
+            <p className="text-theme-secondary font-medium text-center">{t.quotes.pdfGenerating}</p>
           </div>
         </div>
       )}
