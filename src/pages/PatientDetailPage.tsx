@@ -57,6 +57,9 @@ import {
 import type { OdontogramState, OdontogramTimelineEntry } from '../modules/odontogram/types';
 import type { Patient, PatientFormData, Country, Appointment } from '../types';
 import { useAppointments } from '../hooks/useAppointments';
+import { useSms } from '../hooks/useSms';
+import { SmsSendModal } from '../components/sms/SmsSendModal';
+import { SmsHistoryTable } from '../components/sms/SmsHistoryTable';
 import { NeakCheckModal } from '../modules/neak/NeakCheckModal';
 import { checkJogviszony, saveCheck } from '../modules/neak';
 
@@ -229,6 +232,13 @@ export function PatientDetailPage() {
   const [stornoLoading, setStornoLoading] = useState(false);
   const [stornoError, setStornoError] = useState<string | null>(null);
   const [quoteTypeModalOpen, setQuoteTypeModalOpen] = useState(false);
+  const [smsModalOpen, setSmsModalOpen] = useState(false);
+  const { checkEnabled: checkSmsEnabled } = useSms();
+  const [smsEnabled, setSmsEnabled] = useState(false);
+
+  useEffect(() => {
+    checkSmsEnabled().then(setSmsEnabled);
+  }, [checkSmsEnabled]);
 
   const patient = patientId ? getPatient(patientId) : undefined;
   const quotes = patientId ? getQuotesByPatient(patientId) : [];
@@ -667,7 +677,21 @@ export function PatientDetailPage() {
             {patient.phone && (
               <div>
                 <label className="text-sm text-theme-tertiary">{t.patients.phone}</label>
-                <p className="font-medium">{patient.phone}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium">{patient.phone}</p>
+                  {smsEnabled && hasPermission('sms.send') && (
+                    <button
+                      onClick={() => setSmsModalOpen(true)}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-dental-700 dark:text-dental-300 bg-dental-50 dark:bg-dental-900/30 rounded hover:bg-dental-100 dark:hover:bg-dental-900/50 transition-colors"
+                      title={t.sms.sendSmsToPatient}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                      </svg>
+                      SMS
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             {patient.email && (
@@ -1063,8 +1087,36 @@ export function PatientDetailPage() {
               )}
             </>
           )}
+
+          {/* SMS History per patient */}
+          {smsEnabled && hasPermission('sms.history') && (
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                  </svg>
+                  {t.sms.patientSmsHistory}
+                </h2>
+              </CardHeader>
+              <CardContent>
+                <SmsHistoryTable patientId={patient.patientId} compact />
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
+
+      {/* SMS Send Modal */}
+      <SmsSendModal
+        isOpen={smsModalOpen}
+        onClose={() => setSmsModalOpen(false)}
+        patientId={patient.patientId}
+        patientName={formatPatientName(patient.lastName, patient.firstName, patient.title)}
+        phoneNumber={patient.phone || undefined}
+        isHungarianPhone={patient.isHungarianPhone ?? true}
+        context="patient_detail"
+      />
 
       <TimelineEditorModal
         isOpen={editorOpen}

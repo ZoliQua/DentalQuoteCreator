@@ -19,7 +19,7 @@ export function PageTabBar({ tabs }: PageTabBarProps) {
         <NavLink
           key={tab.key}
           to={tab.to}
-          end={tab.to === '/data' || tab.to === '/settings' || tab.to === '/catalog'}
+          end={tab.to === '/data' || tab.to === '/settings' || tab.to === '/catalog' || tab.to === '/notifications'}
           className={({ isActive }) =>
             `flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
               isActive

@@ -5,6 +5,9 @@ import { promisify } from 'util';
 import { Prisma, UserRole } from '@prisma/client';
 import { prisma } from './db.js';
 import rruleLib from 'rrule';
+import Twilio from 'twilio';
+import nodemailer from 'nodemailer';
+import { google } from 'googleapis';
 const { RRule } = rruleLib;
 
 function parseUserAgent(ua: string) {
@@ -54,6 +57,8 @@ const formatRRuleDt = (d: Date): string => {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 };
 const createChairId = (nr: number): string => `chair-${String(nr).padStart(2, '0')}`;
+const createSmsLogId = (): string => 'SL' + randomBytes(4).toString('hex');
+const createEmailLogId = (): string => 'EL' + randomBytes(4).toString('hex');
 
 const MAX_ID_RETRIES = 5;
 async function createWithUniqueId<T>(
@@ -105,6 +110,13 @@ const ALL_PERMISSION_KEYS = [
   'calendar.view',
   'calendar.create',
   'calendar.delete',
+  'sms.send',
+  'sms.history',
+  'sms.settings',
+  'email.send',
+  'email.history',
+  'email.settings',
+  'notifications.view',
   'admin.users.manage',
   'admin.permissions.manage',
 ] as const;
@@ -242,8 +254,8 @@ const ROLE_PERMISSION_PRESETS: Record<UserRole, readonly PermissionKey[]> = {
   admin: [...ALL_PERMISSION_KEYS],
   beta_tester: [...ALL_PERMISSION_KEYS],
   receptionist: ALL_PERMISSION_KEYS.filter(k => !['admin.users.manage', 'admin.permissions.manage', 'lab.view', 'data.browse'].includes(k)),
-  doctor: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.view.detail', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'pricelist.view', 'catalog.deactivate', 'calendar.view', 'calendar.create'],
-  assistant: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.view.detail', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'patients.delete', 'pricelist.view', 'catalog.deactivate', 'calendar.view', 'calendar.create'],
+  doctor: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.view.detail', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'pricelist.view', 'catalog.deactivate', 'calendar.view', 'calendar.create', 'sms.send', 'sms.history', 'email.send', 'email.history', 'notifications.view'],
+  assistant: ['quotes.view', 'quotes.create', 'quotes.delete', 'invoices.view', 'invoices.view.detail', 'invoices.issue', 'invoices.storno', 'patients.create', 'patients.update', 'patients.delete', 'pricelist.view', 'catalog.deactivate', 'calendar.view', 'calendar.create', 'sms.send', 'sms.history', 'email.send', 'email.history', 'notifications.view'],
   user: ['calendar.view', 'calendar.create'],
 };
 
@@ -307,7 +319,7 @@ declare module 'fastify' {
 }
 
 const SESSION_TTL_DAYS = Number(process.env.AUTH_SESSION_TTL_DAYS || 14);
-const PUBLIC_ROUTE_PATTERNS = new Set(['/health', '/db-health', '/debug', '/auth/login', '/api/szamlazz/query-taxpayer', '/visitor-log']);
+const PUBLIC_ROUTE_PATTERNS = new Set(['/health', '/db-health', '/debug', '/auth/login', '/api/szamlazz/query-taxpayer', '/visitor-log', '/webhook/twilio', '/google-calendar/callback', '/google-calendar/webhook']);
 
 const toClientPermissions = (permissions: PermissionMap) => {
   return ALL_PERMISSION_KEYS.map((key) => ({ key, isAllowed: permissions[key] }));
@@ -749,6 +761,10 @@ const BROWSABLE_TABLES = [
   'User',
   'AuthSession',
   'UserPermissionOverride',
+  'SmsLog',
+  'SmsSettings',
+  'EmailLog',
+  'EmailSettings',
   'PermissionAuditLog',
   'UserActivityLog',
   'Doctor',
@@ -763,6 +779,8 @@ const BROWSABLE_TABLES = [
   'AppointmentType',
   'AppointmentChair',
   'Appointment',
+  'GoogleCalendarSync',
+  'GoogleCalendarLog',
 ] as const;
 
 const TABLE_PK_MAP: Record<string, string[]> = {
@@ -795,6 +813,10 @@ const TABLE_PK_MAP: Record<string, string[]> = {
   AppointmentType: ['typeId'],
   AppointmentChair: ['chairId'],
   Appointment: ['appointmentId'],
+  SmsLog: ['id'],
+  SmsSettings: ['id'],
+  EmailLog: ['id'],
+  EmailSettings: ['id'],
 };
 
 const serializeRow = (row: Record<string, unknown>): Record<string, unknown> => {
@@ -872,29 +894,35 @@ server.get('/db/stats', async () => {
     SELECT current_database() AS database_name, pg_database_size(current_database()) AS database_size
   `;
 
-  const tableStats = await Promise.all(
+  const tableStatsResults = await Promise.all(
     tableNames.map(async (tableName) => {
-      const rowCount = await prisma.$queryRawUnsafe<Array<{ row_count: bigint | number }>>(
-        `SELECT COUNT(*)::bigint AS row_count FROM "${tableName}"`
-      );
-      const sizeRow = await prisma.$queryRawUnsafe<
-        Array<{ total_bytes: bigint | number; data_bytes: bigint | number; index_bytes: bigint | number }>
-      >(
-        `SELECT
-          pg_total_relation_size('"${tableName}"') AS total_bytes,
-          pg_relation_size('"${tableName}"') AS data_bytes,
-          pg_indexes_size('"${tableName}"') AS index_bytes`
-      );
+      try {
+        const rowCount = await prisma.$queryRawUnsafe<Array<{ row_count: bigint | number }>>(
+          `SELECT COUNT(*)::bigint AS row_count FROM "${tableName}"`
+        );
+        const sizeRow = await prisma.$queryRawUnsafe<
+          Array<{ total_bytes: bigint | number; data_bytes: bigint | number; index_bytes: bigint | number }>
+        >(
+          `SELECT
+            pg_total_relation_size('"${tableName}"') AS total_bytes,
+            pg_relation_size('"${tableName}"') AS data_bytes,
+            pg_indexes_size('"${tableName}"') AS index_bytes`
+        );
 
-      return {
-        tableName,
-        rowCount: Number(rowCount[0]?.row_count || 0),
-        totalBytes: Number(sizeRow[0]?.total_bytes || 0),
-        dataBytes: Number(sizeRow[0]?.data_bytes || 0),
-        indexBytes: Number(sizeRow[0]?.index_bytes || 0),
-      };
+        return {
+          tableName,
+          rowCount: Number(rowCount[0]?.row_count || 0),
+          totalBytes: Number(sizeRow[0]?.total_bytes || 0),
+          dataBytes: Number(sizeRow[0]?.data_bytes || 0),
+          indexBytes: Number(sizeRow[0]?.index_bytes || 0),
+        };
+      } catch {
+        // Table may not exist yet (e.g. pending migration)
+        return null;
+      }
     })
   );
+  const tableStats = tableStatsResults.filter((s): s is NonNullable<typeof s> => s !== null);
 
   tableStats.sort((a, b) => a.tableName.localeCompare(b.tableName));
 
@@ -2691,6 +2719,892 @@ server.put('/invoice-settings', async (request, reply) => {
   return { status: 'ok' };
 });
 
+// ── SMS Helpers ──────────────────────────────────────────────
+
+const HUNGARIAN_MOBILE_PREFIXES = ['20', '30', '31', '50', '70'];
+const HUNGARIAN_LANDLINE_PREFIXES = ['1'];
+
+function normalizePhoneNumber(phone: string, isHungarian = true): string {
+  const hasPlus = phone.trim().startsWith('+');
+  const digits = phone.replace(/\D/g, '');
+  if (hasPlus && digits.startsWith('36') && digits.length >= 11) return `+${digits}`;
+  if (digits.startsWith('36') && digits.length >= 11) return `+${digits}`;
+  if (digits.startsWith('06') && digits.length >= 10) return `+36${digits.slice(2)}`;
+  if (isHungarian && !digits.startsWith('06') && !digits.startsWith('36')) {
+    const prefix2 = digits.slice(0, 2);
+    const prefix1 = digits.slice(0, 1);
+    if (HUNGARIAN_MOBILE_PREFIXES.includes(prefix2) || HUNGARIAN_LANDLINE_PREFIXES.includes(prefix1)) {
+      return `+36${digits}`;
+    }
+  }
+  if (hasPlus) return `+${digits}`;
+  throw new Error(`Cannot normalize phone number: ${phone}`);
+}
+
+function isValidE164(phone: string): boolean {
+  return /^\+\d{10,15}$/.test(phone);
+}
+
+interface SmsTemplateEntry {
+  id: string;
+  name: string;
+  text: string;
+  variables: string[];
+}
+
+const SMS_TEMPLATES: SmsTemplateEntry[] = [
+  {
+    id: 'appointment_reminder',
+    name: 'Időpont-emlékeztető',
+    text: 'Kedves {{patientName}}! Emlékeztetjük, hogy {{appointmentDate}} napon {{appointmentTime}} órára időpontja van rendelőnkben. Kérjük, jelezzen, ha nem tud jönni. Üdvözlettel, {{clinicName}}',
+    variables: ['patientName', 'appointmentDate', 'appointmentTime', 'clinicName'],
+  },
+  {
+    id: 'appointment_confirmation',
+    name: 'Időpont-megerősítés',
+    text: 'Kedves {{patientName}}! Időpontját rögzítettük: {{appointmentDate}}, {{appointmentTime}}. Helyszín: {{clinicName}}. Ha kérdése van, hívjon minket! Üdvözlettel, {{clinicName}}',
+    variables: ['patientName', 'appointmentDate', 'appointmentTime', 'clinicName'],
+  },
+  {
+    id: 'quote_ready',
+    name: 'Árajánlat kész',
+    text: 'Kedves {{patientName}}! Az Ön árajánlata elkészült. Kérjük, tekintse meg rendelőnkben vagy vegye fel velünk a kapcsolatot. Üdvözlettel, {{clinicName}}',
+    variables: ['patientName', 'clinicName'],
+  },
+];
+
+function renderSmsTemplate(template: SmsTemplateEntry, variables: Record<string, string>): string {
+  let text = template.text;
+  for (const [key, value] of Object.entries(variables)) {
+    text = text.replaceAll(`{{${key}}}`, value);
+  }
+  const unresolved = text.match(/\{\{(\w+)\}\}/g);
+  if (unresolved) {
+    throw new Error(`Missing template variables: ${unresolved.join(', ')}`);
+  }
+  return text;
+}
+
+let twilioClient: ReturnType<typeof Twilio> | null = null;
+let twilioSettings: { accountSid: string; authToken: string; phoneNumber: string; webhookUrl: string } | null = null;
+
+async function getTwilioClient() {
+  const settings = await prisma.smsSettings.findUnique({ where: { id: 'default' } });
+  if (!settings || !settings.isEnabled) throw new Error('SMS is not enabled');
+  if (!settings.twilioAccountSid || !settings.twilioAuthToken || !settings.twilioPhoneNumber) {
+    throw new Error('Twilio credentials not configured');
+  }
+  if (!twilioClient || twilioSettings?.accountSid !== settings.twilioAccountSid || twilioSettings?.authToken !== settings.twilioAuthToken) {
+    twilioClient = Twilio(settings.twilioAccountSid, settings.twilioAuthToken);
+    twilioSettings = {
+      accountSid: settings.twilioAccountSid,
+      authToken: settings.twilioAuthToken,
+      phoneNumber: settings.twilioPhoneNumber,
+      webhookUrl: settings.twilioWebhookUrl || '',
+    };
+  }
+  return { client: twilioClient, settings: twilioSettings! };
+}
+
+async function sendSmsViaTwilio(params: {
+  to: string; message: string; patientId?: string; patientName?: string; context?: string; templateId?: string;
+}) {
+  const { client, settings } = await getTwilioClient();
+  const smsLog = await createWithUniqueId(createSmsLogId, (id) =>
+    prisma.smsLog.create({
+      data: {
+        id,
+        toNumber: params.to,
+        fromNumber: settings.phoneNumber,
+        message: params.message,
+        templateId: params.templateId,
+        status: 'pending',
+        patientId: params.patientId || null,
+        patientName: params.patientName || null,
+        context: params.context || null,
+      },
+    }),
+  );
+
+  try {
+    const twilioMessage = await client.messages.create({
+      body: params.message,
+      from: settings.phoneNumber,
+      to: params.to,
+      statusCallback: settings.webhookUrl || undefined,
+    });
+    const updated = await prisma.smsLog.update({
+      where: { id: smsLog.id },
+      data: { twilioSid: twilioMessage.sid, status: twilioMessage.status },
+    });
+
+    // Poll Twilio for final status if no webhook configured
+    if (!settings.webhookUrl && twilioMessage.sid) {
+      setTimeout(async () => {
+        try {
+          for (const delay of [3000, 5000, 10000]) {
+            await new Promise(r => setTimeout(r, delay));
+            const msg = await client.messages(twilioMessage.sid).fetch();
+            if (['delivered', 'sent', 'failed', 'undelivered'].includes(msg.status)) {
+              await prisma.smsLog.update({
+                where: { id: smsLog.id },
+                data: {
+                  status: msg.status,
+                  errorCode: msg.errorCode?.toString() || null,
+                  errorMessage: msg.errorMessage || null,
+                },
+              });
+              break;
+            }
+          }
+        } catch { /* ignore polling errors */ }
+      }, 0);
+    }
+
+    return updated;
+  } catch (error: unknown) {
+    const err = error as { code?: number; message?: string };
+    const updated = await prisma.smsLog.update({
+      where: { id: smsLog.id },
+      data: {
+        status: 'failed',
+        errorCode: err.code?.toString() || 'UNKNOWN',
+        errorMessage: err.message || 'Unknown error',
+      },
+    });
+    throw { smsLog: updated, error };
+  }
+}
+
+// ── SMS Settings Routes ──────────────────────────────────────────────
+
+server.get('/sms-settings', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'sms.settings');
+  if (!user) return;
+  const row = await prisma.smsSettings.findUnique({ where: { id: 'default' } });
+  if (!row) {
+    return {
+      twilioAccountSid: '',
+      twilioAuthToken: '',
+      twilioPhoneNumber: '',
+      twilioWebhookUrl: '',
+      isEnabled: false,
+      clinicName: '',
+    };
+  }
+  return {
+    twilioAccountSid: row.twilioAccountSid,
+    twilioAuthToken: row.twilioAuthToken ? '••••' + row.twilioAuthToken.slice(-4) : '',
+    twilioPhoneNumber: row.twilioPhoneNumber,
+    twilioWebhookUrl: row.twilioWebhookUrl,
+    isEnabled: row.isEnabled,
+    clinicName: row.clinicName,
+  };
+});
+
+server.put('/sms-settings', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'sms.settings');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+
+  // If authToken is masked, keep the existing one
+  let authToken = String(body.twilioAuthToken || '');
+  if (authToken.startsWith('••••')) {
+    const existing = await prisma.smsSettings.findUnique({ where: { id: 'default' } });
+    authToken = existing?.twilioAuthToken || '';
+  }
+
+  const data = {
+    twilioAccountSid: String(body.twilioAccountSid || ''),
+    twilioAuthToken: authToken,
+    twilioPhoneNumber: String(body.twilioPhoneNumber || ''),
+    twilioWebhookUrl: String(body.twilioWebhookUrl || ''),
+    isEnabled: Boolean(body.isEnabled),
+    clinicName: String(body.clinicName || ''),
+  };
+  await prisma.smsSettings.upsert({
+    where: { id: 'default' },
+    update: data,
+    create: { id: 'default', ...data },
+  });
+  // Invalidate cached Twilio client
+  twilioClient = null;
+  twilioSettings = null;
+  return { status: 'ok' };
+});
+
+server.post('/sms-settings/test', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'sms.settings');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const phone = String(body.phone || '');
+  if (!phone) return reply.code(400).send({ error: 'Phone number required' });
+
+  let normalizedPhone: string;
+  try {
+    normalizedPhone = normalizePhoneNumber(phone, true);
+  } catch {
+    return reply.code(400).send({ error: `Invalid phone number: ${phone}` });
+  }
+
+  try {
+    const smsLog = await sendSmsViaTwilio({
+      to: normalizedPhone,
+      message: 'DentalQuoteCreator: Teszt SMS sikeres!',
+      context: 'test',
+    });
+    return { success: true, smsId: smsLog.id, status: smsLog.status };
+  } catch (err: unknown) {
+    const e = err as { smsLog?: { id: string }; error?: { message?: string } };
+    return reply.code(500).send({ success: false, error: e.error?.message || 'SMS send failed' });
+  }
+});
+
+// ── SMS Send Routes ──────────────────────────────────────────────
+
+server.post('/sms/send', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'sms.send');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const to = String(body.to || '');
+  const message = String(body.message || '');
+  if (!to || !message) return reply.code(400).send({ error: 'Missing required fields: to, message' });
+  if (message.length > 1600) return reply.code(400).send({ error: 'Message too long (max 1600 characters)' });
+
+  let normalizedPhone: string;
+  try {
+    normalizedPhone = normalizePhoneNumber(to, body.isHungarian !== false);
+  } catch {
+    return reply.code(400).send({ error: `Invalid phone number: ${to}` });
+  }
+  if (!isValidE164(normalizedPhone)) {
+    return reply.code(400).send({ error: `Invalid E.164 phone number: ${normalizedPhone}` });
+  }
+
+  try {
+    const smsLog = await sendSmsViaTwilio({
+      to: normalizedPhone,
+      message,
+      patientId: body.patientId ? String(body.patientId) : undefined,
+      patientName: body.patientName ? String(body.patientName) : undefined,
+      context: body.context ? String(body.context) : undefined,
+    });
+    return { success: true, smsId: smsLog.id, twilioSid: smsLog.twilioSid, status: smsLog.status };
+  } catch (err: unknown) {
+    const e = err as { smsLog?: { id: string }; error?: { message?: string } };
+    return reply.code(500).send({ success: false, smsId: e.smsLog?.id, error: e.error?.message || 'SMS send failed' });
+  }
+});
+
+server.post('/sms/send-template', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'sms.send');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const to = String(body.to || '');
+  const templateId = String(body.templateId || '');
+  const variables = body.variables as Record<string, string> | undefined;
+
+  if (!to || !templateId || !variables) {
+    return reply.code(400).send({ error: 'Missing required fields: to, templateId, variables' });
+  }
+
+  const allTemplates = await getEffectiveTemplates();
+  const template = allTemplates.find(t => t.id === templateId);
+  if (!template) return reply.code(400).send({ error: `Unknown template: ${templateId}` });
+
+  let message: string;
+  try {
+    message = renderSmsTemplate(template, variables);
+  } catch (err: unknown) {
+    return reply.code(400).send({ error: (err as Error).message });
+  }
+
+  let normalizedPhone: string;
+  try {
+    normalizedPhone = normalizePhoneNumber(to, body.isHungarian !== false);
+  } catch {
+    return reply.code(400).send({ error: `Invalid phone number: ${to}` });
+  }
+  if (!isValidE164(normalizedPhone)) {
+    return reply.code(400).send({ error: `Invalid E.164 phone number: ${normalizedPhone}` });
+  }
+
+  try {
+    const smsLog = await sendSmsViaTwilio({
+      to: normalizedPhone,
+      message,
+      patientId: body.patientId ? String(body.patientId) : undefined,
+      patientName: body.patientName ? String(body.patientName) : undefined,
+      context: body.context ? String(body.context) : undefined,
+      templateId,
+    });
+    return { success: true, smsId: smsLog.id, twilioSid: smsLog.twilioSid, status: smsLog.status, renderedMessage: message };
+  } catch (err: unknown) {
+    const e = err as { smsLog?: { id: string }; error?: { message?: string } };
+    return reply.code(500).send({ success: false, smsId: e.smsLog?.id, error: e.error?.message || 'SMS send failed' });
+  }
+});
+
+// ── SMS Templates Routes ──────────────────────────────────────────────
+
+async function getEffectiveTemplates(): Promise<SmsTemplateEntry[]> {
+  const row = await prisma.smsSettings.findUnique({ where: { id: 'default' }, select: { customTemplates: true } });
+  let custom: SmsTemplateEntry[] = [];
+  try { custom = JSON.parse(row?.customTemplates || '[]'); } catch { /* ignore */ }
+  // Merge: custom overrides defaults by id, then append any custom-only
+  const merged = SMS_TEMPLATES.map(def => {
+    const override = custom.find(c => c.id === def.id);
+    return override ? { ...def, name: override.name, text: override.text, variables: override.variables } : def;
+  });
+  for (const c of custom) {
+    if (!SMS_TEMPLATES.find(d => d.id === c.id)) merged.push(c);
+  }
+  return merged;
+}
+
+server.get('/sms/templates', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'sms.send');
+  if (!user) return;
+  return getEffectiveTemplates();
+});
+
+server.get('/sms/templates/editable', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'sms.settings');
+  if (!user) return;
+  const effective = await getEffectiveTemplates();
+  return { defaults: SMS_TEMPLATES, templates: effective };
+});
+
+server.put('/sms/templates', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'sms.settings');
+  if (!user) return;
+  const body = request.body as { templates: SmsTemplateEntry[] };
+  if (!Array.isArray(body.templates)) return reply.code(400).send({ error: 'templates must be an array' });
+  // Validate each template
+  for (const tmpl of body.templates) {
+    if (!tmpl.id || !tmpl.name || !tmpl.text) return reply.code(400).send({ error: 'Each template must have id, name, and text' });
+    // Extract variables from text
+    const vars = [...tmpl.text.matchAll(/\{\{(\w+)\}\}/g)].map(m => m[1]);
+    tmpl.variables = [...new Set(vars)];
+  }
+  await prisma.smsSettings.update({
+    where: { id: 'default' },
+    data: { customTemplates: JSON.stringify(body.templates) },
+  });
+  return { success: true, templates: body.templates };
+});
+
+// ── SMS Enabled check (lightweight, for UI) ──────────────────────────
+
+server.get('/sms/enabled', async (request, reply) => {
+  const user = await requireAuth(request, reply);
+  if (!user) return;
+  const row = await prisma.smsSettings.findUnique({ where: { id: 'default' }, select: { isEnabled: true } });
+  return { isEnabled: row?.isEnabled || false };
+});
+
+// ── SMS History Routes ──────────────────────────────────────────────
+
+server.get('/sms/history', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'sms.history');
+  if (!user) return;
+  const query = request.query as Record<string, string | undefined>;
+  const where: Record<string, unknown> = {};
+  if (query.patientId) where.patientId = query.patientId;
+  if (query.status) where.status = query.status;
+  if (query.from || query.to) {
+    const createdAt: Record<string, Date> = {};
+    if (query.from) createdAt.gte = new Date(query.from);
+    if (query.to) createdAt.lte = new Date(query.to);
+    where.createdAt = createdAt;
+  }
+
+  const take = Math.min(parseInt(query.limit || '50', 10), 200);
+  const skip = parseInt(query.offset || '0', 10);
+
+  const [logs, total] = await Promise.all([
+    prisma.smsLog.findMany({ where, orderBy: { createdAt: 'desc' }, take, skip }),
+    prisma.smsLog.count({ where }),
+  ]);
+  return { logs, total, limit: take, offset: skip };
+});
+
+server.get('/sms/history/:id', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'sms.history');
+  if (!user) return;
+  const { id } = request.params as { id: string };
+  const log = await prisma.smsLog.findUnique({ where: { id } });
+  if (!log) return reply.code(404).send({ error: 'SMS log not found' });
+  return log;
+});
+
+// ── SMS Webhook (Twilio delivery status) ──────────────────────────
+
+server.post('/webhook/twilio', async (request, reply) => {
+  const body = request.body as Record<string, string>;
+  const { MessageSid, MessageStatus, ErrorCode, ErrorMessage } = body;
+  if (!MessageSid || !MessageStatus) {
+    return reply.code(400).send({ error: 'Missing MessageSid or MessageStatus' });
+  }
+
+  // Validate Twilio signature if possible
+  const settings = await prisma.smsSettings.findUnique({ where: { id: 'default' } });
+  if (settings?.twilioWebhookUrl && settings?.twilioAuthToken) {
+    const signature = request.headers['x-twilio-signature'] as string;
+    if (signature) {
+      const isValid = Twilio.validateRequest(settings.twilioAuthToken, signature, settings.twilioWebhookUrl, body);
+      if (!isValid) return reply.code(403).send({ error: 'Invalid Twilio signature' });
+    }
+  }
+
+  const existing = await prisma.smsLog.findFirst({ where: { twilioSid: MessageSid } });
+  if (!existing) {
+    server.log.warn({ MessageSid }, 'Webhook received for unknown SMS');
+    return reply.code(200).send({ ok: true });
+  }
+  await prisma.smsLog.update({
+    where: { id: existing.id },
+    data: {
+      status: MessageStatus,
+      errorCode: ErrorCode || existing.errorCode,
+      errorMessage: ErrorMessage || existing.errorMessage,
+    },
+  });
+  return reply.code(200).send({ ok: true });
+});
+
+// ── Email Infrastructure ──────────────────────────────────────────────
+
+interface EmailTemplateEntry {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  variables: string[];
+}
+
+const EMAIL_TEMPLATES: EmailTemplateEntry[] = [
+  {
+    id: 'appointment_reminder',
+    name: 'Időpont-emlékeztető',
+    subject: 'Időpont-emlékeztető – {{clinicName}}',
+    body: 'Kedves {{patientName}}!\n\nEmlékeztetjük, hogy {{appointmentDate}} napon {{appointmentTime}} órára időpontja van rendelőnkben.\n\nKérjük, jelezzen, ha nem tud jönni.\n\nÜdvözlettel,\n{{clinicName}}',
+    variables: ['patientName', 'appointmentDate', 'appointmentTime', 'clinicName'],
+  },
+  {
+    id: 'appointment_confirmation',
+    name: 'Időpont-megerősítés',
+    subject: 'Időpont megerősítése – {{clinicName}}',
+    body: 'Kedves {{patientName}}!\n\nIdőpontját rögzítettük: {{appointmentDate}}, {{appointmentTime}}.\n\nHelyszín: {{clinicName}}\n\nHa kérdése van, hívjon minket!\n\nÜdvözlettel,\n{{clinicName}}',
+    variables: ['patientName', 'appointmentDate', 'appointmentTime', 'clinicName'],
+  },
+  {
+    id: 'quote_ready',
+    name: 'Árajánlat kész',
+    subject: 'Árajánlata elkészült – {{clinicName}}',
+    body: 'Kedves {{patientName}}!\n\nAz Ön árajánlata elkészült. Kérjük, tekintse meg rendelőnkben vagy vegye fel velünk a kapcsolatot.\n\nÜdvözlettel,\n{{clinicName}}',
+    variables: ['patientName', 'clinicName'],
+  },
+];
+
+function renderEmailTemplate(template: EmailTemplateEntry, variables: Record<string, string>): { subject: string; body: string } {
+  let subject = template.subject;
+  let body = template.body;
+  for (const [key, value] of Object.entries(variables)) {
+    subject = subject.replaceAll(`{{${key}}}`, value);
+    body = body.replaceAll(`{{${key}}}`, value);
+  }
+  const unresolvedSubject = subject.match(/\{\{(\w+)\}\}/g);
+  const unresolvedBody = body.match(/\{\{(\w+)\}\}/g);
+  const unresolved = [...(unresolvedSubject || []), ...(unresolvedBody || [])];
+  if (unresolved.length > 0) {
+    throw new Error(`Missing template variables: ${[...new Set(unresolved)].join(', ')}`);
+  }
+  return { subject, body };
+}
+
+let emailTransporter: nodemailer.Transporter | null = null;
+let emailTransporterConfig: string | null = null;
+
+async function getEmailTransporter() {
+  const settings = await prisma.emailSettings.findUnique({ where: { id: 'default' } });
+  if (!settings || !settings.isEnabled) throw new Error('Email is not enabled');
+  if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+    throw new Error('SMTP credentials not configured');
+  }
+  const configKey = `${settings.smtpHost}:${settings.smtpPort}:${settings.smtpUser}`;
+  if (!emailTransporter || emailTransporterConfig !== configKey) {
+    emailTransporter = nodemailer.createTransport({
+      host: settings.smtpHost,
+      port: settings.smtpPort,
+      secure: settings.smtpSecure,
+      auth: { user: settings.smtpUser, pass: settings.smtpPass },
+    });
+    emailTransporterConfig = configKey;
+  }
+  return { transporter: emailTransporter, settings };
+}
+
+async function getEffectiveEmailTemplates(): Promise<EmailTemplateEntry[]> {
+  const row = await prisma.emailSettings.findUnique({ where: { id: 'default' }, select: { customTemplates: true } });
+  let custom: EmailTemplateEntry[] = [];
+  try { custom = JSON.parse(row?.customTemplates || '[]'); } catch { /* ignore */ }
+  const merged = EMAIL_TEMPLATES.map(def => {
+    const override = custom.find(c => c.id === def.id);
+    return override ? { ...def, name: override.name, subject: override.subject, body: override.body, variables: override.variables } : def;
+  });
+  for (const c of custom) {
+    if (!EMAIL_TEMPLATES.find(d => d.id === c.id)) merged.push(c);
+  }
+  return merged;
+}
+
+async function sendEmailViaSmtp(params: {
+  to: string; subject: string; body: string; patientId?: string; patientName?: string; context?: string; templateId?: string;
+}) {
+  const { transporter, settings } = await getEmailTransporter();
+  const emailLog = await createWithUniqueId(createEmailLogId, (id) =>
+    prisma.emailLog.create({
+      data: {
+        id,
+        toEmail: params.to,
+        fromEmail: settings.fromEmail || settings.smtpUser,
+        subject: params.subject,
+        body: params.body,
+        templateId: params.templateId || null,
+        status: 'pending',
+        patientId: params.patientId || null,
+        patientName: params.patientName || null,
+        context: params.context || null,
+      },
+    }),
+  );
+
+  try {
+    await transporter.sendMail({
+      from: settings.fromName ? `"${settings.fromName}" <${settings.fromEmail || settings.smtpUser}>` : (settings.fromEmail || settings.smtpUser),
+      to: params.to,
+      subject: params.subject,
+      text: params.body,
+    });
+    const updated = await prisma.emailLog.update({
+      where: { id: emailLog.id },
+      data: { status: 'sent' },
+    });
+    return updated;
+  } catch (error: unknown) {
+    const err = error as { message?: string };
+    const updated = await prisma.emailLog.update({
+      where: { id: emailLog.id },
+      data: { status: 'failed', errorMessage: err.message || 'Unknown error' },
+    });
+    throw { emailLog: updated, error };
+  }
+}
+
+// ── Email Settings Routes ──────────────────────────────────────────────
+
+server.get('/email-settings', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'email.settings');
+  if (!user) return;
+  const row = await prisma.emailSettings.findUnique({ where: { id: 'default' } });
+  if (!row) {
+    return { smtpHost: '', smtpPort: 587, smtpSecure: false, smtpUser: '', smtpPass: '', fromEmail: '', fromName: '', isEnabled: false, clinicName: '' };
+  }
+  return {
+    smtpHost: row.smtpHost,
+    smtpPort: row.smtpPort,
+    smtpSecure: row.smtpSecure,
+    smtpUser: row.smtpUser,
+    smtpPass: row.smtpPass ? '••••' + row.smtpPass.slice(-4) : '',
+    fromEmail: row.fromEmail,
+    fromName: row.fromName,
+    isEnabled: row.isEnabled,
+    clinicName: row.clinicName,
+  };
+});
+
+server.put('/email-settings', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'email.settings');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+
+  let smtpPass = String(body.smtpPass || '');
+  if (smtpPass.startsWith('••••')) {
+    const existing = await prisma.emailSettings.findUnique({ where: { id: 'default' } });
+    smtpPass = existing?.smtpPass || '';
+  }
+
+  const data = {
+    smtpHost: String(body.smtpHost || ''),
+    smtpPort: Number(body.smtpPort) || 587,
+    smtpSecure: Boolean(body.smtpSecure),
+    smtpUser: String(body.smtpUser || ''),
+    smtpPass,
+    fromEmail: String(body.fromEmail || ''),
+    fromName: String(body.fromName || ''),
+    isEnabled: Boolean(body.isEnabled),
+    clinicName: String(body.clinicName || ''),
+  };
+  await prisma.emailSettings.upsert({
+    where: { id: 'default' },
+    update: data,
+    create: { id: 'default', ...data },
+  });
+  emailTransporter = null;
+  emailTransporterConfig = null;
+  return { status: 'ok' };
+});
+
+server.post('/email-settings/test', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'email.settings');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const email = String(body.email || '');
+  if (!email) return reply.code(400).send({ error: 'Email address required' });
+
+  try {
+    const emailLog = await sendEmailViaSmtp({
+      to: email,
+      subject: 'DentalQuoteCreator: Teszt e-mail',
+      body: 'Ha ezt az e-mailt megkapta, az SMTP konfiguráció helyes!',
+      context: 'test',
+    });
+    return { success: true, emailId: emailLog.id, status: emailLog.status };
+  } catch (err: unknown) {
+    const e = err as { emailLog?: { id: string }; error?: { message?: string } };
+    return reply.code(500).send({ success: false, error: e.error?.message || 'Email send failed' });
+  }
+});
+
+// ── Email Send Routes ──────────────────────────────────────────────
+
+server.post('/email/send', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'email.send');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const to = String(body.to || '');
+  const subject = String(body.subject || '');
+  const message = String(body.body || '');
+  if (!to || !subject || !message) return reply.code(400).send({ error: 'Missing required fields: to, subject, body' });
+
+  try {
+    const emailLog = await sendEmailViaSmtp({
+      to, subject, body: message,
+      patientId: body.patientId ? String(body.patientId) : undefined,
+      patientName: body.patientName ? String(body.patientName) : undefined,
+      context: body.context ? String(body.context) : undefined,
+    });
+    return { success: true, emailId: emailLog.id, status: emailLog.status };
+  } catch (err: unknown) {
+    const e = err as { emailLog?: { id: string }; error?: { message?: string } };
+    return reply.code(500).send({ success: false, emailId: e.emailLog?.id, error: e.error?.message || 'Email send failed' });
+  }
+});
+
+server.post('/email/send-template', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'email.send');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const to = String(body.to || '');
+  const templateId = String(body.templateId || '');
+  const variables = body.variables as Record<string, string> | undefined;
+
+  if (!to || !templateId || !variables) {
+    return reply.code(400).send({ error: 'Missing required fields: to, templateId, variables' });
+  }
+
+  const allTemplates = await getEffectiveEmailTemplates();
+  const template = allTemplates.find(t => t.id === templateId);
+  if (!template) return reply.code(400).send({ error: `Unknown template: ${templateId}` });
+
+  let rendered: { subject: string; body: string };
+  try {
+    rendered = renderEmailTemplate(template, variables);
+  } catch (err: unknown) {
+    return reply.code(400).send({ error: (err as Error).message });
+  }
+
+  try {
+    const emailLog = await sendEmailViaSmtp({
+      to, subject: rendered.subject, body: rendered.body,
+      patientId: body.patientId ? String(body.patientId) : undefined,
+      patientName: body.patientName ? String(body.patientName) : undefined,
+      context: body.context ? String(body.context) : undefined,
+      templateId,
+    });
+    return { success: true, emailId: emailLog.id, status: emailLog.status };
+  } catch (err: unknown) {
+    const e = err as { emailLog?: { id: string }; error?: { message?: string } };
+    return reply.code(500).send({ success: false, emailId: e.emailLog?.id, error: e.error?.message || 'Email send failed' });
+  }
+});
+
+// ── Email Templates Routes ──────────────────────────────────────────────
+
+server.get('/email/templates', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'email.send');
+  if (!user) return;
+  return getEffectiveEmailTemplates();
+});
+
+server.get('/email/templates/editable', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'email.settings');
+  if (!user) return;
+  const effective = await getEffectiveEmailTemplates();
+  return { defaults: EMAIL_TEMPLATES, templates: effective };
+});
+
+server.put('/email/templates', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'email.settings');
+  if (!user) return;
+  const body = request.body as { templates: EmailTemplateEntry[] };
+  if (!Array.isArray(body.templates)) return reply.code(400).send({ error: 'templates must be an array' });
+  for (const tmpl of body.templates) {
+    if (!tmpl.id || !tmpl.name || !tmpl.subject || !tmpl.body) return reply.code(400).send({ error: 'Each template must have id, name, subject, and body' });
+    const vars = [...tmpl.body.matchAll(/\{\{(\w+)\}\}/g), ...tmpl.subject.matchAll(/\{\{(\w+)\}\}/g)].map(m => m[1]);
+    tmpl.variables = [...new Set(vars)];
+  }
+  await prisma.emailSettings.upsert({
+    where: { id: 'default' },
+    update: { customTemplates: JSON.stringify(body.templates) },
+    create: { id: 'default', customTemplates: JSON.stringify(body.templates) },
+  });
+  return { success: true, templates: body.templates };
+});
+
+// ── Email Enabled check (lightweight, for UI) ──────────────────────────
+
+server.get('/email/enabled', async (request, reply) => {
+  const user = await requireAuth(request, reply);
+  if (!user) return;
+  const row = await prisma.emailSettings.findUnique({ where: { id: 'default' }, select: { isEnabled: true } });
+  return { isEnabled: row?.isEnabled || false };
+});
+
+// ── Email History Routes ──────────────────────────────────────────────
+
+server.get('/email/history', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'email.history');
+  if (!user) return;
+  const query = request.query as Record<string, string | undefined>;
+  const where: Record<string, unknown> = {};
+  if (query.patientId) where.patientId = query.patientId;
+  if (query.status) where.status = query.status;
+  if (query.from || query.to) {
+    const createdAt: Record<string, Date> = {};
+    if (query.from) createdAt.gte = new Date(query.from);
+    if (query.to) createdAt.lte = new Date(query.to);
+    where.createdAt = createdAt;
+  }
+
+  const take = Math.min(parseInt(query.limit || '50', 10), 200);
+  const skip = parseInt(query.offset || '0', 10);
+
+  const [logs, total] = await Promise.all([
+    prisma.emailLog.findMany({ where, orderBy: { createdAt: 'desc' }, take, skip }),
+    prisma.emailLog.count({ where }),
+  ]);
+  return { logs, total, limit: take, offset: skip };
+});
+
+server.get('/email/history/:id', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'email.history');
+  if (!user) return;
+  const { id } = request.params as { id: string };
+  const log = await prisma.emailLog.findUnique({ where: { id } });
+  if (!log) return reply.code(404).send({ error: 'Email log not found' });
+  return log;
+});
+
+// ── Notifications: Pending Messages ──────────────────────────────────
+
+server.get('/notifications/pending', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'notifications.view');
+  if (!user) return;
+  const query = request.query as Record<string, string | undefined>;
+
+  // Default to tomorrow, but allow any date via ?date= param
+  let targetDate: Date;
+  if (query.date) {
+    targetDate = new Date(query.date);
+  } else {
+    targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + 1);
+  }
+
+  const dayStart = new Date(targetDate);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(targetDate);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      startDateTime: { gte: dayStart, lte: dayEnd },
+      isArchived: false,
+    },
+    include: {
+      patient: { select: { patientId: true, lastName: true, firstName: true, phone: true, email: true } },
+      appointmentType: { select: { nameHu: true, nameEn: true, nameDe: true, color: true } },
+    },
+    orderBy: { startDateTime: 'asc' },
+  });
+
+  // Check SMS and Email logs for each appointment
+  const results = await Promise.all(appointments.map(async (apt) => {
+    let smsSent = false;
+    let emailSent = false;
+    let smsLogId: string | null = null;
+    let emailLogId: string | null = null;
+
+    if (apt.patientId) {
+      const dateStr = dayStart.toISOString().slice(0, 10);
+      // Check for SMS sent for this patient on this date with appointment_reminder context
+      const smsLog = await prisma.smsLog.findFirst({
+        where: {
+          patientId: apt.patientId,
+          context: { in: ['appointment_reminder', 'appointment_confirmation'] },
+          createdAt: { gte: new Date(dateStr + 'T00:00:00Z') },
+          status: { notIn: ['failed'] },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (smsLog) { smsSent = true; smsLogId = smsLog.id; }
+
+      const emailLog = await prisma.emailLog.findFirst({
+        where: {
+          patientId: apt.patientId,
+          context: { in: ['appointment_reminder', 'appointment_confirmation'] },
+          createdAt: { gte: new Date(dateStr + 'T00:00:00Z') },
+          status: { notIn: ['failed'] },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (emailLog) { emailSent = true; emailLogId = emailLog.id; }
+    }
+
+    return {
+      appointmentId: apt.appointmentId,
+      startDateTime: apt.startDateTime.toISOString(),
+      endDateTime: apt.endDateTime.toISOString(),
+      title: apt.title,
+      description: apt.description,
+      status: apt.status,
+      patient: apt.patient,
+      appointmentType: apt.appointmentType,
+      smsSent,
+      emailSent,
+      smsLogId,
+      emailLogId,
+    };
+  }));
+
+  return {
+    date: dayStart.toISOString().slice(0, 10),
+    appointments: results,
+  };
+});
+
 // ── NEAK Settings ──────────────────────────────────────────────
 server.get('/neak-settings', async (request, reply) => {
   const user = await requirePermission(request, reply, 'settings.view');
@@ -2957,6 +3871,9 @@ server.post('/appointments', async (request, reply) => {
     },
   });
 
+  // Async Google Calendar push (non-blocking)
+  pushAppointmentToGoogle(appointmentId).catch(() => {});
+
   // If recurrence rule is set, generate child instances
   if (recurrenceRule) {
     try {
@@ -3009,7 +3926,7 @@ server.patch('/appointments/:appointmentId', async (request, reply) => {
     if (existing?.recurrenceParentId) {
       data.isRecurrenceException = true;
     }
-    return prisma.appointment.update({
+    const result = await prisma.appointment.update({
       where: { appointmentId },
       data,
       include: {
@@ -3017,6 +3934,9 @@ server.patch('/appointments/:appointmentId', async (request, reply) => {
         appointmentType: true,
       },
     });
+    // Async Google Calendar push
+    pushAppointmentToGoogle(appointmentId).catch(() => {});
+    return result;
   }
 
   // For scope=future or scope=all, find the parent and siblings
@@ -3078,6 +3998,9 @@ server.patch('/appointments/:appointmentId', async (request, reply) => {
     }
   }
 
+  // Async Google push for updated appointments
+  pushAppointmentToGoogle(appointmentId).catch(() => {});
+
   return prisma.appointment.findUnique({
     where: { appointmentId },
     include: {
@@ -3125,7 +4048,654 @@ server.delete('/appointments/:appointmentId', async (request, reply) => {
     await prisma.appointment.updateMany({ where: archiveWhere, data: { isArchived: true } });
   }
 
+  // Async Google Calendar delete
+  if (current.googleEventId) {
+    deleteAppointmentFromGoogle(appointmentId, current.googleEventId, current.googleCalendarId).catch(() => {});
+  }
+
   return { success: true };
+});
+
+// ── Google Calendar Integration ──────────────────────────────────────
+
+const GOOGLE_CLIENT_ID_ENV = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET_ENV = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_REDIRECT_URI_ENV = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/backend/google-calendar/callback';
+const DQ_PATIENT_TAG_RE = /#DQ:PAT-(\S+)/;
+
+async function getGoogleCredentials(): Promise<{ clientId: string; clientSecret: string; redirectUri: string }> {
+  const settings = await prisma.googleCalendarSync.findUnique({ where: { id: 'default' } });
+  return {
+    clientId: settings?.clientId || GOOGLE_CLIENT_ID_ENV,
+    clientSecret: settings?.clientSecret || GOOGLE_CLIENT_SECRET_ENV,
+    redirectUri: settings?.redirectUri || GOOGLE_REDIRECT_URI_ENV,
+  };
+}
+
+async function createGoogleOAuth2Client() {
+  const creds = await getGoogleCredentials();
+  return new google.auth.OAuth2(creds.clientId, creds.clientSecret, creds.redirectUri);
+}
+
+async function getAuthedGoogleClient() {
+  const settings = await prisma.googleCalendarSync.findUnique({ where: { id: 'default' } });
+  if (!settings || !settings.refreshToken) return null;
+  const oauth2 = await createGoogleOAuth2Client();
+  oauth2.setCredentials({
+    access_token: settings.accessToken || undefined,
+    refresh_token: settings.refreshToken,
+    expiry_date: settings.tokenExpiresAt?.getTime(),
+  });
+  // Auto-refresh — save new tokens if refreshed
+  oauth2.on('tokens', async (tokens) => {
+    const update: Record<string, unknown> = {};
+    if (tokens.access_token) update.accessToken = tokens.access_token;
+    if (tokens.expiry_date) update.tokenExpiresAt = new Date(tokens.expiry_date);
+    if (tokens.refresh_token) update.refreshToken = tokens.refresh_token;
+    if (Object.keys(update).length > 0) {
+      await prisma.googleCalendarSync.update({ where: { id: 'default' }, data: update });
+    }
+  });
+  return oauth2;
+}
+
+function buildGoogleEventBody(apt: {
+  appointmentId: string;
+  title: string;
+  description?: string | null;
+  startDateTime: Date;
+  endDateTime: Date;
+  patientId?: string | null;
+  notes?: string | null;
+  status?: string;
+  recurrenceRule?: string | null;
+}, patientName?: string) {
+  const descParts: string[] = [];
+  if (apt.patientId) descParts.push(`#DQ:PAT-${apt.patientId}`);
+  if (patientName) descParts.push(patientName);
+  if (apt.description) descParts.push(apt.description);
+  if (apt.notes) descParts.push(apt.notes);
+
+  const event: Record<string, unknown> = {
+    summary: apt.title + (patientName ? ` — ${patientName}` : ''),
+    description: descParts.join('\n'),
+    start: { dateTime: apt.startDateTime.toISOString(), timeZone: 'Europe/Budapest' },
+    end: { dateTime: apt.endDateTime.toISOString(), timeZone: 'Europe/Budapest' },
+    extendedProperties: {
+      private: { dqAppointmentId: apt.appointmentId },
+    },
+  };
+
+  if (apt.recurrenceRule) {
+    event.recurrence = [apt.recurrenceRule];
+  }
+
+  return event;
+}
+
+function getCalendarIdForChair(chairCalendarMap: string, chairIndex: number): string | null {
+  try {
+    const map = JSON.parse(chairCalendarMap) as Array<{ chairId: string; calendarId: string; chairNr?: number }>;
+    // Match by chairNr (0-based chairIndex → 1-based chairNr) or by array index
+    const entry = map.find(m => (m.chairNr ?? 0) === chairIndex + 1) || map[chairIndex];
+    return entry?.calendarId || null;
+  } catch {
+    return null;
+  }
+}
+
+async function logGoogleSync(data: {
+  direction: string;
+  action: string;
+  appointmentId?: string;
+  googleEventId?: string;
+  chairId?: string;
+  calendarId?: string;
+  status?: string;
+  errorMessage?: string;
+  details?: string;
+}) {
+  try {
+    await prisma.googleCalendarLog.create({ data });
+  } catch {
+    // Non-critical
+  }
+}
+
+// Push a single appointment to Google Calendar
+async function pushAppointmentToGoogle(appointmentId: string) {
+  const oauth2 = await getAuthedGoogleClient();
+  if (!oauth2) return;
+
+  const settings = await prisma.googleCalendarSync.findUnique({ where: { id: 'default' } });
+  if (!settings?.isEnabled || (settings.syncMode !== 'push' && settings.syncMode !== 'bidirectional')) return;
+
+  const apt = await prisma.appointment.findUnique({
+    where: { appointmentId },
+    include: { patient: { select: { patientId: true, lastName: true, firstName: true } } },
+  });
+  if (!apt || apt.isArchived) return;
+
+  const calendarId = getCalendarIdForChair(settings.chairCalendarMap, apt.chairIndex);
+  if (!calendarId) return;
+
+  const calendar = google.calendar({ version: 'v3', auth: oauth2 });
+  const patientName = apt.patient ? `${apt.patient.lastName} ${apt.patient.firstName}` : undefined;
+  const eventBody = buildGoogleEventBody(apt, patientName);
+
+  try {
+    if (apt.googleEventId) {
+      // Update existing
+      const res = await calendar.events.patch({
+        calendarId,
+        eventId: apt.googleEventId,
+        requestBody: eventBody,
+      });
+      await logGoogleSync({
+        direction: 'push', action: 'update', appointmentId, googleEventId: apt.googleEventId,
+        calendarId, status: 'success',
+      });
+    } else {
+      // Create new
+      const res = await calendar.events.insert({ calendarId, requestBody: eventBody });
+      const googleEventId = res.data.id || undefined;
+      if (googleEventId) {
+        await prisma.appointment.update({
+          where: { appointmentId },
+          data: { googleEventId, googleCalendarId: calendarId },
+        });
+      }
+      await logGoogleSync({
+        direction: 'push', action: 'create', appointmentId, googleEventId,
+        calendarId, status: 'success',
+      });
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await logGoogleSync({
+      direction: 'push', action: apt.googleEventId ? 'update' : 'create',
+      appointmentId, calendarId, status: 'error', errorMessage: msg,
+    });
+    server.log.warn(`Google push failed for ${appointmentId}: ${msg}`);
+  }
+}
+
+// Delete from Google Calendar
+async function deleteAppointmentFromGoogle(appointmentId: string, googleEventId: string, googleCalendarId?: string | null) {
+  const oauth2 = await getAuthedGoogleClient();
+  if (!oauth2 || !googleEventId) return;
+
+  const settings = await prisma.googleCalendarSync.findUnique({ where: { id: 'default' } });
+  if (!settings?.isEnabled) return;
+
+  const calendarId = googleCalendarId || 'primary';
+  const calendar = google.calendar({ version: 'v3', auth: oauth2 });
+
+  try {
+    await calendar.events.delete({ calendarId, eventId: googleEventId });
+    await logGoogleSync({
+      direction: 'push', action: 'delete', appointmentId, googleEventId, calendarId, status: 'success',
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await logGoogleSync({
+      direction: 'push', action: 'delete', appointmentId, googleEventId, calendarId,
+      status: 'error', errorMessage: msg,
+    });
+  }
+}
+
+// Pull changes from Google Calendar (incremental sync)
+async function pullFromGoogle() {
+  const oauth2 = await getAuthedGoogleClient();
+  if (!oauth2) return { imported: 0, updated: 0, errors: 0 };
+
+  const settings = await prisma.googleCalendarSync.findUnique({ where: { id: 'default' } });
+  if (!settings?.isEnabled || (settings.syncMode !== 'pull' && settings.syncMode !== 'bidirectional')) {
+    return { imported: 0, updated: 0, errors: 0 };
+  }
+
+  const calendar = google.calendar({ version: 'v3', auth: oauth2 });
+  let chairMap: Array<{ chairId: string; calendarId: string; chairNr: number }> = [];
+  try { chairMap = JSON.parse(settings.chairCalendarMap); } catch { /* empty */ }
+
+  let imported = 0, updated = 0, errors = 0;
+
+  for (const mapping of chairMap) {
+    const chairIndex = (mapping.chairNr || 1) - 1;
+    try {
+      const params: Record<string, unknown> = {
+        calendarId: mapping.calendarId,
+        singleEvents: true,
+        maxResults: 250,
+      };
+
+      // Use syncToken for incremental sync, or timeMin for initial sync
+      if (settings.syncToken) {
+        params.syncToken = settings.syncToken;
+      } else {
+        const now = new Date();
+        params.timeMin = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(); // last 30 days
+        params.timeMax = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString(); // next 365 days
+      }
+
+      let pageToken: string | undefined;
+      let nextSyncToken: string | undefined;
+
+      do {
+        if (pageToken) params.pageToken = pageToken;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let response: { data: { items?: any[]; nextSyncToken?: string | null; nextPageToken?: string | null } };
+        try {
+          response = await calendar.events.list(params as any);
+        } catch (syncErr: unknown) {
+          // If syncToken is invalid (410 Gone), reset and do full sync
+          const errObj = syncErr as { code?: number };
+          if (errObj.code === 410) {
+            await prisma.googleCalendarSync.update({ where: { id: 'default' }, data: { syncToken: null } });
+            // Retry without syncToken
+            delete params.syncToken;
+            const now = new Date();
+            params.timeMin = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+            params.timeMax = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+            response = await calendar.events.list(params as any);
+          } else {
+            throw syncErr;
+          }
+        }
+
+        const events = response.data.items || [];
+        nextSyncToken = response.data.nextSyncToken || undefined;
+        pageToken = response.data.nextPageToken || undefined;
+
+        for (const event of events) {
+          if (!event.id) continue;
+
+          // Skip cancelled events
+          if (event.status === 'cancelled') {
+            // Find and archive matching appointment
+            const existing = await prisma.appointment.findFirst({
+              where: { googleEventId: event.id, isArchived: false },
+            });
+            if (existing) {
+              await prisma.appointment.update({
+                where: { appointmentId: existing.appointmentId },
+                data: { isArchived: true },
+              });
+              await logGoogleSync({
+                direction: 'pull', action: 'delete', appointmentId: existing.appointmentId,
+                googleEventId: event.id, calendarId: mapping.calendarId, status: 'success',
+              });
+              updated++;
+            }
+            continue;
+          }
+
+          const startDt = event.start?.dateTime ? new Date(event.start.dateTime) : null;
+          const endDt = event.end?.dateTime ? new Date(event.end.dateTime) : null;
+          if (!startDt || !endDt) continue; // Skip all-day events
+
+          // Check if we already have this event
+          const existing = await prisma.appointment.findFirst({
+            where: { googleEventId: event.id, isArchived: false },
+          });
+
+          // Try to match patient from description tag #DQ:PAT-xxxxx
+          let patientId: string | null = null;
+          if (event.description) {
+            const match = event.description.match(DQ_PATIENT_TAG_RE);
+            if (match) {
+              const patient = await prisma.patient.findUnique({ where: { patientId: match[1] } });
+              if (patient) patientId = patient.patientId;
+            }
+          }
+
+          // Check extended properties for DQ appointment ID
+          const dqApptId = event.extendedProperties?.private?.dqAppointmentId;
+
+          if (existing) {
+            // Update existing appointment from Google
+            await prisma.appointment.update({
+              where: { appointmentId: existing.appointmentId },
+              data: {
+                title: event.summary || existing.title,
+                startDateTime: startDt,
+                endDateTime: endDt,
+                ...(patientId && { patientId }),
+              },
+            });
+            await logGoogleSync({
+              direction: 'pull', action: 'update', appointmentId: existing.appointmentId,
+              googleEventId: event.id, calendarId: mapping.calendarId, status: 'success',
+            });
+            updated++;
+          } else if (dqApptId) {
+            // This was created by our app but googleEventId wasn't saved — link it
+            const appAppt = await prisma.appointment.findUnique({ where: { appointmentId: dqApptId } });
+            if (appAppt) {
+              await prisma.appointment.update({
+                where: { appointmentId: dqApptId },
+                data: { googleEventId: event.id, googleCalendarId: mapping.calendarId },
+              });
+              updated++;
+            }
+          } else {
+            // Import as new appointment
+            const newId = createAppointmentId();
+            await prisma.appointment.create({
+              data: {
+                appointmentId: newId,
+                patientId,
+                chairIndex,
+                startDateTime: startDt,
+                endDateTime: endDt,
+                title: event.summary || 'Google event',
+                description: event.description || null,
+                status: 'scheduled',
+                googleEventId: event.id,
+                googleCalendarId: mapping.calendarId,
+              },
+            });
+            await logGoogleSync({
+              direction: 'pull', action: 'import', appointmentId: newId,
+              googleEventId: event.id, calendarId: mapping.calendarId, status: 'success',
+            });
+            imported++;
+          }
+        }
+      } while (pageToken);
+
+      // Save sync token for incremental sync next time
+      if (nextSyncToken) {
+        await prisma.googleCalendarSync.update({
+          where: { id: 'default' },
+          data: { syncToken: nextSyncToken, lastSyncAt: new Date() },
+        });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await logGoogleSync({
+        direction: 'pull', action: 'import', calendarId: mapping.calendarId,
+        status: 'error', errorMessage: msg,
+      });
+      errors++;
+      server.log.warn(`Google pull failed for calendar ${mapping.calendarId}: ${msg}`);
+    }
+  }
+
+  return { imported, updated, errors };
+}
+
+// ── Google Calendar: OAuth2 Flow ──
+
+server.get('/google-calendar/auth-url', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+
+  const creds = await getGoogleCredentials();
+  if (!creds.clientId || !creds.clientSecret) {
+    return reply.code(400).send({ message: 'Google OAuth credentials not configured' });
+  }
+
+  const oauth2 = await createGoogleOAuth2Client();
+  const url = oauth2.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: ['https://www.googleapis.com/auth/calendar'],
+  });
+  return { url };
+});
+
+server.get('/google-calendar/callback', async (request, reply) => {
+  const query = request.query as Record<string, string>;
+  const code = query.code;
+  if (!code) return reply.code(400).send({ message: 'Missing authorization code' });
+
+  const oauth2 = await createGoogleOAuth2Client();
+  try {
+    const { tokens } = await oauth2.getToken(code);
+    await prisma.googleCalendarSync.upsert({
+      where: { id: 'default' },
+      create: {
+        id: 'default',
+        accessToken: tokens.access_token || '',
+        refreshToken: tokens.refresh_token || '',
+        tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        isEnabled: false, // User must enable manually after mapping chairs
+      },
+      update: {
+        accessToken: tokens.access_token || '',
+        refreshToken: tokens.refresh_token || '',
+        tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+      },
+    });
+
+    // Redirect to frontend settings page
+    return reply.redirect('/?googleCalendarConnected=1#/settings/calendar');
+  } catch (e) {
+    server.log.error('Google Calendar OAuth error: ' + (e instanceof Error ? e.message : String(e)));
+    return reply.redirect('/?googleCalendarError=1#/settings/calendar');
+  }
+});
+
+server.delete('/google-calendar/disconnect', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+
+  await prisma.googleCalendarSync.upsert({
+    where: { id: 'default' },
+    create: { id: 'default' },
+    update: {
+      accessToken: '',
+      refreshToken: '',
+      tokenExpiresAt: null,
+      isEnabled: false,
+      syncToken: null,
+      lastSyncAt: null,
+    },
+  });
+  return { success: true };
+});
+
+// ── Google Calendar: Settings ──
+
+server.get('/google-calendar/settings', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+
+  const settings = await prisma.googleCalendarSync.findUnique({ where: { id: 'default' } });
+  const creds = await getGoogleCredentials();
+  const isConnected = !!(settings?.refreshToken);
+  return {
+    isConnected,
+    isEnabled: settings?.isEnabled || false,
+    syncMode: settings?.syncMode || 'bidirectional',
+    pollIntervalMin: settings?.pollIntervalMin || 5,
+    lastSyncAt: settings?.lastSyncAt?.toISOString() || null,
+    chairCalendarMap: settings?.chairCalendarMap || '[]',
+    hasCredentials: !!(creds.clientId && creds.clientSecret),
+    clientId: settings?.clientId || GOOGLE_CLIENT_ID_ENV,
+    clientSecret: settings?.clientSecret ? '••••••••' : (GOOGLE_CLIENT_SECRET_ENV ? '••••••••' : ''),
+    clientSecretSet: !!(settings?.clientSecret || GOOGLE_CLIENT_SECRET_ENV),
+    redirectUri: settings?.redirectUri || GOOGLE_REDIRECT_URI_ENV,
+  };
+});
+
+server.put('/google-calendar/settings', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+
+  const data: Record<string, unknown> = {};
+  if (body.clientId !== undefined) data.clientId = String(body.clientId);
+  if (body.clientSecret !== undefined && String(body.clientSecret) !== '••••••••') data.clientSecret = String(body.clientSecret);
+  if (body.redirectUri !== undefined) data.redirectUri = String(body.redirectUri);
+  if (body.isEnabled !== undefined) data.isEnabled = Boolean(body.isEnabled);
+  if (body.syncMode !== undefined) data.syncMode = String(body.syncMode);
+  if (body.pollIntervalMin !== undefined) data.pollIntervalMin = Number(body.pollIntervalMin);
+  if (body.chairCalendarMap !== undefined) data.chairCalendarMap = typeof body.chairCalendarMap === 'string' ? body.chairCalendarMap : JSON.stringify(body.chairCalendarMap);
+
+  const settings = await prisma.googleCalendarSync.upsert({
+    where: { id: 'default' },
+    create: { id: 'default', ...data },
+    update: data,
+  });
+  return settings;
+});
+
+// ── Google Calendar: List calendars (for chair mapping) ──
+
+server.get('/google-calendar/calendars', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+
+  const oauth2 = await getAuthedGoogleClient();
+  if (!oauth2) return reply.code(400).send({ message: 'Not connected to Google Calendar' });
+
+  const calendar = google.calendar({ version: 'v3', auth: oauth2 });
+  try {
+    const res = await calendar.calendarList.list();
+    const calendars = (res.data.items || []).map(c => ({
+      id: c.id,
+      summary: c.summary,
+      primary: c.primary || false,
+      backgroundColor: c.backgroundColor,
+      accessRole: c.accessRole,
+    }));
+    return { calendars };
+  } catch (e) {
+    return reply.code(500).send({ message: 'Failed to list calendars: ' + (e instanceof Error ? e.message : String(e)) });
+  }
+});
+
+// ── Google Calendar: Manual sync trigger ──
+
+server.post('/google-calendar/sync', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'calendar.create');
+  if (!user) return;
+
+  const body = request.body as JsonRecord;
+  const direction = String(body.direction || 'pull'); // pull | push | both
+
+  const results: Record<string, unknown> = {};
+
+  if (direction === 'push' || direction === 'both') {
+    // Push all non-archived appointments that have no googleEventId
+    const unpushed = await prisma.appointment.findMany({
+      where: { isArchived: false, googleEventId: null },
+      take: 500,
+    });
+    let pushed = 0;
+    for (const apt of unpushed) {
+      await pushAppointmentToGoogle(apt.appointmentId);
+      pushed++;
+    }
+    results.pushed = pushed;
+  }
+
+  if (direction === 'pull' || direction === 'both') {
+    const pullResult = await pullFromGoogle();
+    results.pull = pullResult;
+  }
+
+  return { success: true, ...results };
+});
+
+// ── Google Calendar: Sync log ──
+
+server.get('/google-calendar/log', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+
+  const query = request.query as Record<string, string>;
+  const page = Math.max(1, parseInt(query.page || '1', 10));
+  const limit = Math.min(100, Math.max(1, parseInt(query.limit || '50', 10)));
+
+  const [logs, total] = await Promise.all([
+    prisma.googleCalendarLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.googleCalendarLog.count(),
+  ]);
+
+  return { logs, total, page, limit };
+});
+
+// ── Google Calendar: Webhook endpoint (for production push notifications) ──
+
+server.post('/google-calendar/webhook', async (request, reply) => {
+  // Google sends push notifications here
+  // Validate channel token header
+  const channelToken = (request.headers as Record<string, string>)['x-goog-channel-token'];
+  if (channelToken !== 'dq-gcal-sync') {
+    return reply.code(403).send({ message: 'Invalid channel token' });
+  }
+
+  // Trigger a pull sync
+  const resourceState = (request.headers as Record<string, string>)['x-goog-resource-state'];
+  if (resourceState === 'sync') {
+    // Initial sync confirmation — just acknowledge
+    return { ok: true };
+  }
+
+  // Resource changed — do incremental sync
+  try {
+    await pullFromGoogle();
+  } catch (e) {
+    server.log.warn('Webhook-triggered sync failed: ' + (e instanceof Error ? e.message : String(e)));
+  }
+  return { ok: true };
+});
+
+// ── Google Calendar: Register webhook (production only) ──
+
+server.post('/google-calendar/webhook/register', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
+
+  const body = request.body as JsonRecord;
+  const webhookUrl = String(body.webhookUrl || '');
+  if (!webhookUrl.startsWith('https://')) {
+    return reply.code(400).send({ message: 'Webhook URL must be HTTPS' });
+  }
+
+  const oauth2 = await getAuthedGoogleClient();
+  if (!oauth2) return reply.code(400).send({ message: 'Not connected to Google Calendar' });
+
+  const settings = await prisma.googleCalendarSync.findUnique({ where: { id: 'default' } });
+  let chairMap: Array<{ chairId: string; calendarId: string }> = [];
+  try { chairMap = JSON.parse(settings?.chairCalendarMap || '[]'); } catch { /* empty */ }
+
+  const results: Array<{ calendarId: string; channelId: string; expiration: string }> = [];
+  const calendar = google.calendar({ version: 'v3', auth: oauth2 });
+
+  for (const mapping of chairMap) {
+    try {
+      const channelId = randomUUID();
+      const res = await calendar.events.watch({
+        calendarId: mapping.calendarId,
+        requestBody: {
+          id: channelId,
+          type: 'web_hook',
+          address: webhookUrl,
+          token: 'dq-gcal-sync',
+          params: { ttl: '604800' }, // 7 days
+        },
+      });
+      results.push({
+        calendarId: mapping.calendarId,
+        channelId,
+        expiration: res.data.expiration || '',
+      });
+    } catch (e) {
+      server.log.warn('Webhook registration failed for ' + mapping.calendarId + ': ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  return { channels: results };
 });
 
 // ── NEAK API Test ─────────────────────────────────────────────
@@ -3816,15 +5386,16 @@ server.delete('/patients/:patientId/snapshots/:snapshotId', async (request, repl
 });
 
 // ---- Integrated Szamlazz + NEAK API (moved from server/) ----
-const INVOICE_MODE = process.env.INVOICE_MODE || 'preview';
+const INVOICE_MODE = process.env.INVOICE_MODE || 'test';
 const SZAMLAZZ_ENDPOINT = 'https://www.szamlazz.hu/szamla/';
-const AGENT_KEY_ENV = process.env.SZAMLAZZ_AGENT_KEY || '';
+const AGENT_KEY_TEST_ENV = process.env.SZAMLAZZ_AGENT_KEY_TEST || '';
+const AGENT_KEY_LIVE_ENV = process.env.SZAMLAZZ_AGENT_KEY_LIVE || '';
 
 async function getActiveAgentKey(): Promise<string> {
   const row = await prisma.invoiceSettings.findUnique({ where: { id: 'default' } });
-  if (!row) return AGENT_KEY_ENV;
+  if (!row) return INVOICE_MODE === 'live' ? AGENT_KEY_LIVE_ENV : AGENT_KEY_TEST_ENV;
   const key = row.invoiceMode === 'live' ? row.agentKeyLive : row.agentKeyTest;
-  return key || AGENT_KEY_ENV;
+  return key || (row.invoiceMode === 'live' ? AGENT_KEY_LIVE_ENV : AGENT_KEY_TEST_ENV);
 }
 
 const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -4543,7 +6114,18 @@ const runPendingMigrations = async () => {
       });
       server.log.info('Migrated invoice data from AppSettings → InvoiceSettings');
     } else if (!existing) {
-      await prisma.invoiceSettings.create({ data: { id: 'default' } });
+      // No row and no AppSettings data → seed from .env with test mode
+      await prisma.invoiceSettings.create({
+        data: {
+          id: 'default',
+          invoiceMode: 'test',
+          agentKeyTest: AGENT_KEY_TEST_ENV,
+          agentKeyLive: AGENT_KEY_LIVE_ENV,
+        },
+      });
+      if (AGENT_KEY_TEST_ENV || AGENT_KEY_LIVE_ENV) {
+        server.log.info('Created default InvoiceSettings from .env (test mode)');
+      }
     } else if (existing && inv && !existing.defaultComment && !existing.agentKeyLive && !existing.agentKeyTest) {
       // Row exists with empty defaults but AppSettings has real data → update
       await prisma.invoiceSettings.update({
@@ -4923,6 +6505,171 @@ const runPendingMigrations = async () => {
     `);
   } catch (e) {
     server.log.warn('AppointmentChair migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create SmsSettings table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SmsSettings" (
+        "id" TEXT NOT NULL DEFAULT 'default',
+        "twilioAccountSid" TEXT NOT NULL DEFAULT '',
+        "twilioAuthToken" TEXT NOT NULL DEFAULT '',
+        "twilioPhoneNumber" TEXT NOT NULL DEFAULT '',
+        "twilioWebhookUrl" TEXT NOT NULL DEFAULT '',
+        "isEnabled" BOOLEAN NOT NULL DEFAULT false,
+        "clinicName" TEXT NOT NULL DEFAULT '',
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "SmsSettings_pkey" PRIMARY KEY ("id")
+      )
+    `);
+  } catch (e) {
+    server.log.warn('SmsSettings migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Add customTemplates column to SmsSettings if missing
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SmsSettings" ADD COLUMN IF NOT EXISTS "customTemplates" TEXT NOT NULL DEFAULT '[]'`);
+  } catch (e) {
+    server.log.warn('SmsSettings customTemplates column skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create SmsLog table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "SmsLog" (
+        "id" TEXT NOT NULL,
+        "twilioSid" TEXT,
+        "toNumber" TEXT NOT NULL,
+        "fromNumber" TEXT NOT NULL,
+        "message" TEXT NOT NULL,
+        "templateId" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'pending',
+        "patientId" TEXT,
+        "patientName" TEXT,
+        "context" TEXT,
+        "errorCode" TEXT,
+        "errorMessage" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "SmsLog_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SmsLog_patientId_idx" ON "SmsLog"("patientId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SmsLog_twilioSid_idx" ON "SmsLog"("twilioSid")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SmsLog_status_idx" ON "SmsLog"("status")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SmsLog_createdAt_idx" ON "SmsLog"("createdAt")`);
+  } catch (e) {
+    server.log.warn('SmsLog migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create EmailSettings table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "EmailSettings" (
+        "id" TEXT NOT NULL DEFAULT 'default',
+        "smtpHost" TEXT NOT NULL DEFAULT '',
+        "smtpPort" INTEGER NOT NULL DEFAULT 587,
+        "smtpSecure" BOOLEAN NOT NULL DEFAULT false,
+        "smtpUser" TEXT NOT NULL DEFAULT '',
+        "smtpPass" TEXT NOT NULL DEFAULT '',
+        "fromEmail" TEXT NOT NULL DEFAULT '',
+        "fromName" TEXT NOT NULL DEFAULT '',
+        "isEnabled" BOOLEAN NOT NULL DEFAULT false,
+        "clinicName" TEXT NOT NULL DEFAULT '',
+        "customTemplates" TEXT NOT NULL DEFAULT '[]',
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "EmailSettings_pkey" PRIMARY KEY ("id")
+      )
+    `);
+  } catch (e) {
+    server.log.warn('EmailSettings migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create EmailLog table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "EmailLog" (
+        "id" TEXT NOT NULL,
+        "toEmail" TEXT NOT NULL,
+        "fromEmail" TEXT NOT NULL,
+        "subject" TEXT NOT NULL,
+        "body" TEXT NOT NULL,
+        "templateId" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'pending',
+        "patientId" TEXT,
+        "patientName" TEXT,
+        "context" TEXT,
+        "errorMessage" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "EmailLog_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EmailLog_patientId_idx" ON "EmailLog"("patientId")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EmailLog_status_idx" ON "EmailLog"("status")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EmailLog_createdAt_idx" ON "EmailLog"("createdAt")`);
+  } catch (e) {
+    server.log.warn('EmailLog migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Add googleCalendarId column to Appointment if missing
+  try {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Appointment" ADD COLUMN IF NOT EXISTS "googleCalendarId" TEXT`);
+  } catch (e) {
+    server.log.warn('Appointment googleCalendarId column skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create GoogleCalendarSync table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "GoogleCalendarSync" (
+        "id" TEXT NOT NULL DEFAULT 'default',
+        "clientId" TEXT NOT NULL DEFAULT '',
+        "clientSecret" TEXT NOT NULL DEFAULT '',
+        "redirectUri" TEXT NOT NULL DEFAULT '',
+        "accessToken" TEXT NOT NULL DEFAULT '',
+        "refreshToken" TEXT NOT NULL DEFAULT '',
+        "tokenExpiresAt" TIMESTAMP(3),
+        "isEnabled" BOOLEAN NOT NULL DEFAULT false,
+        "syncMode" TEXT NOT NULL DEFAULT 'bidirectional',
+        "pollIntervalMin" INTEGER NOT NULL DEFAULT 5,
+        "lastSyncAt" TIMESTAMP(3),
+        "syncToken" TEXT,
+        "chairCalendarMap" TEXT NOT NULL DEFAULT '[]',
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "GoogleCalendarSync_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    // Add credential columns if table already existed without them
+    await prisma.$executeRawUnsafe(`ALTER TABLE "GoogleCalendarSync" ADD COLUMN IF NOT EXISTS "clientId" TEXT NOT NULL DEFAULT ''`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "GoogleCalendarSync" ADD COLUMN IF NOT EXISTS "clientSecret" TEXT NOT NULL DEFAULT ''`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "GoogleCalendarSync" ADD COLUMN IF NOT EXISTS "redirectUri" TEXT NOT NULL DEFAULT ''`);
+  } catch (e) {
+    server.log.warn('GoogleCalendarSync migration skipped: ' + (e instanceof Error ? e.message : String(e)));
+  }
+
+  // Auto-create GoogleCalendarLog table if it doesn't exist
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "GoogleCalendarLog" (
+        "id" TEXT NOT NULL,
+        "direction" TEXT NOT NULL,
+        "action" TEXT NOT NULL,
+        "appointmentId" TEXT,
+        "googleEventId" TEXT,
+        "chairId" TEXT,
+        "calendarId" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'success',
+        "errorMessage" TEXT,
+        "details" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "GoogleCalendarLog_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "GoogleCalendarLog_createdAt_idx" ON "GoogleCalendarLog"("createdAt")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "GoogleCalendarLog_appointmentId_idx" ON "GoogleCalendarLog"("appointmentId")`);
+  } catch (e) {
+    server.log.warn('GoogleCalendarLog migration skipped: ' + (e instanceof Error ? e.message : String(e)));
   }
 
   // Seed default chairs

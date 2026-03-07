@@ -120,6 +120,23 @@ export function Layout({ children }: LayoutProps) {
       ),
     },
     {
+      key: 'notifications',
+      to: '/notifications',
+      label: t.nav.notifications,
+      permission: 'notifications.view',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+      ),
+      children: [
+        { to: '/notifications', label: t.nav.notificationsOverview },
+        { to: '/notifications/pending', label: t.nav.notificationsPending },
+        { to: '/notifications/sms', label: t.nav.notificationsSmsLog, permission: 'sms.history' },
+        { to: '/notifications/email', label: t.nav.notificationsEmailLog, permission: 'email.history' },
+      ],
+    },
+    {
       key: 'catalog',
       to: '/catalog',
       label: t.nav.catalog,
@@ -171,6 +188,8 @@ export function Layout({ children }: LayoutProps) {
         { to: '/settings/quotes', label: t.nav.settingsQuotes },
         { to: '/settings/invoicing', label: t.nav.settingsInvoicing },
         { to: '/settings/neak', label: t.nav.settingsNeak },
+        { to: '/settings/sms', label: t.nav.settingsSms, permission: 'sms.settings' },
+        { to: '/settings/email', label: t.nav.settingsEmail, permission: 'email.settings' },
       ],
     },
     {
@@ -241,7 +260,7 @@ export function Layout({ children }: LayoutProps) {
   const navItems = allNavItems.filter((item) => !item.permission || hasPermission(item.permission));
 
   return (
-    <div className="min-h-screen bg-theme-primary flex">
+    <div className="min-h-screen bg-theme-primary flex pt-[5px]">
       {/* Sidebar */}
       <aside
         className={`${

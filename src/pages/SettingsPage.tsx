@@ -5,13 +5,15 @@ import { useQuotes } from '../hooks';
 import { Settings, Doctor, DateFormat, PdfFontFamily } from '../types';
 import { Button, Card, CardContent, CardHeader, Input, TextArea, Select, ConfirmModal, Modal, PageTabBar } from '../components/common';
 import { useAppointments } from '../hooks/useAppointments';
+import { useGoogleCalendar } from '../hooks/useGoogleCalendar';
 import type { AppointmentType } from '../types';
 import type { AppointmentChair } from '../types/appointment';
+import type { ChairCalendarMapping } from '../types/googleCalendar';
 import type { PageTab } from '../components/common/PageTabBar';
 import { formatDateTimeWithPattern } from '../utils';
 import { getAuthHeaders } from '../utils/auth';
 
-type SettingsSection = 'general' | 'clinic' | 'patient' | 'quotes' | 'invoicing' | 'neak' | 'calendar';
+type SettingsSection = 'general' | 'clinic' | 'patient' | 'quotes' | 'invoicing' | 'neak' | 'calendar' | 'sms' | 'email';
 
 type DoctorRow = { doctorId: string; doctorName: string; doctorNum: string; doctorEESZTId: string };
 
@@ -24,6 +26,914 @@ const DATE_FORMAT_OPTIONS: DateFormat[] = [
   'MM.DD.YYYY HH:MM:SS',
   'MM/DD/YYYY HH:MM:SS',
 ];
+
+interface SmsTemplateForm {
+  id: string;
+  name: string;
+  text: string;
+  variables: string[];
+}
+
+interface EmailTemplateForm {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  variables: string[];
+}
+
+function GoogleCalendarSection() {
+  const { t } = useSettings();
+  const { settings: gcalSettings, fetchSettings, updateSettings, getAuthUrl, disconnect, fetchCalendars, calendars, triggerSync, loading: syncLoading } = useGoogleCalendar();
+  const { chairs, fetchChairs } = useAppointments();
+  const [chairMap, setChairMap] = useState<ChairCalendarMapping[]>([]);
+  const [calendarsLoaded, setCalendarsLoaded] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [credForm, setCredForm] = useState({ clientId: '', clientSecret: '', redirectUri: '' });
+  const [credSaved, setCredSaved] = useState(false);
+
+  useEffect(() => {
+    fetchChairs();
+    fetchSettings().then((s) => {
+      if (s?.chairCalendarMap) {
+        try { setChairMap(JSON.parse(s.chairCalendarMap)); } catch { /* empty */ }
+      }
+      if (s) {
+        setCredForm({
+          clientId: s.clientId || '',
+          clientSecret: s.clientSecret || '',
+          redirectUri: s.redirectUri || '',
+        });
+      }
+    });
+  }, [fetchSettings]);
+
+  const handleSaveCredentials = async () => {
+    const payload: Record<string, string> = {
+      clientId: credForm.clientId,
+      redirectUri: credForm.redirectUri,
+    };
+    // Only send secret if changed (not the masked value)
+    if (credForm.clientSecret && credForm.clientSecret !== '••••••••') {
+      payload.clientSecret = credForm.clientSecret;
+    }
+    await updateSettings(payload as any);
+    setCredSaved(true);
+    setTimeout(() => setCredSaved(false), 3000);
+    await fetchSettings();
+  };
+
+  const handleConnect = async () => {
+    const url = await getAuthUrl();
+    if (url) window.location.href = url;
+  };
+
+  const handleDisconnect = async () => {
+    if (!confirm(t.calendar.google.disconnectConfirm)) return;
+    await disconnect();
+    await fetchSettings();
+  };
+
+  const handleLoadCalendars = async () => {
+    await fetchCalendars();
+    setCalendarsLoaded(true);
+  };
+
+  const handleChairCalendarChange = (chairId: string, chairNr: number, calendarId: string, calendarName: string) => {
+    setChairMap(prev => {
+      const existing = prev.findIndex(m => m.chairId === chairId);
+      const updated = [...prev];
+      if (existing >= 0) {
+        if (calendarId) {
+          updated[existing] = { chairId, chairNr, calendarId, calendarName };
+        } else {
+          updated.splice(existing, 1);
+        }
+      } else if (calendarId) {
+        updated.push({ chairId, chairNr, calendarId, calendarName });
+      }
+      return updated;
+    });
+  };
+
+  const handleSaveMapping = async () => {
+    await updateSettings({ chairCalendarMap: JSON.stringify(chairMap) });
+  };
+
+  const handleToggleEnabled = async () => {
+    await updateSettings({ isEnabled: !gcalSettings?.isEnabled });
+    await fetchSettings();
+  };
+
+  const handleSyncModeChange = async (mode: string) => {
+    await updateSettings({ syncMode: mode as 'push' | 'pull' | 'bidirectional' });
+  };
+
+  const handleSync = async () => {
+    setSyncResult(null);
+    const result = await triggerSync('both');
+    if (result) {
+      setSyncResult(t.calendar.google.syncSuccess);
+      setTimeout(() => setSyncResult(null), 4000);
+      await fetchSettings();
+    }
+  };
+
+  if (!gcalSettings) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <svg className="w-5 h-5 text-theme-tertiary" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          {t.calendar.google.title}
+        </h2>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-5">
+          {/* OAuth Credentials */}
+          <div className="space-y-3">
+            <p className="text-xs text-theme-muted">{t.calendar.google.credentialsDesc}</p>
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-theme-secondary mb-1">{t.calendar.google.clientId}</label>
+                <input
+                  type="text"
+                  value={credForm.clientId}
+                  onChange={(e) => setCredForm(prev => ({ ...prev, clientId: e.target.value }))}
+                  className="w-full px-3 py-2 border border-theme-secondary rounded-lg text-sm bg-theme-primary text-theme-primary font-mono"
+                  placeholder="xxxx.apps.googleusercontent.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-theme-secondary mb-1">{t.calendar.google.clientSecret}</label>
+                <input
+                  type="password"
+                  value={credForm.clientSecret}
+                  onChange={(e) => setCredForm(prev => ({ ...prev, clientSecret: e.target.value }))}
+                  className="w-full px-3 py-2 border border-theme-secondary rounded-lg text-sm bg-theme-primary text-theme-primary font-mono"
+                  placeholder={gcalSettings.clientSecretSet ? '••••••••' : 'GOCSPX-...'}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-theme-secondary mb-1">{t.calendar.google.redirectUri}</label>
+                <input
+                  type="text"
+                  value={credForm.redirectUri}
+                  onChange={(e) => setCredForm(prev => ({ ...prev, redirectUri: e.target.value }))}
+                  className="w-full px-3 py-2 border border-theme-secondary rounded-lg text-sm bg-theme-primary text-theme-primary font-mono"
+                  placeholder="http://localhost:4000/backend/google-calendar/callback"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button size="sm" onClick={handleSaveCredentials}>{t.calendar.google.saveCredentials}</Button>
+              {credSaved && <span className="text-sm text-green-600 dark:text-green-400">{t.calendar.google.credentialsSaved}</span>}
+            </div>
+          </div>
+
+          <hr className="border-theme-primary" />
+
+          {/* Connection status */}
+          {!gcalSettings.hasCredentials ? (
+            <div className="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 text-sm">
+              {t.calendar.google.noCredentials}
+            </div>
+          ) : !gcalSettings.isConnected ? (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-theme-secondary">{t.calendar.google.notConnected}</span>
+              <Button size="sm" onClick={handleConnect}>{t.calendar.google.connect}</Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400 font-medium">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  {t.calendar.google.connected}
+                </span>
+                <Button size="sm" variant="secondary" onClick={handleDisconnect}>{t.calendar.google.disconnect}</Button>
+              </div>
+
+              {/* Enable toggle */}
+              <div className="flex items-center gap-3">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={gcalSettings.isEnabled}
+                    onChange={handleToggleEnabled}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-300 dark:bg-gray-600 peer-checked:bg-dental-500 rounded-full transition-colors after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+                </label>
+                <span className="text-sm text-theme-primary">
+                  {gcalSettings.isEnabled ? t.calendar.google.enabled : t.calendar.google.disabled}
+                </span>
+              </div>
+
+              {/* Sync mode */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-theme-secondary mb-1">{t.calendar.google.syncMode}</label>
+                  <select
+                    value={gcalSettings.syncMode}
+                    onChange={(e) => handleSyncModeChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-theme-secondary rounded-lg text-sm bg-theme-primary text-theme-primary"
+                  >
+                    <option value="bidirectional">{t.calendar.google.syncModeBidirectional}</option>
+                    <option value="push">{t.calendar.google.syncModePush}</option>
+                    <option value="pull">{t.calendar.google.syncModePull}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-secondary mb-1">{t.calendar.google.lastSync}</label>
+                  <p className="text-sm text-theme-primary py-2">
+                    {gcalSettings.lastSyncAt
+                      ? new Date(gcalSettings.lastSyncAt).toLocaleString('hu-HU')
+                      : t.calendar.google.never}
+                  </p>
+                </div>
+              </div>
+
+              {/* Chair → Calendar mapping */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-theme-secondary">{t.calendar.google.chairMapping}</label>
+                  <Button size="sm" variant="secondary" onClick={handleLoadCalendars}>
+                    {t.calendar.google.loadCalendars}
+                  </Button>
+                </div>
+
+                {calendarsLoaded && calendars.length === 0 && (
+                  <p className="text-sm text-theme-muted">{t.calendar.google.noCalendar}</p>
+                )}
+
+                {chairs.filter(c => c.isActive).map((chair) => {
+                  const mapping = chairMap.find(m => m.chairId === chair.chairId);
+                  return (
+                    <div key={chair.chairId} className="flex items-center gap-3 py-1.5">
+                      <span className="text-sm text-theme-primary w-32 truncate font-medium">{chair.chairNameHu}</span>
+                      <select
+                        value={mapping?.calendarId || ''}
+                        onChange={(e) => {
+                          const cal = calendars.find(c => c.id === e.target.value);
+                          handleChairCalendarChange(chair.chairId, chair.chairNr, e.target.value, cal?.summary || '');
+                        }}
+                        className="flex-1 px-3 py-1.5 border border-theme-secondary rounded-lg text-sm bg-theme-primary text-theme-primary"
+                      >
+                        <option value="">{t.calendar.google.noCalendar}</option>
+                        {calendars.map(cal => (
+                          <option key={cal.id} value={cal.id}>{cal.summary}{cal.primary ? ' ★' : ''}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+
+                {chairMap.length > 0 && (
+                  <div className="flex justify-end mt-2">
+                    <Button size="sm" onClick={handleSaveMapping}>{t.common.save}</Button>
+                  </div>
+                )}
+
+                {!gcalSettings.isEnabled && chairMap.length === 0 && (
+                  <p className="text-xs text-theme-muted mt-1">{t.calendar.google.configureFirst}</p>
+                )}
+              </div>
+
+              {/* Sync now */}
+              <div className="flex items-center gap-3 pt-2 border-t border-theme-primary">
+                <Button
+                  size="sm"
+                  onClick={handleSync}
+                  disabled={syncLoading || !gcalSettings.isEnabled}
+                >
+                  {syncLoading ? t.calendar.google.syncing : t.calendar.google.syncNow}
+                </Button>
+                {syncResult && (
+                  <span className="text-sm text-green-600 dark:text-green-400">{syncResult}</span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SmsSettingsSection() {
+  const { t } = useSettings();
+  const [smsForm, setSmsForm] = useState({
+    twilioAccountSid: '',
+    twilioAuthToken: '',
+    twilioPhoneNumber: '',
+    twilioWebhookUrl: '',
+    isEnabled: false,
+    clinicName: '',
+  });
+  const [smsSaved, setSmsSaved] = useState(false);
+  const [smsLoading, setSmsLoading] = useState(true);
+  const [testPhone, setTestPhone] = useState('');
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testLoading, setTestLoading] = useState(false);
+  const [showToken, setShowToken] = useState(false);
+  const [templates, setTemplates] = useState<SmsTemplateForm[]>([]);
+  const [defaultTemplates, setDefaultTemplates] = useState<SmsTemplateForm[]>([]);
+  const [templatesSaved, setTemplatesSaved] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setSmsLoading(true);
+      try {
+        const [settingsRes, tmplRes] = await Promise.all([
+          fetch('/backend/sms-settings', { headers: getAuthHeaders() }),
+          fetch('/backend/sms/templates/editable', { headers: getAuthHeaders() }),
+        ]);
+        if (settingsRes.ok) {
+          const data = await settingsRes.json();
+          setSmsForm(data);
+        }
+        if (tmplRes.ok) {
+          const data = await tmplRes.json();
+          setTemplates(data.templates || []);
+          setDefaultTemplates(data.defaults || []);
+        }
+      } finally {
+        setSmsLoading(false);
+      }
+    })();
+  }, []);
+
+  const saveSms = async () => {
+    await fetch('/backend/sms-settings', {
+      method: 'PUT',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(smsForm),
+    });
+    setSmsSaved(true);
+    setTimeout(() => setSmsSaved(false), 2000);
+  };
+
+  const sendTest = async () => {
+    setTestLoading(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/backend/sms-settings/test', {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: testPhone }),
+      });
+      const data = await res.json();
+      setTestResult({
+        success: data.success,
+        message: data.success ? t.sms.testSuccess : (data.error || t.sms.testError),
+      });
+    } catch {
+      setTestResult({ success: false, message: t.sms.testError });
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  const saveTemplates = async () => {
+    await fetch('/backend/sms/templates', {
+      method: 'PUT',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templates }),
+    });
+    setTemplatesSaved(true);
+    setTimeout(() => setTemplatesSaved(false), 2000);
+  };
+
+  const updateTemplate = (index: number, field: keyof SmsTemplateForm, value: string) => {
+    setTemplates(prev => prev.map((tmpl, i) => i === index ? { ...tmpl, [field]: value } : tmpl));
+  };
+
+  const removeTemplate = (index: number) => {
+    setTemplates(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const addTemplate = () => {
+    const newId = 'custom_' + Date.now();
+    setTemplates(prev => [...prev, { id: newId, name: '', text: '', variables: [] }]);
+  };
+
+  const resetTemplates = () => {
+    setTemplates(defaultTemplates.map(d => ({ ...d })));
+  };
+
+  if (smsLoading) return <div className="text-center py-8 text-theme-muted">...</div>;
+
+  return (
+    <>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+            {t.sms.settingsTitle}
+          </h2>
+          <div className="flex items-center gap-3">
+            {smsSaved && <span className="text-sm text-green-600">{t.settings.saved}</span>}
+            <Button onClick={saveSms}>{t.common.save}</Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-6">
+          {/* Enable/Disable */}
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={smsForm.isEnabled}
+              onChange={(e) => setSmsForm({ ...smsForm, isEnabled: e.target.checked })}
+              className="rounded border-theme-secondary w-5 h-5"
+            />
+            <span className={`text-sm font-medium ${smsForm.isEnabled ? 'text-green-600 dark:text-green-400' : 'text-theme-muted'}`}>
+              {smsForm.isEnabled ? t.sms.enabled : t.sms.disabled}
+            </span>
+          </label>
+
+          {/* Twilio credentials */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label={t.sms.twilioAccountSid}
+              value={smsForm.twilioAccountSid}
+              onChange={(e) => setSmsForm({ ...smsForm, twilioAccountSid: e.target.value })}
+            />
+            <div>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.sms.twilioAuthToken}</label>
+              <div className="relative">
+                <input
+                  type={showToken ? 'text' : 'password'}
+                  value={smsForm.twilioAuthToken}
+                  onChange={(e) => setSmsForm({ ...smsForm, twilioAuthToken: e.target.value })}
+                  className="w-full px-3 py-2 border border-theme-secondary rounded-lg text-sm bg-theme-primary text-theme-primary pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowToken(!showToken)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-primary"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    {showToken ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    )}
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label={t.sms.twilioPhoneNumber}
+              value={smsForm.twilioPhoneNumber}
+              onChange={(e) => setSmsForm({ ...smsForm, twilioPhoneNumber: e.target.value })}
+              placeholder="+36..."
+            />
+            <Input
+              label={t.sms.clinicNameForSms}
+              value={smsForm.clinicName}
+              onChange={(e) => setSmsForm({ ...smsForm, clinicName: e.target.value })}
+            />
+          </div>
+
+          <Input
+            label={t.sms.twilioWebhookUrl}
+            value={smsForm.twilioWebhookUrl}
+            onChange={(e) => setSmsForm({ ...smsForm, twilioWebhookUrl: e.target.value })}
+            placeholder="https://yourdomain.com/backend/webhook/twilio"
+          />
+
+          {/* Test SMS */}
+          <div className="border-t border-theme-primary pt-4">
+            <h3 className="text-sm font-medium text-theme-secondary mb-3">{t.sms.testSms}</h3>
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <Input
+                  label={t.sms.testPhone}
+                  value={testPhone}
+                  onChange={(e) => setTestPhone(e.target.value)}
+                  placeholder="+36201234567"
+                />
+              </div>
+              <Button onClick={sendTest} disabled={!testPhone || testLoading || !smsForm.isEnabled}>
+                {testLoading ? '...' : t.sms.testSms}
+              </Button>
+            </div>
+            {testResult && (
+              <div className={`mt-3 p-3 rounded-lg text-sm ${testResult.success ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'}`}>
+                {testResult.message}
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* SMS Templates Card */}
+    <Card className="mt-6">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+            </svg>
+            {t.sms.templatesTitle}
+          </h2>
+          <div className="flex items-center gap-3">
+            {templatesSaved && <span className="text-sm text-green-600">{t.sms.templateSaved}</span>}
+            <Button variant="secondary" onClick={resetTemplates}>{t.sms.resetToDefault}</Button>
+            <Button onClick={saveTemplates}>{t.common.save}</Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-xs text-theme-muted mb-4">{t.sms.templateVariablesHint}</p>
+        <div className="space-y-4">
+          {templates.map((tmpl, idx) => (
+            <div key={tmpl.id} className="border border-theme-primary rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-theme-muted">{tmpl.id}</span>
+                <button
+                  type="button"
+                  onClick={() => removeTemplate(idx)}
+                  className="text-red-500 hover:text-red-700 text-sm"
+                  title={t.sms.deleteTemplate}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-1 13H6L5 7M10 11v6m4-6v6M9 7V4h6v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+              <Input
+                label={t.sms.templateName}
+                value={tmpl.name}
+                onChange={(e) => updateTemplate(idx, 'name', e.target.value)}
+              />
+              <div>
+                <label className="block text-sm font-medium text-theme-secondary mb-1">{t.sms.templateText}</label>
+                <textarea
+                  value={tmpl.text}
+                  onChange={(e) => updateTemplate(idx, 'text', e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-theme-secondary rounded-lg text-sm bg-theme-primary text-theme-primary focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
+                />
+                {tmpl.text && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {[...tmpl.text.matchAll(/\{\{(\w+)\}\}/g)].map((m, i) => (
+                      <span key={i} className="inline-block text-xs bg-dental-50 dark:bg-dental-900/30 text-dental-700 dark:text-dental-300 px-1.5 py-0.5 rounded font-mono">
+                        {m[1]}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={addTemplate}
+          className="mt-4 flex items-center gap-2 px-4 py-2 text-sm border border-dashed border-theme-secondary rounded-lg text-theme-secondary hover:border-dental-400 hover:text-dental-600 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          {t.sms.addTemplate}
+        </button>
+      </CardContent>
+    </Card>
+    </>
+  );
+}
+
+function EmailSettingsSection() {
+  const { t } = useSettings();
+  const [emailForm, setEmailForm] = useState({
+    smtpHost: '', smtpPort: 587, smtpSecure: false,
+    smtpUser: '', smtpPass: '', fromEmail: '', fromName: '',
+    isEnabled: false, clinicName: '',
+  });
+  const [emailSaved, setEmailSaved] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(true);
+  const [testEmail, setTestEmail] = useState('');
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testLoading, setTestLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+  const [templates, setTemplates] = useState<EmailTemplateForm[]>([]);
+  const [defaultTemplates, setDefaultTemplates] = useState<EmailTemplateForm[]>([]);
+  const [templatesSaved, setTemplatesSaved] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setEmailLoading(true);
+      try {
+        const [settingsRes, tmplRes] = await Promise.all([
+          fetch('/backend/email-settings', { headers: getAuthHeaders() }),
+          fetch('/backend/email/templates/editable', { headers: getAuthHeaders() }),
+        ]);
+        if (settingsRes.ok) {
+          const data = await settingsRes.json();
+          setEmailForm(data);
+        }
+        if (tmplRes.ok) {
+          const data = await tmplRes.json();
+          setTemplates(data.templates || []);
+          setDefaultTemplates(data.defaults || []);
+        }
+      } finally {
+        setEmailLoading(false);
+      }
+    })();
+  }, []);
+
+  const saveEmail = async () => {
+    await fetch('/backend/email-settings', {
+      method: 'PUT',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(emailForm),
+    });
+    setEmailSaved(true);
+    setTimeout(() => setEmailSaved(false), 2000);
+  };
+
+  const sendTest = async () => {
+    setTestLoading(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/backend/email-settings/test', {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: testEmail }),
+      });
+      const data = await res.json();
+      setTestResult({
+        success: data.success,
+        message: data.success ? t.email.testSuccess : (data.error || t.email.testError),
+      });
+    } catch {
+      setTestResult({ success: false, message: t.email.testError });
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  const saveTemplates = async () => {
+    await fetch('/backend/email/templates', {
+      method: 'PUT',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templates }),
+    });
+    setTemplatesSaved(true);
+    setTimeout(() => setTemplatesSaved(false), 2000);
+  };
+
+  const updateTemplate = (index: number, field: keyof EmailTemplateForm, value: string) => {
+    setTemplates(prev => prev.map((tmpl, i) => i === index ? { ...tmpl, [field]: value } : tmpl));
+  };
+
+  const removeTemplate = (index: number) => {
+    setTemplates(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const addTemplate = () => {
+    const newId = 'custom_' + Date.now();
+    setTemplates(prev => [...prev, { id: newId, name: '', subject: '', body: '', variables: [] }]);
+  };
+
+  const resetTemplates = () => {
+    setTemplates(defaultTemplates.map(d => ({ ...d })));
+  };
+
+  if (emailLoading) return <div className="text-center py-8 text-theme-muted">...</div>;
+
+  return (
+    <>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            {t.email.settingsTitle}
+          </h2>
+          <div className="flex items-center gap-3">
+            {emailSaved && <span className="text-sm text-green-600">{t.settings.saved}</span>}
+            <Button onClick={saveEmail}>{t.common.save}</Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-6">
+          {/* Enable/Disable */}
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={emailForm.isEnabled}
+              onChange={(e) => setEmailForm({ ...emailForm, isEnabled: e.target.checked })}
+              className="rounded border-theme-secondary w-5 h-5"
+            />
+            <span className={`text-sm font-medium ${emailForm.isEnabled ? 'text-green-600 dark:text-green-400' : 'text-theme-muted'}`}>
+              {emailForm.isEnabled ? t.email.enabled : t.email.disabled}
+            </span>
+          </label>
+
+          {/* SMTP credentials */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label={t.email.smtpHost}
+              value={emailForm.smtpHost}
+              onChange={(e) => setEmailForm({ ...emailForm, smtpHost: e.target.value })}
+              placeholder="smtp.gmail.com"
+            />
+            <Input
+              label={t.email.smtpPort}
+              value={String(emailForm.smtpPort)}
+              onChange={(e) => setEmailForm({ ...emailForm, smtpPort: Number(e.target.value) || 587 })}
+              placeholder="587"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label={t.email.smtpUser}
+              value={emailForm.smtpUser}
+              onChange={(e) => setEmailForm({ ...emailForm, smtpUser: e.target.value })}
+            />
+            <div>
+              <label className="block text-sm font-medium text-theme-secondary mb-1">{t.email.smtpPass}</label>
+              <div className="relative">
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  value={emailForm.smtpPass}
+                  onChange={(e) => setEmailForm({ ...emailForm, smtpPass: e.target.value })}
+                  className="w-full px-3 py-2 border border-theme-secondary rounded-lg text-sm bg-theme-primary text-theme-primary pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-primary"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    {showPass ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    )}
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={emailForm.smtpSecure}
+              onChange={(e) => setEmailForm({ ...emailForm, smtpSecure: e.target.checked })}
+              className="rounded border-theme-secondary w-4 h-4"
+            />
+            <span className="text-sm text-theme-secondary">{t.email.smtpSecure}</span>
+          </label>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label={t.email.fromEmail}
+              value={emailForm.fromEmail}
+              onChange={(e) => setEmailForm({ ...emailForm, fromEmail: e.target.value })}
+              placeholder="noreply@clinic.hu"
+            />
+            <Input
+              label={t.email.fromName}
+              value={emailForm.fromName}
+              onChange={(e) => setEmailForm({ ...emailForm, fromName: e.target.value })}
+            />
+          </div>
+
+          <Input
+            label={t.email.clinicNameForEmail}
+            value={emailForm.clinicName}
+            onChange={(e) => setEmailForm({ ...emailForm, clinicName: e.target.value })}
+          />
+
+          {/* Test Email */}
+          <div className="border-t border-theme-primary pt-4">
+            <h3 className="text-sm font-medium text-theme-secondary mb-3">{t.email.testEmail}</h3>
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <Input
+                  label={t.email.testAddress}
+                  value={testEmail}
+                  onChange={(e) => setTestEmail(e.target.value)}
+                  placeholder="test@example.com"
+                />
+              </div>
+              <Button onClick={sendTest} disabled={!testEmail || testLoading || !emailForm.isEnabled}>
+                {testLoading ? '...' : t.email.testEmail}
+              </Button>
+            </div>
+            {testResult && (
+              <div className={`mt-3 p-3 rounded-lg text-sm ${testResult.success ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'}`}>
+                {testResult.message}
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* Email Templates Card */}
+    <Card className="mt-6">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+            </svg>
+            {t.email.templatesTitle}
+          </h2>
+          <div className="flex items-center gap-3">
+            {templatesSaved && <span className="text-sm text-green-600">{t.email.templateSaved}</span>}
+            <Button variant="secondary" onClick={resetTemplates}>{t.email.resetToDefault}</Button>
+            <Button onClick={saveTemplates}>{t.common.save}</Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-xs text-theme-muted mb-4">{t.email.templateVariablesHint}</p>
+        <div className="space-y-4">
+          {templates.map((tmpl, idx) => (
+            <div key={tmpl.id} className="border border-theme-primary rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-theme-muted">{tmpl.id}</span>
+                <button
+                  type="button"
+                  onClick={() => removeTemplate(idx)}
+                  className="text-red-500 hover:text-red-700 text-sm"
+                  title={t.email.deleteTemplate}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-1 13H6L5 7M10 11v6m4-6v6M9 7V4h6v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+              <Input
+                label={t.email.templateName}
+                value={tmpl.name}
+                onChange={(e) => updateTemplate(idx, 'name', e.target.value)}
+              />
+              <Input
+                label={t.email.templateSubject}
+                value={tmpl.subject}
+                onChange={(e) => updateTemplate(idx, 'subject', e.target.value)}
+              />
+              <div>
+                <label className="block text-sm font-medium text-theme-secondary mb-1">{t.email.templateBody}</label>
+                <textarea
+                  value={tmpl.body}
+                  onChange={(e) => updateTemplate(idx, 'body', e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-theme-secondary rounded-lg text-sm bg-theme-primary text-theme-primary focus:ring-2 focus:ring-dental-500 focus:border-dental-500"
+                />
+                {tmpl.body && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {[...tmpl.body.matchAll(/\{\{(\w+)\}\}/g), ...tmpl.subject.matchAll(/\{\{(\w+)\}\}/g)].map((m, i) => (
+                      <span key={i} className="inline-block text-xs bg-dental-50 dark:bg-dental-900/30 text-dental-700 dark:text-dental-300 px-1.5 py-0.5 rounded font-mono">
+                        {m[1]}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={addTemplate}
+          className="mt-4 flex items-center gap-2 px-4 py-2 text-sm border border-dashed border-theme-secondary rounded-lg text-theme-secondary hover:border-dental-400 hover:text-dental-600 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          {t.email.addTemplate}
+        </button>
+      </CardContent>
+    </Card>
+    </>
+  );
+}
 
 export function SettingsPage({ section }: { section?: SettingsSection }) {
   const {
@@ -412,6 +1322,8 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
     { key: 'quotes', to: '/settings/quotes', label: t.settings.tabQuotes, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
     { key: 'invoicing', to: '/settings/invoicing', label: t.settings.tabInvoicing, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg> },
     { key: 'neak', to: '/settings/neak', label: t.settings.tabNeak, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> },
+    { key: 'sms', to: '/settings/sms', label: t.sms.title, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg> },
+    { key: 'email', to: '/settings/email', label: t.email.title, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg> },
   ];
 
   const overviewCards: Array<{ key: SettingsSection; to: string; title: string; description: string; icon: React.ReactNode }> = [
@@ -493,6 +1405,28 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
         </svg>
       ),
     },
+    {
+      key: 'sms',
+      to: '/settings/sms',
+      title: t.sms.settingsTitle,
+      description: t.sms.overviewDesc,
+      icon: (
+        <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+        </svg>
+      ),
+    },
+    {
+      key: 'email',
+      to: '/settings/email',
+      title: t.email.settingsTitle,
+      description: t.email.overviewDesc,
+      icon: (
+        <svg className="w-8 h-8 text-dental-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+      ),
+    },
   ];
 
   const taxDigits = (formData.clinic.taxNumber || '').replace(/\D/g, '');
@@ -504,7 +1438,7 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
           <h1 className="text-2xl font-bold text-theme-primary">{t.settings.title}</h1>
           <p className="text-theme-tertiary mt-1">{t.settings.subtitle}</p>
         </div>
-        {section && section !== 'neak' && (
+        {section && section !== 'neak' && section !== 'sms' && section !== 'email' && (
           <div className="flex items-center gap-3">
             {saved && (
               <span className="text-green-600 flex items-center gap-2">
@@ -2116,7 +3050,21 @@ export function SettingsPage({ section }: { section?: SettingsSection }) {
               </div>
             </div>
           </Modal>
+
+          {/* Google Calendar Integration */}
+          <div className="mt-6">
+            <GoogleCalendarSection />
+          </div>
           </>
+        )}
+
+        {/* SMS section */}
+        {section === 'sms' && (
+          <SmsSettingsSection />
+        )}
+
+        {section === 'email' && (
+          <EmailSettingsSection />
         )}
       </div>
 

@@ -1,7 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Modal, Button, Input, Select, TextArea } from '../common';
 import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
 import { formatBirthDateForDisplay, parseBirthDateFromDisplay, getDatePlaceholder } from '../../utils/formatters';
+import { formatPatientName } from '../../utils/formatters';
+import { useSms } from '../../hooks/useSms';
+import { SmsSendModal } from '../sms/SmsSendModal';
 import type { Appointment, AppointmentType, AppointmentStatus } from '../../types';
 import type { AppointmentChair } from '../../types/appointment';
 import type { Patient } from '../../types';
@@ -50,7 +54,16 @@ export function AppointmentModal({
   chairs,
   defaultChairIndex,
 }: AppointmentModalProps) {
-  const { t, appLanguage } = useSettings();
+  const { t, appLanguage, settings } = useSettings();
+  const { hasPermission } = useAuth();
+  const { checkEnabled: checkSmsEnabled } = useSms();
+  const [smsEnabled, setSmsEnabled] = useState(false);
+  const [smsModalOpen, setSmsModalOpen] = useState(false);
+
+  useEffect(() => {
+    checkSmsEnabled().then(setSmsEnabled);
+  }, [checkSmsEnabled]);
+
   const isEdit = !!appointment;
   const isRecurring = !!(appointment?.recurrenceRule || appointment?.recurrenceParentId);
 
@@ -475,12 +488,25 @@ export function AppointmentModal({
 
         {/* Buttons */}
         <div className="flex justify-between pt-2">
-          <div>
+          <div className="flex gap-2">
             {isEdit && onDelete && (
               <Button variant="danger" onClick={handleDelete} disabled={saving}>
                 {t.calendar.deleteAppointment}
               </Button>
             )}
+            {isEdit && smsEnabled && patientId && hasPermission('sms.send') && (() => {
+              const p = patients.find(pt => pt.patientId === patientId);
+              return p?.phone ? (
+                <Button variant="secondary" onClick={() => setSmsModalOpen(true)}>
+                  <span className="flex items-center gap-1.5">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                    </svg>
+                    SMS
+                  </span>
+                </Button>
+              ) : null;
+            })()}
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" onClick={onClose}>
@@ -492,6 +518,32 @@ export function AppointmentModal({
           </div>
         </div>
       </div>
+
+      {/* SMS Reminder Modal */}
+      {(() => {
+        const selectedPatient = patients.find(pt => pt.patientId === patientId);
+        if (!selectedPatient?.phone) return null;
+        const apptDate = parseBirthDateFromDisplay(startDate);
+        const dateStr = apptDate ? formatBirthDateForDisplay(apptDate) : startDate;
+        return (
+          <SmsSendModal
+            isOpen={smsModalOpen}
+            onClose={() => setSmsModalOpen(false)}
+            patientId={patientId}
+            patientName={formatPatientName(selectedPatient.lastName, selectedPatient.firstName, selectedPatient.title)}
+            phoneNumber={selectedPatient.phone}
+            isHungarianPhone={selectedPatient.isHungarianPhone ?? true}
+            context="appointment_reminder"
+            preselectedTemplate="appointment_reminder"
+            templateVariables={{
+              patientName: `${selectedPatient.lastName} ${selectedPatient.firstName}`,
+              appointmentDate: dateStr,
+              appointmentTime: startTime,
+              clinicName: settings.clinic?.name || '',
+            }}
+          />
+        );
+      })()}
     </Modal>
   );
 }

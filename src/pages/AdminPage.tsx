@@ -64,6 +64,13 @@ function getPermissionLabels(t: TranslationKeys): Record<string, string> {
     'calendar.view': t.admin.permCalendarView,
     'calendar.create': t.admin.permCalendarCreate,
     'calendar.delete': t.admin.permCalendarDelete,
+    'notifications.view': t.admin.permNotificationsView,
+    'sms.send': t.admin.permSmsSend,
+    'sms.history': t.admin.permSmsHistory,
+    'sms.settings': t.admin.permSmsSettings,
+    'email.send': t.admin.permEmailSend,
+    'email.history': t.admin.permEmailHistory,
+    'email.settings': t.admin.permEmailSettings,
     'admin.users.manage': t.admin.permAdminUsersManage,
     'admin.permissions.manage': t.admin.permAdminPermissionsManage,
   };
@@ -78,6 +85,7 @@ function getPermissionGroups(t: TranslationKeys): PermissionGroup[] {
     { label: t.admin.permGroupPriceLists, keys: ['pricelist.view', 'pricelist.create', 'pricelist.update', 'pricelist.delete', 'pricelist.restore', 'pricelist.category.create', 'pricelist.category.update', 'pricelist.category.delete', 'pricelist.category.restore', 'catalog.create', 'catalog.update', 'catalog.deactivate', 'catalog.delete', 'catalog.restore'] },
     { label: t.admin.permGroupPatients, keys: ['patients.create', 'patients.update', 'patients.delete'] },
     { label: t.admin.permGroupCalendar, keys: ['calendar.view', 'calendar.create', 'calendar.delete'] },
+    { label: t.admin.permGroupNotifications, keys: ['notifications.view', 'sms.send', 'sms.history', 'sms.settings', 'email.send', 'email.history', 'email.settings'] },
     { label: t.admin.permGroupOther, keys: ['lab.view', 'settings.view', 'data.view', 'data.browse'] },
     { label: t.admin.permGroupAdmin, keys: ['admin.users.manage', 'admin.permissions.manage'] },
   ];

@@ -138,6 +138,7 @@ model Patient {
   snapshots    DentalStatusSnapshot[]
   appointments Appointment[]
   smsLogs      SmsLog[]
+  emailLogs    EmailLog[]
 }
 
 model Quote {
@@ -486,6 +487,7 @@ model Appointment {
   updatedAt         DateTime  @updatedAt
   createdByUserId   String?
   googleEventId     String?
+  googleCalendarId  String?  // Which Google calendar this event belongs to
 
   // Recurrence (RRULE / RFC 5545)
   recurrenceRule        String?
@@ -503,6 +505,18 @@ model Appointment {
   @@index([appointmentTypeId])
   @@index([status])
   @@index([recurrenceParentId])
+}
+
+model SmsSettings {
+  id                String   @id @default("default")
+  twilioAccountSid  String   @default("")
+  twilioAuthToken   String   @default("")
+  twilioPhoneNumber String   @default("")
+  twilioWebhookUrl  String   @default("")
+  isEnabled         Boolean  @default(false)
+  clinicName        String   @default("")
+  customTemplates   String   @default("[]")
+  updatedAt         DateTime @updatedAt
 }
 
 model SmsLog {
@@ -525,6 +539,78 @@ model SmsLog {
 
   @@index([patientId])
   @@index([twilioSid])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model EmailSettings {
+  id              String   @id @default("default")
+  smtpHost        String   @default("")
+  smtpPort        Int      @default(587)
+  smtpSecure      Boolean  @default(false)
+  smtpUser        String   @default("")
+  smtpPass        String   @default("")
+  fromEmail       String   @default("")
+  fromName        String   @default("")
+  isEnabled       Boolean  @default(false)
+  clinicName      String   @default("")
+  customTemplates String   @default("[]")
+  updatedAt       DateTime @updatedAt
+}
+
+model GoogleCalendarSync {
+  id              String   @id @default("default")
+  clientId        String   @default("")
+  clientSecret    String   @default("")
+  redirectUri     String   @default("")
+  accessToken     String   @default("")
+  refreshToken    String   @default("")
+  tokenExpiresAt  DateTime?
+  isEnabled       Boolean  @default(false)
+  syncMode        String   @default("bidirectional") // push | pull | bidirectional
+  pollIntervalMin Int      @default(5)
+  lastSyncAt      DateTime?
+  syncToken       String?  // Google incremental sync token
+  // Chair-to-calendar mapping: JSON array of { chairId, calendarId, calendarName }
+  chairCalendarMap String  @default("[]")
+  updatedAt       DateTime @updatedAt
+}
+
+model GoogleCalendarLog {
+  id            String   @id @default(cuid())
+  direction     String   // push | pull
+  action        String   // create | update | delete | import
+  appointmentId String?
+  googleEventId String?
+  chairId       String?
+  calendarId    String?
+  status        String   @default("success") // success | error
+  errorMessage  String?
+  details       String?  // JSON with extra info
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([appointmentId])
+}
+
+model EmailLog {
+  id           String   @id @default(cuid())
+  toEmail      String
+  fromEmail    String
+  subject      String
+  body         String
+  templateId   String?
+  status       String   @default("pending")
+  patientId    String?
+  patientName  String?
+  context      String?
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  patient      Patient? @relation(fields: [patientId], references: [patientId])
+
+  @@index([patientId])
   @@index([status])
   @@index([createdAt])
 }

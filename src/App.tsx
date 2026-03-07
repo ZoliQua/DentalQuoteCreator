@@ -22,6 +22,10 @@ import { AdminPage } from './pages/AdminPage';
 import { VisualQuoteEditorPage } from './pages/VisualQuoteEditorPage';
 import { DatabaseBrowserPage } from './pages/DatabaseBrowserPage';
 import { CalendarPage } from './pages/CalendarPage';
+import { SmsHistoryPage } from './pages/SmsHistoryPage';
+import { NotificationsOverviewPage } from './pages/NotificationsOverviewPage';
+import { PendingMessagesPage } from './pages/PendingMessagesPage';
+import { EmailHistoryPage } from './pages/EmailHistoryPage';
 import { CatalogLayout } from './pages/CatalogLayout';
 import { Card, CardContent } from './components/common';
 import { ImporterPage } from '@dq-importer';
@@ -116,6 +120,13 @@ function App() {
         <Route path="/settings/invoicing" element={<Guard permission="settings.view"><SettingsPage key="invoicing" section="invoicing" /></Guard>} />
         <Route path="/settings/neak" element={<Guard permission="settings.view"><SettingsPage key="neak" section="neak" /></Guard>} />
         <Route path="/settings/calendar" element={<Guard permission="settings.view"><SettingsPage key="calendar" section="calendar" /></Guard>} />
+        <Route path="/settings/sms" element={<Guard permission="sms.settings"><SettingsPage key="sms" section="sms" /></Guard>} />
+        <Route path="/settings/email" element={<Guard permission="email.settings"><SettingsPage key="email" section="email" /></Guard>} />
+        <Route path="/notifications" element={<Guard permission="notifications.view"><NotificationsOverviewPage /></Guard>} />
+        <Route path="/notifications/pending" element={<Guard permission="notifications.view"><PendingMessagesPage /></Guard>} />
+        <Route path="/notifications/sms" element={<Guard permission="sms.history"><SmsHistoryPage /></Guard>} />
+        <Route path="/notifications/email" element={<Guard permission="email.history"><EmailHistoryPage /></Guard>} />
+        <Route path="/sms" element={<Navigate to="/notifications/sms" replace />} />
         <Route path="/calendar" element={<Guard permission="calendar.view"><CalendarPage /></Guard>} />
         <Route path="/calendar/day" element={<Guard permission="calendar.view"><CalendarPage initialView="timeGridDay" /></Guard>} />
         <Route path="/calendar/week" element={<Guard permission="calendar.view"><CalendarPage initialView="timeGridWeek" /></Guard>} />
