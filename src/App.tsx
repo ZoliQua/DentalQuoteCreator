@@ -102,7 +102,7 @@ function App() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/patients" element={<PatientsPage />} />
         <Route path="/patients/deleted" element={<PatientsPage showDeleted />} />
-        <Route path="/patients/:patientId" element={<PatientDetailPage />} />
+        <Route path="/patients/:patientId/*" element={<PatientDetailPage />} />
         <Route path="/patients/:patientId/quotes/new" element={<Guard permission="quotes.create"><QuoteEditorPage /></Guard>} />
         <Route path="/patients/:patientId/quotes/:quoteId" element={<Guard permission="quotes.view"><QuoteEditorPage /></Guard>} />
         <Route path="/patients/:patientId/visual-quotes/:quoteId" element={<Guard permission="quotes.view"><VisualQuoteEditorPage /></Guard>} />

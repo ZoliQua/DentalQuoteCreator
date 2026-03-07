@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Calendar } from '@dq-calendar';
 import type { CalendarEvent, CalendarView, CalendarConfig, CalendarCallbacks, CalendarLabels, Chair } from '@dq-calendar';
 import { useSettings } from '../context/SettingsContext';
@@ -42,6 +43,7 @@ interface CalendarPageProps {
 export function CalendarPage({ initialView: initialViewProp }: CalendarPageProps) {
   const { t, settings, appLanguage } = useSettings();
   const { patients } = useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // ── data hooks ──
   const {
@@ -65,6 +67,7 @@ export function CalendarPage({ initialView: initialViewProp }: CalendarPageProps
   const [defaultStart, setDefaultStart] = useState('');
   const [defaultEnd, setDefaultEnd] = useState('');
   const [defaultChairIndex, setDefaultChairIndex] = useState<number | undefined>(undefined);
+  const [defaultPatientId, setDefaultPatientId] = useState<string | undefined>(undefined);
   const [chairsReady, setChairsReady] = useState(false);
 
   // Use ref for current range so callbacks stay stable
@@ -234,6 +237,30 @@ export function CalendarPage({ initialView: initialViewProp }: CalendarPageProps
     refetch();
   };
 
+  // ── Auto-open modal from URL search params (e.g. ?action=new&patientId=xxx&date=2026-03-08) ──
+  const autoOpenDone = useRef(false);
+  useEffect(() => {
+    if (autoOpenDone.current || !chairsReady) return;
+    const action = searchParams.get('action');
+    const paramPatientId = searchParams.get('patientId');
+    const paramDate = searchParams.get('date');
+    if (action === 'new') {
+      autoOpenDone.current = true;
+      setEditingAppointment(null);
+      if (paramPatientId) setDefaultPatientId(paramPatientId);
+      if (paramDate) {
+        setDefaultStart(`${paramDate}T09:00`);
+        setDefaultEnd(`${paramDate}T09:30`);
+      }
+      setModalOpen(true);
+      // Clean up URL params
+      setSearchParams({}, { replace: true });
+    } else if (paramDate) {
+      autoOpenDone.current = true;
+      setSearchParams({}, { replace: true });
+    }
+  }, [chairsReady, searchParams, setSearchParams]);
+
   // ── render ──
   if (!chairsReady) {
     return (
@@ -273,6 +300,7 @@ export function CalendarPage({ initialView: initialViewProp }: CalendarPageProps
         patients={activePatients}
         chairs={activeChairs}
         defaultChairIndex={defaultChairIndex}
+        defaultPatientId={defaultPatientId}
       />
     </div>
   );

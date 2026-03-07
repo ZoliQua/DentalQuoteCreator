@@ -1,4 +1,4 @@
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { nanoid } from 'nanoid';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
@@ -17,6 +17,7 @@ import {
   Select,
   TextArea,
 } from '../components/common';
+import { PageTabBar } from '../components/common/PageTabBar';
 import {
   formatDate,
   formatDateTime,
@@ -60,6 +61,8 @@ import { useAppointments } from '../hooks/useAppointments';
 import { useSms } from '../hooks/useSms';
 import { SmsSendModal } from '../components/sms/SmsSendModal';
 import { SmsHistoryTable } from '../components/sms/SmsHistoryTable';
+import { EmailHistoryTable } from '../components/email/EmailHistoryTable';
+import { EmailSendModal } from '../components/email/EmailSendModal';
 import { NeakCheckModal } from '../modules/neak/NeakCheckModal';
 import { checkJogviszony, saveCheck } from '../modules/neak';
 
@@ -186,6 +189,7 @@ function TimelinePlusButton({ onClick, title }: { onClick: () => void; title: st
 export function PatientDetailPage() {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { t, appLanguage } = useSettings();
   const { hasPermission, user } = useAuth();
   const [countries, setCountries] = useState<Country[]>([]);
@@ -233,6 +237,7 @@ export function PatientDetailPage() {
   const [stornoError, setStornoError] = useState<string | null>(null);
   const [quoteTypeModalOpen, setQuoteTypeModalOpen] = useState(false);
   const [smsModalOpen, setSmsModalOpen] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
   const { checkEnabled: checkSmsEnabled } = useSms();
   const [smsEnabled, setSmsEnabled] = useState(false);
 
@@ -303,6 +308,11 @@ export function PatientDetailPage() {
     return age < 0 ? null : age;
   }, [patient?.birthDate]);
 
+  // Determine active tab from URL path
+  const basePath = `/patients/${patientId}`;
+  const subPath = location.pathname.replace(basePath, '').replace(/^\//, '');
+  const activeTab = subPath || 'status';
+
   if (!patient) {
     return (
       <div className="text-center py-12">
@@ -313,6 +323,23 @@ export function PatientDetailPage() {
       </div>
     );
   }
+
+  // Redirect base path to status tab
+  const validTabs = ['status', 'treatments', 'card', 'calendar', 'notifications', 'quotes', 'invoices', 'neak'];
+  if (!subPath || !validTabs.includes(activeTab)) {
+    return <Navigate to={`${basePath}/status`} replace />;
+  }
+
+  const patientTabs = [
+    { key: 'status', to: `${basePath}/status`, label: t.patients.patientTabStatus, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3h6m-6 0a2 2 0 00-2 2v2a2 2 0 002 2h6a2 2 0 002-2V5a2 2 0 00-2-2m-6 0v2m6-2v2M7 11h10m-9 4h8m-7 4h6" /></svg> },
+    { key: 'card', to: `${basePath}/card`, label: t.patients.patientTabCard, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" /></svg> },
+    { key: 'treatments', to: `${basePath}/treatments`, label: t.patients.patientTabTreatments, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg> },
+    { key: 'calendar', to: `${basePath}/calendar`, label: t.patients.patientTabCalendar, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
+    { key: 'notifications', to: `${basePath}/notifications`, label: t.patients.patientTabNotifications, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg> },
+    { key: 'quotes', to: `${basePath}/quotes`, label: t.patients.patientTabQuotes, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
+    { key: 'invoices', to: `${basePath}/invoices`, label: t.patients.patientTabInvoices, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg> },
+    ...(patient.patientType?.toLowerCase().includes('neak') ? [{ key: 'neak', to: `${basePath}/neak`, label: t.patients.patientTabNeak, icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" /></svg> }] : []),
+  ];
 
   const handleNewQuote = () => {
     setQuoteTypeModalOpen(true);
@@ -541,7 +568,9 @@ export function PatientDetailPage() {
         </div>
       </div>
 
-      {!editorOpen && (
+      <PageTabBar tabs={patientTabs} />
+
+      {activeTab === 'status' && !editorOpen && (
         <div id="patientOdontogramSection" onClick={handleOdontogramClick}>
           <OdontogramHost
             ref={hostRef}
@@ -589,59 +618,96 @@ export function PatientDetailPage() {
         </div>
       )}
 
-      <div id="patientContentGrid" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div id="patientDataCard">
-          <Card>
-            <div id="patientDataCardHeader">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">{t.patients.patientDetails}</h2>
-                  {hasPermission('patients.update') && (
-                  <Button id="patientEditBtn" variant="secondary" size="sm"
-                          onClick={() => setEditPatientModalOpen(true)}>
-                    {t.common.edit}
-                  </Button>
-                  )}
-                </div>
-              </CardHeader>
-            </div>
-            <div id="patientDataCardContent">
-              <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm text-theme-tertiary">{t.patients.birthDate}</label>
-              <p className="font-medium">{formatDate(patient.birthDate, 'long')}</p>
-            </div>
-            {patient.birthPlace && (
-              <div>
-                <label className="text-sm text-theme-tertiary">{t.patients.birthPlace}</label>
-                <p className="font-medium">{patient.birthPlace}</p>
+      {/* Tab: Karton (Card) */}
+      {activeTab === 'card' && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">{t.patients.patientDetails}</h2>
+              <div className="flex items-center gap-1">
+                {hasPermission('patients.update') && (
+                  <button
+                    onClick={() => setDuplicatePatientConfirm(true)}
+                    className="rounded-lg p-2 text-theme-secondary hover:bg-theme-hover transition-colors"
+                    title={t.patients.duplicateDataSheet}
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  </button>
+                )}
+                {hasPermission('patients.update') && !patient.isArchived && (
+                  <button
+                    onClick={handleArchivePatient}
+                    className="rounded-lg p-2 text-theme-secondary hover:bg-theme-hover transition-colors"
+                    title={t.common.archive}
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                  </button>
+                )}
+                {hasPermission('patients.delete') && (
+                  <button
+                    onClick={() => setDeletePatientConfirm(true)}
+                    className="rounded-lg p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    title={t.common.delete}
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-1 13H6L5 7m5 4v6m4-6v6M9 7V4h6v3M4 7h16" /></svg>
+                  </button>
+                )}
+                {hasPermission('patients.update') && (
+                  <button
+                    onClick={() => setEditPatientModalOpen(true)}
+                    className="rounded-lg p-2 text-dental-600 hover:bg-dental-50 dark:hover:bg-dental-900/20 transition-colors"
+                    title={t.common.edit}
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                  </button>
+                )}
               </div>
-            )}
-            {patient.mothersName && (
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+              {/* Row 1: Név + Nem, Anyja neve */}
+              <div className="flex gap-8">
+                <div className="flex-1">
+                  <label className="text-sm text-theme-tertiary">{t.patients.name}</label>
+                  <p className="font-medium">{formatPatientName(patient.lastName, patient.firstName, patient.title)}</p>
+                </div>
+                <div className="flex-1">
+                  <label className="text-sm text-theme-tertiary">{t.patients.sex}</label>
+                  <p className="font-medium">{t.patients[patient.sex]}</p>
+                </div>
+              </div>
               <div>
                 <label className="text-sm text-theme-tertiary">{t.patients.mothersName}</label>
-                <p className="font-medium">{patient.mothersName}</p>
+                <p className="font-medium">{patient.mothersName || '—'}</p>
               </div>
-            )}
-            <div>
-              <label className="text-sm text-theme-tertiary">{t.patients.sex}</label>
-              <p className="font-medium">{t.patients[patient.sex]}</p>
-            </div>
-            {patient.insuranceNum && (
+
+              {/* Row 2: Születési hely, Születési idő */}
+              <div>
+                <label className="text-sm text-theme-tertiary">{t.patients.birthPlace}</label>
+                <p className="font-medium">{patient.birthPlace || '—'}</p>
+              </div>
+              <div>
+                <label className="text-sm text-theme-tertiary">{t.patients.birthDate}</label>
+                <p className="font-medium">{formatDate(patient.birthDate, 'long')}</p>
+              </div>
+
+              {/* Row 3: Személyazonosító típus, TAJ szám */}
+              <div>
+                <label className="text-sm text-theme-tertiary">{t.patients.neakDocumentType}</label>
+                <p className="font-medium">
+                  {t.patients[`neakDocType${patient.neakDocumentType ?? 1}` as keyof typeof t.patients] || t.patients.neakDocumentType}
+                </p>
+              </div>
               <div>
                 <label className="text-sm text-theme-tertiary">{t.patients.insuranceNum}</label>
                 <div className="flex items-center gap-2">
-                  <p className="font-medium">{patient.insuranceNum}</p>
-                  {patient.neakDocumentType != null && patient.neakDocumentType !== 1 && (
-                    <span className="text-xs bg-theme-hover text-theme-secondary px-2 py-0.5 rounded">
-                      {t.patients[`neakDocType${patient.neakDocumentType}` as keyof typeof t.patients] || t.patients.neakDocumentType}
-                    </span>
-                  )}
-                  {patient.patientType?.toLowerCase().includes('neak') && (
+                  <p className="font-medium">{patient.insuranceNum || '—'}</p>
+                  {patient.patientType?.toLowerCase().includes('neak') && patient.insuranceNum && (
                     <button
                       type="button"
                       onClick={() => setNeakModalOpen(true)}
-                      className="rounded-md border border-theme-primary p-1.5 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
+                      className="rounded-md border border-theme-primary p-1 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
                       title={t.neak.checkButton}
                     >
                       <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -657,163 +723,196 @@ export function PatientDetailPage() {
                   </p>
                 )}
               </div>
-            )}
-            {(patient.zipCode || patient.city || patient.street) && (
+
+              {/* Row 4: Ország, Lakcím */}
+              <div>
+                <label className="text-sm text-theme-tertiary">{t.patients.country}</label>
+                <p className="font-medium">
+                  {patient.isForeignAddress && patient.country
+                    ? resolveCountryName(patient.country)
+                    : 'Magyarország'}
+                  {patient.isForeignAddress && (
+                    <span className="ml-2 text-xs bg-theme-hover text-theme-secondary px-2 py-0.5 rounded">
+                      {t.patients.foreignAddress}
+                    </span>
+                  )}
+                </p>
+              </div>
               <div>
                 <label className="text-sm text-theme-tertiary">{t.patients.addressSection}</label>
                 <p className="font-medium">
-                  {patient.country && patient.isForeignAddress ? `${resolveCountryName(patient.country)}, ` : ''}
                   {[patient.zipCode, patient.city].filter(Boolean).join(' ')}
                   {(patient.zipCode || patient.city) && patient.street ? ', ' : ''}
-                  {patient.street}
+                  {patient.street || '—'}
                 </p>
-                {patient.isForeignAddress && (
-                  <span className="inline-block mt-1 text-xs bg-theme-hover text-theme-secondary px-2 py-0.5 rounded">
-                    {t.patients.foreignAddress}
-                  </span>
-                )}
               </div>
-            )}
-            {patient.phone && (
+
+              {/* Row 5: Számlázási név + Adószám, Számlázási cím */}
+              <div className="flex gap-8">
+                <div className="flex-1">
+                  <label className="text-sm text-theme-tertiary">{t.patients.patientVATName}</label>
+                  <p className="font-medium">{patient.patientVATName || '—'}</p>
+                </div>
+                <div className="flex-1">
+                  <label className="text-sm text-theme-tertiary">{t.patients.patientVATNumber}</label>
+                  <p className="font-medium">{patient.patientVATNumber || '—'}</p>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm text-theme-tertiary">{t.patients.patientVATAddress}</label>
+                <p className="font-medium">{patient.patientVATAddress || '—'}</p>
+              </div>
+
+              {/* Row 6: Telefonszám, E-mail */}
               <div>
                 <label className="text-sm text-theme-tertiary">{t.patients.phone}</label>
                 <div className="flex items-center gap-2">
-                  <p className="font-medium">{patient.phone}</p>
-                  {smsEnabled && hasPermission('sms.send') && (
+                  <p className="font-medium">{patient.phone || '—'}</p>
+                  {smsEnabled && hasPermission('sms.send') && patient.phone && (
                     <button
                       onClick={() => setSmsModalOpen(true)}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-dental-700 dark:text-dental-300 bg-dental-50 dark:bg-dental-900/30 rounded hover:bg-dental-100 dark:hover:bg-dental-900/50 transition-colors"
+                      className="rounded-md border border-theme-primary p-1 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
                       title={t.sms.sendSmsToPatient}
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                       </svg>
-                      SMS
                     </button>
                   )}
                 </div>
               </div>
-            )}
-            {patient.email && (
               <div>
                 <label className="text-sm text-theme-tertiary">{t.patients.email}</label>
-                <p className="font-medium">{patient.email}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium">{patient.email || '—'}</p>
+                  {patient.email && (
+                    <a
+                      href={`mailto:${patient.email}`}
+                      className="rounded-md border border-theme-primary p-1 text-dental-600 hover:bg-dental-50 hover:text-dental-700 transition-colors"
+                      title={t.email.send}
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </a>
+                  )}
+                </div>
               </div>
-            )}
-            {(patient.patientVATName || patient.patientVATNumber || patient.patientVATAddress) && (
-              <div>
-                <label className="text-sm text-theme-tertiary">{t.patients.billingSection}</label>
-                {patient.patientVATName && <p className="font-medium">{patient.patientVATName}</p>}
-                {patient.patientVATNumber && <p className="text-sm text-theme-secondary">{t.patients.patientVATNumber}: {patient.patientVATNumber}</p>}
-                {patient.patientVATAddress && <p className="text-sm text-theme-secondary">{t.patients.patientVATAddress}: {patient.patientVATAddress}</p>}
-              </div>
-            )}
-            {patient.patientDiscount != null && patient.patientDiscount > 0 && (
+
+              {/* Row 6: Páciens kedvezmény, Páciens típus */}
               <div>
                 <label className="text-sm text-theme-tertiary">{t.patients.patientDiscount}</label>
-                <p className="font-medium">{patient.patientDiscount}%</p>
+                <p className="font-medium">{patient.patientDiscount != null && patient.patientDiscount > 0 ? `${patient.patientDiscount}%` : '—'}</p>
               </div>
-            )}
-            {patient.patientType && (
               <div>
                 <label className="text-sm text-theme-tertiary">{t.patients.patientType}</label>
-                <p className="font-medium">{patient.patientType}</p>
+                <p className="font-medium">{patient.patientType || '—'}</p>
               </div>
-            )}
+            </div>
+
+            {/* Notes */}
             {patient.notes && (
-              <div>
+              <div className="mt-4 pt-4 border-t border-theme-primary">
                 <label className="text-sm text-theme-tertiary">{t.patients.notes}</label>
-                <p className="text-theme-secondary whitespace-pre-wrap">{patient.notes}</p>
+                <p className="text-theme-secondary whitespace-pre-wrap mt-1">{patient.notes}</p>
               </div>
             )}
-            <div className="pt-4 border-t text-sm text-theme-tertiary">
-              <p>
-                {t.patients.createdAt}: {formatDate(patient.createdAt)}
-              </p>
-            </div>
-              </CardContent>
-            </div>
-          </Card>
-          <Card className="mt-4">
-            <CardHeader>
-              <h2 className="text-lg font-semibold">{t.patients.dataSheetActions}</h2>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              {hasPermission('patients.update') && (
-              <Button id="patientDuplicateBtn" variant="secondary" className="w-full justify-center"
-                      onClick={() => setDuplicatePatientConfirm(true)}>
-                {t.patients.duplicateDataSheet}
-              </Button>
-              )}
-              {hasPermission('patients.update') && !patient.isArchived && (
-                <Button id="patientArchiveBtn" variant="secondary" className="w-full justify-center"
-                        onClick={handleArchivePatient}>
-                  {t.common.archive}
-                </Button>
-              )}
-              {hasPermission('patients.delete') && (
-              <Button id="patientDeleteBtn" variant="danger" className="w-full justify-center"
-                      onClick={() => setDeletePatientConfirm(true)}>
-                {t.common.delete}
-              </Button>
-              )}
-            </CardContent>
-          </Card>
-        </div>
 
-        {/* Upcoming Appointments */}
-        {patientAppointments.length > 0 && (
-          <Card>
-            <CardHeader>
-              <h2 className="text-sm font-semibold">{t.calendar.upcomingAppointments}</h2>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {patientAppointments
-                  .filter((a) => new Date(a.startDateTime) >= new Date())
-                  .slice(0, 5)
-                  .map((a) => {
-                    const start = new Date(a.startDateTime);
-                    const statusColors: Record<string, string> = {
-                      scheduled: 'bg-blue-100 text-blue-800',
-                      confirmed: 'bg-green-100 text-green-800',
-                      completed: 'bg-theme-hover text-theme-secondary',
-                      cancelled: 'bg-red-100 text-red-700',
-                      noShow: 'bg-yellow-100 text-yellow-800',
-                    };
-                    const statusLabels: Record<string, string> = {
-                      scheduled: t.calendar.statusScheduled,
-                      confirmed: t.calendar.statusConfirmed,
-                      completed: t.calendar.statusCompleted,
-                      cancelled: t.calendar.statusCancelled,
-                      noShow: t.calendar.statusNoShow,
-                    };
-                    return (
-                      <div key={a.appointmentId} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          {a.appointmentType && (
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: a.appointmentType.color }} />
-                          )}
-                          <span className="font-medium">{a.title}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-theme-tertiary">
-                          <span>{start.toLocaleDateString()} {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          <span className={`px-1.5 py-0.5 rounded text-xs ${statusColors[a.status] || 'bg-theme-hover text-theme-secondary'}`}>
-                            {statusLabels[a.status] || a.status}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                {patientAppointments.filter((a) => new Date(a.startDateTime) >= new Date()).length === 0 && (
-                  <p className="text-sm text-theme-muted">{t.calendar.noAppointments}</p>
+            {/* Timestamps */}
+            <div className="mt-4 pt-4 border-t border-theme-primary flex gap-6 text-sm text-theme-tertiary">
+              <p>{t.patients.createdAt}: {formatDate(patient.createdAt)}</p>
+              <p>{t.patients.modifiedAt}: {formatDate(patient.updatedAt)}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tab: Naptár (Calendar) */}
+      {activeTab === 'calendar' && (() => {
+        const now = new Date();
+        const upcoming = [...patientAppointments].filter(a => new Date(a.startDateTime) >= now).sort((a, b) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
+        const past = [...patientAppointments].filter(a => new Date(a.startDateTime) < now).sort((a, b) => new Date(b.startDateTime).getTime() - new Date(a.startDateTime).getTime());
+        const statusColors: Record<string, string> = {
+          scheduled: 'bg-blue-100 text-blue-800',
+          confirmed: 'bg-green-100 text-green-800',
+          completed: 'bg-theme-hover text-theme-secondary',
+          cancelled: 'bg-red-100 text-red-700',
+          noShow: 'bg-yellow-100 text-yellow-800',
+        };
+        const statusLabels: Record<string, string> = {
+          scheduled: t.calendar.statusScheduled,
+          confirmed: t.calendar.statusConfirmed,
+          completed: t.calendar.statusCompleted,
+          cancelled: t.calendar.statusCancelled,
+          noShow: t.calendar.statusNoShow,
+        };
+        const renderRow = (a: Appointment) => {
+          const start = new Date(a.startDateTime);
+          return (
+            <Link key={a.appointmentId} to={`/calendar/day?date=${start.toISOString().slice(0, 10)}`} className="block">
+              <Card hoverable>
+                <CardContent className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {a.appointmentType && (
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: a.appointmentType.color }} />
+                    )}
+                    <span className="font-medium text-theme-primary">{a.title}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-theme-tertiary text-sm">
+                    <span>{start.toLocaleDateString()} {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-xs ${statusColors[a.status] || 'bg-theme-hover text-theme-secondary'}`}>
+                      {statusLabels[a.status] || a.status}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        };
+        return (
+          <div className="space-y-6">
+            {/* Upcoming */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">{t.calendar.upcomingAppointments}</h2>
+                  {hasPermission('calendar.create') && (
+                    <Button size="sm" onClick={() => navigate(`/calendar/day?action=new&patientId=${patient.patientId}&date=${new Date().toISOString().slice(0, 10)}`)}>
+                      <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                      {t.calendar.newAppointment}
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {upcoming.length > 0 ? (
+                  <div className="space-y-2">{upcoming.map(renderRow)}</div>
+                ) : (
+                  <p className="text-sm text-theme-muted">{t.calendar.noUpcomingAppointments}</p>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              </CardContent>
+            </Card>
 
-        <div id="patientQuotesSection" className="lg:col-span-2 space-y-4">
+            {/* Past */}
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold">{t.calendar.pastAppointments}</h2>
+              </CardHeader>
+              <CardContent>
+                {past.length > 0 ? (
+                  <div className="space-y-2">{past.map(renderRow)}</div>
+                ) : (
+                  <p className="text-sm text-theme-muted">{t.calendar.noPastAppointments}</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
+
+      {/* Tab: Árajánlatok (Quotes) */}
+      {activeTab === 'quotes' && (
+        <div id="patientQuotesSection" className="space-y-4">
           <div id="patientQuotesHeader" className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">{t.quotes.title}</h2>
             <Button id="patientNewQuoteBtn" onClick={handleNewQuote} disabled={!hasPermission('quotes.create')}>
@@ -925,8 +1024,13 @@ export function PatientDetailPage() {
               })}
             </div>
           )}
+        </div>
+      )}
 
-          <h2 className="text-lg font-semibold mt-6">{t.invoices.issuedInvoices}</h2>
+      {/* Tab: Számlák (Invoices) */}
+      {activeTab === 'invoices' && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">{t.invoices.issuedInvoices}</h2>
 
           {patientInvoices.length === 0 ? (
             <Card>
@@ -1031,10 +1135,13 @@ export function PatientDetailPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
 
-          {patient.patientType?.toLowerCase().includes('neak') && (
-            <>
-              <h2 className="text-lg font-semibold mt-6">{t.neak.neakData}</h2>
+      {/* Tab: NEAK */}
+      {activeTab === 'neak' && patient.patientType?.toLowerCase().includes('neak') && (
+        <div className="space-y-4">
+              <h2 className="text-lg font-semibold">{t.neak.neakData}</h2>
               {neakChecks.length === 0 ? (
                 <Card>
                   <CardContent>
@@ -1085,27 +1192,129 @@ export function PatientDetailPage() {
                   })}
                 </div>
               )}
-            </>
-          )}
+        </div>
+      )}
 
-          {/* SMS History per patient */}
-          {smsEnabled && hasPermission('sms.history') && (
-            <Card>
-              <CardHeader>
+      {/* Tab: Értesítések (Notifications) */}
+      {activeTab === 'notifications' && (
+        <div className="space-y-6">
+          {/* SMS Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                   </svg>
                   {t.sms.patientSmsHistory}
                 </h2>
-              </CardHeader>
-              <CardContent>
+                {smsEnabled && hasPermission('sms.send') && patient.phone && (
+                  <Button size="sm" onClick={() => setSmsModalOpen(true)}>
+                    <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    {t.sms.sendSmsToPatient}
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {smsEnabled && hasPermission('sms.history') ? (
                 <SmsHistoryTable patientId={patient.patientId} compact />
+              ) : (
+                <p className="text-sm text-theme-muted">{t.sms.noHistory}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Email Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <svg className="w-5 h-5 text-theme-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  {t.email.patientEmailHistory}
+                </h2>
+                {hasPermission('email.send') && patient.email && (
+                  <Button size="sm" onClick={() => setEmailModalOpen(true)}>
+                    <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    {t.email.sendEmailToPatient}
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {hasPermission('email.history') ? (
+                <EmailHistoryTable patientId={patient.patientId} compact />
+              ) : (
+                <p className="text-sm text-theme-muted">{t.email.noHistory}</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Tab: Kezelések (Treatments) */}
+      {activeTab === 'treatments' && (
+        <div className="space-y-4">
+          {sortedQuotes.filter(q => q.quoteStatus === 'started' || q.quoteStatus === 'completed').length === 0 ? (
+            <Card>
+              <CardContent>
+                <EmptyState
+                  icon={<EmptyQuoteIcon />}
+                  title={t.patients.noTreatmentsYet}
+                  description={t.patients.noTreatmentsDesc}
+                />
               </CardContent>
             </Card>
+          ) : (
+            sortedQuotes
+              .filter(q => q.quoteStatus === 'started' || q.quoteStatus === 'completed')
+              .map((quote) => {
+                const totals = calculateQuoteTotals(quote);
+                return (
+                  <Card key={quote.quoteId} hoverable>
+                    <CardContent>
+                      <Link
+                        to={quote.quoteType === 'visual'
+                          ? `/patients/${patient.patientId}/visual-quotes/${quote.quoteId}`
+                          : `/patients/${patient.patientId}/quotes/${quote.quoteId}`}
+                        className="block"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold text-theme-primary">{quote.quoteName}</h3>
+                            <div className="flex items-center gap-3 text-sm text-theme-tertiary mt-1">
+                              <span className="rounded bg-theme-hover px-2 py-0.5 font-mono text-xs text-theme-secondary">
+                                {quote.quoteNumber || formatQuoteId(quote.quoteId)}
+                              </span>
+                              <Badge
+                                variant={quote.quoteStatus === 'completed' ? 'default' : 'success'}
+                                size="sm"
+                              >
+                                {quote.quoteStatus === 'completed' ? t.quotes.statusCompleted : t.quotes.statusStarted}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-theme-primary">{formatCurrency(totals.total)}</p>
+                            <p className="text-sm text-theme-tertiary">
+                              {t.quotes.itemsCount.replace('{count}', String(quote.items.length))}
+                            </p>
+                          </div>
+                        </div>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                );
+              })
           )}
         </div>
-      </div>
+      )}
 
       {/* SMS Send Modal */}
       <SmsSendModal
@@ -1115,6 +1324,16 @@ export function PatientDetailPage() {
         patientName={formatPatientName(patient.lastName, patient.firstName, patient.title)}
         phoneNumber={patient.phone || undefined}
         isHungarianPhone={patient.isHungarianPhone ?? true}
+        context="patient_detail"
+      />
+
+      {/* Email Send Modal */}
+      <EmailSendModal
+        isOpen={emailModalOpen}
+        onClose={() => setEmailModalOpen(false)}
+        patientId={patient.patientId}
+        patientName={formatPatientName(patient.lastName, patient.firstName, patient.title)}
+        emailAddress={patient.email || undefined}
         context="patient_detail"
       />
 

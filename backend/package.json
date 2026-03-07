@@ -1,6 +1,6 @@
 {
   "name": "dental-quoter-backend",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,10 +12,10 @@
     "generate": "prisma generate"
   },
   "dependencies": {
+    "@googleapis/calendar": "^14.2.0",
     "@prisma/client": "^5.19.1",
     "dotenv": "^16.4.5",
     "fastify": "^5.7.4",
-    "googleapis": "^171.4.0",
     "nodemailer": "^8.0.1",
     "rrule": "^2.8.1",
     "twilio": "^5.12.2",

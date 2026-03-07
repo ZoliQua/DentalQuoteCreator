@@ -7,7 +7,7 @@ import { prisma } from './db.js';
 import rruleLib from 'rrule';
 import Twilio from 'twilio';
 import nodemailer from 'nodemailer';
-import { google } from 'googleapis';
+import { calendar_v3, auth as googleAuth } from '@googleapis/calendar';
 const { RRule } = rruleLib;
 
 function parseUserAgent(ua: string) {
@@ -4074,7 +4074,7 @@ async function getGoogleCredentials(): Promise<{ clientId: string; clientSecret:
 
 async function createGoogleOAuth2Client() {
   const creds = await getGoogleCredentials();
-  return new google.auth.OAuth2(creds.clientId, creds.clientSecret, creds.redirectUri);
+  return new googleAuth.OAuth2(creds.clientId, creds.clientSecret, creds.redirectUri);
 }
 
 async function getAuthedGoogleClient() {
@@ -4179,7 +4179,7 @@ async function pushAppointmentToGoogle(appointmentId: string) {
   const calendarId = getCalendarIdForChair(settings.chairCalendarMap, apt.chairIndex);
   if (!calendarId) return;
 
-  const calendar = google.calendar({ version: 'v3', auth: oauth2 });
+  const calendar = new calendar_v3.Calendar({ auth: oauth2 });
   const patientName = apt.patient ? `${apt.patient.lastName} ${apt.patient.firstName}` : undefined;
   const eventBody = buildGoogleEventBody(apt, patientName);
 
@@ -4229,7 +4229,7 @@ async function deleteAppointmentFromGoogle(appointmentId: string, googleEventId:
   if (!settings?.isEnabled) return;
 
   const calendarId = googleCalendarId || 'primary';
-  const calendar = google.calendar({ version: 'v3', auth: oauth2 });
+  const calendar = new calendar_v3.Calendar({ auth: oauth2 });
 
   try {
     await calendar.events.delete({ calendarId, eventId: googleEventId });
@@ -4255,7 +4255,7 @@ async function pullFromGoogle() {
     return { imported: 0, updated: 0, errors: 0 };
   }
 
-  const calendar = google.calendar({ version: 'v3', auth: oauth2 });
+  const calendar = new calendar_v3.Calendar({ auth: oauth2 });
   let chairMap: Array<{ chairId: string; calendarId: string; chairNr: number }> = [];
   try { chairMap = JSON.parse(settings.chairCalendarMap); } catch { /* empty */ }
 
@@ -4553,7 +4553,7 @@ server.get('/google-calendar/calendars', async (request, reply) => {
   const oauth2 = await getAuthedGoogleClient();
   if (!oauth2) return reply.code(400).send({ message: 'Not connected to Google Calendar' });
 
-  const calendar = google.calendar({ version: 'v3', auth: oauth2 });
+  const calendar = new calendar_v3.Calendar({ auth: oauth2 });
   try {
     const res = await calendar.calendarList.list();
     const calendars = (res.data.items || []).map(c => ({
@@ -4670,7 +4670,7 @@ server.post('/google-calendar/webhook/register', async (request, reply) => {
   try { chairMap = JSON.parse(settings?.chairCalendarMap || '[]'); } catch { /* empty */ }
 
   const results: Array<{ calendarId: string; channelId: string; expiration: string }> = [];
-  const calendar = google.calendar({ version: 'v3', auth: oauth2 });
+  const calendar = new calendar_v3.Calendar({ auth: oauth2 });
 
   for (const mapping of chairMap) {
     try {
@@ -6686,10 +6686,81 @@ const runPendingMigrations = async () => {
   }
 };
 
+// ── Seed settings from env vars (first-run only) ──────────────────────
+
+const seedSettingsFromEnv = async () => {
+  // SMS (Twilio) — seed if DB record missing or has empty accountSid
+  const twilioSid = process.env.TWILIO_ACCOUNT_SID || '';
+  if (twilioSid) {
+    try {
+      const existing = await prisma.smsSettings.findUnique({ where: { id: 'default' } });
+      if (!existing || !existing.twilioAccountSid) {
+        await prisma.smsSettings.upsert({
+          where: { id: 'default' },
+          create: {
+            id: 'default',
+            twilioAccountSid: twilioSid,
+            twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || '',
+            twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
+            isEnabled: true,
+          },
+          update: {
+            twilioAccountSid: twilioSid,
+            twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || '',
+            twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
+            isEnabled: true,
+          },
+        });
+        server.log.info('SMS settings seeded from env vars');
+      }
+    } catch (e) {
+      server.log.warn('SMS settings seed failed: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  // Email (SMTP) — seed if DB record missing or has empty smtpHost
+  const smtpHost = process.env.SMTP_HOST || '';
+  if (smtpHost) {
+    try {
+      const existing = await prisma.emailSettings.findUnique({ where: { id: 'default' } });
+      if (!existing || !existing.smtpHost) {
+        await prisma.emailSettings.upsert({
+          where: { id: 'default' },
+          create: {
+            id: 'default',
+            smtpHost,
+            smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
+            smtpSecure: process.env.SMTP_SECURE === 'true',
+            smtpUser: process.env.SMTP_USER || '',
+            smtpPass: process.env.SMTP_PASS || '',
+            fromEmail: process.env.SMTP_FROM_EMAIL || '',
+            fromName: process.env.SMTP_FROM_NAME || '',
+            isEnabled: true,
+          },
+          update: {
+            smtpHost,
+            smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
+            smtpSecure: process.env.SMTP_SECURE === 'true',
+            smtpUser: process.env.SMTP_USER || '',
+            smtpPass: process.env.SMTP_PASS || '',
+            fromEmail: process.env.SMTP_FROM_EMAIL || '',
+            fromName: process.env.SMTP_FROM_NAME || '',
+            isEnabled: true,
+          },
+        });
+        server.log.info('Email settings seeded from env vars');
+      }
+    } catch (e) {
+      server.log.warn('Email settings seed failed: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+};
+
 const start = async () => {
   try {
     await prisma.$connect();
     await runPendingMigrations();
+    await seedSettingsFromEnv();
     await ensureBootstrapAdmin();
     await server.listen({ port, host: '0.0.0.0' });
   } catch (error) {

@@ -21,6 +21,7 @@ interface AppointmentModalProps {
   appointment?: Appointment | null;
   defaultStart?: string;
   defaultEnd?: string;
+  defaultPatientId?: string;
   appointmentTypes: AppointmentType[];
   patients: Patient[];
   chairs: AppointmentChair[];
@@ -49,6 +50,7 @@ export function AppointmentModal({
   appointment,
   defaultStart,
   defaultEnd,
+  defaultPatientId,
   appointmentTypes,
   patients,
   chairs,
@@ -106,8 +108,14 @@ export function AppointmentModal({
       setNotes(appointment.notes || '');
       setRecurrencePattern('none');
     } else {
-      setPatientId('');
-      setPatientSearch('');
+      if (defaultPatientId) {
+        setPatientId(defaultPatientId);
+        const p = patients.find(pt => pt.patientId === defaultPatientId);
+        setPatientSearch(p ? `${p.lastName} ${p.firstName}` : '');
+      } else {
+        setPatientId('');
+        setPatientSearch('');
+      }
       setAppointmentTypeId(appointmentTypes[0]?.typeId || '');
       setChairIndex(defaultChairIndex ?? 0);
       if (defaultStart) {

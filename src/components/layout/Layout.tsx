@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import { usePatients } from '../../hooks';
+import { formatPatientName } from '../../utils';
 import dcqLogo from '../../assets/dcq_logo.svg';
 
 interface NavChild {
@@ -31,6 +33,12 @@ export function Layout({ children }: LayoutProps) {
   };
 
   const isAdmin = user?.role === 'admin';
+
+  // Dynamic patient name in sidebar
+  const { getPatient } = usePatients();
+  const patientMatch = location.pathname.match(/^\/patients\/([^/]+)/);
+  const activePatientId = patientMatch?.[1] && patientMatch[1] !== 'deleted' ? patientMatch[1] : null;
+  const activePatient = useMemo(() => activePatientId ? getPatient(activePatientId) : null, [activePatientId, getPatient]);
 
   const allNavItems: Array<{ key: string; to: string; label: string; permission?: string; icon: React.ReactNode; children?: NavChild[] }> = [
     {
@@ -65,6 +73,7 @@ export function Layout({ children }: LayoutProps) {
       children: [
         { to: '/patients', label: t.nav.patientsActive },
         ...(isAdmin ? [{ to: '/patients/deleted', label: t.nav.patientsDeleted }] : []),
+        ...(activePatient ? [{ to: `/patients/${activePatient.patientId}`, label: formatPatientName(activePatient.lastName, activePatient.firstName, activePatient.title) }] : []),
       ],
     },
     {
@@ -259,6 +268,20 @@ export function Layout({ children }: LayoutProps) {
 
   const navItems = allNavItems.filter((item) => !item.permission || hasPermission(item.permission));
 
+  // Auto-expand sidebar menu for active route
+  React.useEffect(() => {
+    for (const item of allNavItems) {
+      if (item.to !== '/' && location.pathname.startsWith(item.to) && item.children && item.children.length > 1) {
+        setOpenMenus((prev) => {
+          if (prev.has(item.key)) return prev;
+          const next = new Set(prev);
+          next.add(item.key);
+          return next;
+        });
+      }
+    }
+  }, [location.pathname]);
+
   return (
     <div className="min-h-screen bg-theme-primary flex pt-[5px]">
       {/* Sidebar */}
@@ -337,7 +360,7 @@ export function Layout({ children }: LayoutProps) {
                     {isExpanded && (
                       <ul className="mt-1 space-y-1">
                         {item.children!.filter(c => !c.permission || hasPermission(c.permission)).map((child) => {
-                          const isChildActive = location.pathname === child.to;
+                          const isChildActive = location.pathname === child.to || (child.to.startsWith('/patients/') && child.to !== '/patients' && child.to !== '/patients/deleted' && location.pathname.startsWith(child.to));
                           return (
                           <li key={child.to}>
                             <NavLink
