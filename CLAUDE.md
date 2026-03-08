@@ -6,6 +6,15 @@
 - Monorepo: frontend and backend share the same git repo but have separate tsconfig/package.json
 - Backend runs on /backend prefix (frontend proxied via Vite)
 
+## Git Submodules
+- **Odontogram Engine**: `src/modules/odontogram/engine` → https://github.com/ZoliQua/React-Odontogram-Modul.git
+- **DQ-Importer**: `src/modules/dq-importer` → https://github.com/ZoliQua/DQ-Importer.git (private repo)
+- NEVER inline submodule files into the main repo — they must remain as git submodules
+- After cloning, run `git submodule update --init --recursive`
+- tsconfig.json excludes submodule server/build files: `"exclude": ["src/modules/odontogram/engine", "src/modules/dq-importer/server", "src/modules/dq-importer/vite.config.ts"]`
+- Path aliases point to `src/` subdirectory within submodules: `@dq-importer` → `src/modules/dq-importer/src`
+- If submodule code is modified, commit and push changes in the submodule repo first, then update the submodule reference in this repo
+
 ## Key Patterns
 - **Permissions**: ALL_PERMISSION_KEYS array in backend/src/server.ts drives RBAC; ROLE_PERMISSION_PRESETS maps roles to keys
 - **Storage**: StorageRepository interface (src/repositories/StorageRepository.ts) -> LocalStorageRepository calls backend API via sync XHR (requestJsonSync)

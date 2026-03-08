@@ -1,3 +1,6 @@
 [submodule "test_uis/odontogram_editor_v4"]
 	path = src/modules/odontogram/engine
 	url = https://github.com/ZoliQua/React-Odontogram-Modul.git
+[submodule "src/modules/dq-importer"]
+	path = src/modules/dq-importer
+	url = https://github.com/ZoliQua/DQ-Importer.git

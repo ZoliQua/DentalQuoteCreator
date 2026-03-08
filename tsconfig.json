@@ -19,12 +19,12 @@
     "paths": {
       "@/*": ["src/*"],
       "@odontogram-shell": ["src/modules/odontogram/odontogram-shell"],
-      "@dq-importer": ["src/modules/dq-importer"],
-      "@dq-importer/*": ["src/modules/dq-importer/*"],
+      "@dq-importer": ["src/modules/dq-importer/src"],
+      "@dq-importer/*": ["src/modules/dq-importer/src/*"],
       "@dq-calendar": ["src/modules/dq-calendar"],
       "@dq-calendar/*": ["src/modules/dq-calendar/*"]
     }
   },
   "include": ["src"],
-  "exclude": ["src/modules/odontogram/engine"]
+  "exclude": ["src/modules/odontogram/engine", "src/modules/dq-importer/server", "src/modules/dq-importer/vite.config.ts"]
 }
