@@ -124,8 +124,8 @@ export class LocalStorageRepository implements StorageRepository {
         return;
       }
       requestJsonSync('POST', `${API_PREFIX}/pricelists`, priceList);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error('Failed to save price list:', err);
     }
   }
 
@@ -152,8 +152,8 @@ export class LocalStorageRepository implements StorageRepository {
         try {
           const cats = requestJsonSync<PriceListCategory[]>('GET', `${API_PREFIX}/pricelists/${list.priceListId}/categories`);
           if (Array.isArray(cats)) allCats.push(...cats);
-        } catch {
-          // ignore
+        } catch (err) {
+          console.error(`Failed to fetch categories for pricelist ${list.priceListId}:`, err);
         }
       }
       return allCats;
@@ -169,8 +169,8 @@ export class LocalStorageRepository implements StorageRepository {
         return;
       }
       requestJsonSync('POST', `${API_PREFIX}/pricelist-categories`, category);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error('Failed to save price list category:', err);
     }
   }
 
@@ -290,9 +290,10 @@ export class LocalStorageRepository implements StorageRepository {
       ) {
         return false;
       }
-      requestJsonSync('POST', `${API_PREFIX}/data/import`, parsed);
-      return true;
-    } catch {
+      const result = requestJsonSync<{ status: string }>('POST', `${API_PREFIX}/data/import`, parsed);
+      return result?.status === 'ok';
+    } catch (err) {
+      console.error('Data import failed:', err);
       return false;
     }
   }

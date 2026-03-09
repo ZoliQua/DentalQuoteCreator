@@ -268,10 +268,18 @@ export function Layout({ children }: LayoutProps) {
 
   const navItems = allNavItems.filter((item) => !item.permission || hasPermission(item.permission));
 
+  // Stable list of expandable nav keys+paths for auto-expand effect
+  const expandableNavKeys = useMemo(
+    () => allNavItems
+      .filter((item) => item.to !== '/' && item.children && item.children.length > 1)
+      .map((item) => ({ key: item.key, to: item.to })),
+    [allNavItems]
+  );
+
   // Auto-expand sidebar menu for active route
   React.useEffect(() => {
-    for (const item of allNavItems) {
-      if (item.to !== '/' && location.pathname.startsWith(item.to) && item.children && item.children.length > 1) {
+    for (const item of expandableNavKeys) {
+      if (location.pathname.startsWith(item.to)) {
         setOpenMenus((prev) => {
           if (prev.has(item.key)) return prev;
           const next = new Set(prev);
@@ -280,7 +288,7 @@ export function Layout({ children }: LayoutProps) {
         });
       }
     }
-  }, [location.pathname]);
+  }, [location.pathname, expandableNavKeys]);
 
   return (
     <div className="min-h-screen bg-theme-primary flex pt-[5px]">

@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useRef, useEffect } from 'react';
 import { nanoid } from 'nanoid';
 import { useApp } from '../context/AppContext';
 import { useSettings } from '../context/SettingsContext';
@@ -34,6 +34,11 @@ function createEvent(
 export function useQuotes() {
   const { quotes, addQuote, updateQuote, getQuote, getQuotesByPatient } = useApp();
   const { settings, updateSettings } = useSettings();
+
+  // Track latest counter via ref to prevent race conditions when
+  // createQuote/duplicateQuote are called before React re-renders with updated settings
+  const counterRef = useRef(settings.quote.counter);
+  useEffect(() => { counterRef.current = settings.quote.counter; }, [settings.quote.counter]);
 
   // Filter out deleted quotes for display
   const activeQuotes = useMemo(() => quotes.filter((q) => !q.isDeleted), [quotes]);
@@ -76,8 +81,9 @@ export function useQuotes() {
       const defaultQuoteName = patientName ? `${patientName} árajánlata` : 'Új árajánlat';
       const doctorName = getDoctorName(defaultDoctorId);
 
-      // Increment counter and generate quote number
-      const newCounter = settings.quote.counter + 1;
+      // Increment counter via ref to avoid race conditions in same render cycle
+      const newCounter = counterRef.current + 1;
+      counterRef.current = newCounter;
       const quoteNumber = generateQuoteNumber(settings.quote.prefix, newCounter);
 
       // Update settings with new counter
@@ -409,8 +415,9 @@ export function useQuotes() {
       const now = getCurrentDateString();
       const doctorName = getDoctorName(existing.doctorId);
 
-      // Increment counter and generate quote number
-      const newCounter = settings.quote.counter + 1;
+      // Increment counter via ref to avoid race conditions in same render cycle
+      const newCounter = counterRef.current + 1;
+      counterRef.current = newCounter;
       const quoteNumber = generateQuoteNumber(settings.quote.prefix, newCounter);
 
       // Update settings with new counter

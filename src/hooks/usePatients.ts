@@ -120,7 +120,7 @@ export function usePatients() {
       createDentalStatusSnapshot(snapshot);
       return duplicate;
     },
-    [getPatient, addPatient, createDentalStatusSnapshot]
+    [patients, getPatient, addPatient, createDentalStatusSnapshot]
   );
 
   const searchPatients = useCallback(

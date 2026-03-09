@@ -375,6 +375,20 @@ const requirePermission = async (
   return user;
 };
 
+const requireAnyPermission = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  keys: PermissionKey[]
+) => {
+  const user = await requireAuth(request, reply);
+  if (!user) return null;
+  if (!keys.some((key) => hasPermission(user, key))) {
+    await reply.code(403).send({ message: 'Nincs jogosultság ehhez a művelethez.' });
+    return null;
+  }
+  return user;
+};
+
 const logActivity = async (
   userId: string,
   action: string,
@@ -480,9 +494,10 @@ server.post('/seed', async (request, reply) => {
   const user = await requirePermission(request, reply, 'admin.users.manage');
   if (!user) return;
 
-  const { readFileSync, existsSync } = await import('fs');
+  const { existsSync } = await import('fs');
   const { resolve, dirname } = await import('path');
   const { fileURLToPath } = await import('url');
+  const { readCsv: readCsvFromDir } = await import('./csvUtils.js');
 
   const __dir = dirname(fileURLToPath(import.meta.url));
   // In dev: __dir = backend/dist -> ../../src/data = src/data (monorepo root)
@@ -490,34 +505,8 @@ server.post('/seed', async (request, reply) => {
   let dataDir = resolve(__dir, '../../src/data');
   if (!existsSync(dataDir)) dataDir = resolve(__dir, '../src/data');
 
-  function parseCsvLine(line: string): string[] {
-    const values: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"') {
-        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
-        else inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) { values.push(current); current = ''; }
-      else current += char;
-    }
-    values.push(current);
-    return values.map((v) => v.trim());
-  }
-
   function readCsv(filename: string): Record<string, string>[] {
-    const filePath = resolve(dataDir, filename);
-    const content = readFileSync(filePath, 'utf-8');
-    const lines = content.trim().split(/\r?\n/).filter((l) => l.trim());
-    if (lines.length < 2) return [];
-    const headers = parseCsvLine(lines[0]);
-    return lines.slice(1).map((line) => {
-      const values = parseCsvLine(line);
-      const row: Record<string, string> = {};
-      headers.forEach((h, idx) => { row[h] = values[idx] ?? ''; });
-      return row;
-    });
+    return readCsvFromDir(dataDir, filename);
   }
 
   const toBool = (val: string | undefined) => (val || '').toUpperCase() === 'TRUE' || val === '1';
@@ -605,9 +594,9 @@ server.post('/seed', async (request, reply) => {
     const neakLevels = readCsv('NeakLevel.csv');
     for (const row of neakLevels) {
       const data = {
-        neakLevelInfoHu: row.NekaLevelInfoHu || '',
-        neakLevelInfoEn: row.NekaLevelInfoEn || '',
-        neakLevelInfoDe: row.NekaLevelInfoDe || '',
+        neakLevelInfoHu: row.NeakLevelInfoHu || '',
+        neakLevelInfoEn: row.NeakLevelInfoEn || '',
+        neakLevelInfoDe: row.NeakLevelInfoDe || '',
       };
       await prisma.neakLevel.upsert({ where: { neakLevelCode: row.NeakLevelCode }, update: data, create: { neakLevelCode: row.NeakLevelCode, ...data } });
     }
@@ -2466,6 +2455,13 @@ server.get('/quotes', async () => {
   return quotes.map((q) => q.data);
 });
 
+server.get('/quotes/:quoteId', async (request, reply) => {
+  const { quoteId } = request.params as { quoteId: string };
+  const row = await prisma.quote.findUnique({ where: { quoteId } });
+  if (!row) return reply.code(404).send({ message: 'Quote not found' });
+  return row.data;
+});
+
 server.post('/quotes', async (request, reply) => {
   const user = await requirePermission(request, reply, 'quotes.create');
   if (!user) return;
@@ -2536,9 +2532,10 @@ server.post('/quotes', async (request, reply) => {
 });
 
 server.patch('/quotes/:quoteId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'quotes.create');
+  if (!user) return;
   const { quoteId } = request.params as { quoteId: string };
   const body = request.body as JsonRecord;
-  const user = request.currentUser;
   try {
     const oldRow = await prisma.quote.findUnique({ where: { quoteId }, select: { quoteStatus: true } });
     const row = await prisma.quote.update({
@@ -2560,21 +2557,19 @@ server.patch('/quotes/:quoteId', async (request, reply) => {
       },
     });
 
-    if (user) {
-      const details: Record<string, unknown> = { patientId: row.patientId };
-      if (body.quoteStatus !== undefined && oldRow && String(body.quoteStatus) !== oldRow.quoteStatus) {
-        details.statusChange = `${oldRow.quoteStatus} → ${body.quoteStatus}`;
-        details.oldStatus = oldRow.quoteStatus;
-        details.newStatus = String(body.quoteStatus);
-      }
-      await logActivity(user.id, 'quote.update', {
-        page: `patients/${row.patientId}/quotes/${quoteId}`,
-        entityType: 'Quote',
-        entityId: quoteId,
-        details,
-        ipAddress: request.ip || undefined,
-      });
+    const details: Record<string, unknown> = { patientId: row.patientId };
+    if (body.quoteStatus !== undefined && oldRow && String(body.quoteStatus) !== oldRow.quoteStatus) {
+      details.statusChange = `${oldRow.quoteStatus} → ${body.quoteStatus}`;
+      details.oldStatus = oldRow.quoteStatus;
+      details.newStatus = String(body.quoteStatus);
     }
+    await logActivity(user.id, 'quote.update', {
+      page: `patients/${row.patientId}/quotes/${quoteId}`,
+      entityType: 'Quote',
+      entityId: quoteId,
+      details,
+      ipAddress: request.ip || undefined,
+    });
 
     return row.data;
   } catch {
@@ -4721,6 +4716,8 @@ server.get('/dental-status-snapshots', async (request) => {
 });
 
 server.post('/dental-status-snapshots', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.update');
+  if (!user) return;
   const body = request.body as JsonRecord;
   const snapshot = await prisma.dentalStatusSnapshot.create({
     data: {
@@ -4735,6 +4732,8 @@ server.post('/dental-status-snapshots', async (request, reply) => {
 });
 
 server.put('/dental-status-snapshots/:snapshotId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.update');
+  if (!user) return;
   const { snapshotId } = request.params as { snapshotId: string };
   const body = request.body as JsonRecord;
   try {
@@ -4754,22 +4753,24 @@ server.put('/dental-status-snapshots/:snapshotId', async (request, reply) => {
 
 // Invoices
 server.get('/invoices', async (request, reply) => {
-  const currentUser = await requireAuth(request, reply);
-  if (!currentUser) return;
-  if (!hasPermission(currentUser, 'invoices.view') && !hasPermission(currentUser, 'invoices.view.detail')) {
-    return reply.code(403).send({ message: 'Nincs jogosultság ehhez a művelethez.' });
-  }
+  const user = await requireAnyPermission(request, reply, ['invoices.view', 'invoices.view.detail']);
+  if (!user) return;
   const rows = await prisma.invoice.findMany({ orderBy: { createdAt: 'desc' } });
   return rows.map((row) => row.data);
 });
 
+server.get('/invoices/:invoiceId', async (request, reply) => {
+  const user = await requireAnyPermission(request, reply, ['invoices.view', 'invoices.view.detail']);
+  if (!user) return;
+  const { invoiceId } = request.params as { invoiceId: string };
+  const row = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  if (!row) return reply.code(404).send({ message: 'Invoice not found' });
+  return row.data;
+});
+
 server.put('/invoices/:invoiceId', async (request, reply) => {
-  const currentUser = await requireAuth(request, reply);
-  if (!currentUser) return;
-  if (!hasPermission(currentUser, 'invoices.issue') && !hasPermission(currentUser, 'invoices.storno')) {
-    return reply.code(403).send({ message: 'Nincs jogosultság ehhez a művelethez.' });
-  }
-  const user = currentUser;
+  const user = await requireAnyPermission(request, reply, ['invoices.issue', 'invoices.storno']);
+  if (!user) return;
 
   const { invoiceId } = request.params as { invoiceId: string };
   const body = request.body as JsonRecord;
@@ -4815,8 +4816,15 @@ server.put('/invoices/:invoiceId', async (request, reply) => {
   return { status: 'ok', id: invoiceId };
 });
 
-server.delete('/invoices', async () => {
+server.delete('/invoices', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.users.manage');
+  if (!user) return;
   await prisma.invoice.deleteMany({});
+  await logActivity(user.id, 'invoice.deleteAll', {
+    entityType: 'Invoice',
+    details: { action: 'Deleted all invoices' },
+    ipAddress: request.ip || undefined,
+  });
   return { status: 'ok' };
 });
 
@@ -4848,11 +4856,15 @@ server.get('/invoices/next-id/:patientId', async (request, reply) => {
 });
 
 // Doctor CRUD
-server.get('/doctors', async () => {
+server.get('/doctors', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.view');
+  if (!user) return;
   return prisma.doctor.findMany({ orderBy: { doctorId: 'asc' } });
 });
 
 server.post('/doctors', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.edit');
+  if (!user) return;
   const body = request.body as JsonRecord;
   const doctorId = await nextDoctorId();
   const doctor = await prisma.doctor.create({
@@ -4868,6 +4880,8 @@ server.post('/doctors', async (request, reply) => {
 });
 
 server.put('/doctors/:doctorId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.edit');
+  if (!user) return;
   const { doctorId } = request.params as { doctorId: string };
   const body = request.body as JsonRecord;
   try {
@@ -4886,6 +4900,8 @@ server.put('/doctors/:doctorId', async (request, reply) => {
 });
 
 server.delete('/doctors/:doctorId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'settings.edit');
+  if (!user) return;
   const { doctorId } = request.params as { doctorId: string };
   try {
     await prisma.doctor.delete({ where: { doctorId } });
@@ -4905,7 +4921,9 @@ server.get('/neak-checks', async (request) => {
   return rows.map((row) => row.data);
 });
 
-server.put('/neak-checks/:id', async (request) => {
+server.put('/neak-checks/:id', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.update');
+  if (!user) return;
   const { id } = request.params as { id: string };
   const body = request.body as JsonRecord;
   const checkedAt = body.checkedAt ? toDate(String(body.checkedAt)) : new Date();
@@ -4936,7 +4954,9 @@ server.get('/odontogram/current/:patientId', async (request) => {
   return row.data;
 });
 
-server.put('/odontogram/current/:patientId', async (request) => {
+server.put('/odontogram/current/:patientId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.update');
+  if (!user) return;
   const { patientId } = request.params as { patientId: string };
   const body = request.body as JsonRecord;
   await prisma.odontogramCurrent.upsert({
@@ -4960,7 +4980,9 @@ server.get('/odontogram/daily/:patientId/:dateKey', async (request) => {
   return row?.data ?? null;
 });
 
-server.put('/odontogram/daily/:patientId/:dateKey', async (request) => {
+server.put('/odontogram/daily/:patientId/:dateKey', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.update');
+  if (!user) return;
   const { patientId, dateKey } = request.params as { patientId: string; dateKey: string };
   const body = request.body as JsonRecord;
   await prisma.odontogramDaily.upsert({
@@ -5011,6 +5033,8 @@ server.get('/odontogram/timeline/:patientId/:snapshotId', async (request, reply)
 });
 
 server.post('/odontogram/timeline/:patientId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.update');
+  if (!user) return;
   const { patientId } = request.params as { patientId: string };
   const body = request.body as JsonRecord;
   const snapshotId = String(body.snapshotId || randomUUID());
@@ -5027,6 +5051,8 @@ server.post('/odontogram/timeline/:patientId', async (request, reply) => {
 });
 
 server.put('/odontogram/timeline/:patientId/:snapshotId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.update');
+  if (!user) return;
   const { patientId, snapshotId } = request.params as { patientId: string; snapshotId: string };
   const body = request.body as JsonRecord;
   const updatedAt = body.updatedAt ? toDate(String(body.updatedAt)) : new Date();
@@ -5046,6 +5072,8 @@ server.put('/odontogram/timeline/:patientId/:snapshotId', async (request, reply)
 });
 
 server.delete('/odontogram/timeline/:patientId/:snapshotId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'patients.update');
+  if (!user) return;
   const { patientId, snapshotId } = request.params as { patientId: string; snapshotId: string };
   const row = await prisma.odontogramTimeline.findUnique({ where: { snapshotId } });
   if (!row || row.patientId !== patientId) {
@@ -5056,7 +5084,9 @@ server.delete('/odontogram/timeline/:patientId/:snapshotId', async (request, rep
 });
 
 // Data export/import
-server.get('/data/export', async () => {
+server.get('/data/export', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'data.view');
+  if (!user) return;
   const [patients, catalog, quotes, settings, dentalStatusSnapshots, invoices, neakChecks, pricelists, pricelistCategories, doctors] =
     await Promise.all([
       prisma.patient.findMany(),
@@ -5090,13 +5120,16 @@ server.get('/data/export', async () => {
 });
 
 server.post('/data/import', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'admin.users.manage');
+  if (!user) return;
   const body = request.body as ExportData;
   if (!body || !Array.isArray(body.patients) || !Array.isArray(body.catalog) || !Array.isArray(body.quotes)) {
     return reply.code(400).send({ message: 'Invalid import payload' });
   }
 
-  const importUserId = request.currentUser?.id || null;
+  const importUserId = user.id;
 
+  try {
   await prisma.$transaction(async (tx) => {
     await tx.odontogramTimeline.deleteMany({});
     await tx.odontogramDaily.deleteMany({});
@@ -5301,6 +5334,11 @@ server.post('/data/import', async (request, reply) => {
       create: { id: 'default', data: toInputJson(body.settings || defaultSettings) },
     });
   });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Import failed';
+    server.log.error({ err }, 'Data import failed');
+    return reply.code(500).send({ message: `Import hiba: ${message}` });
+  }
 
   return { status: 'ok' };
 });

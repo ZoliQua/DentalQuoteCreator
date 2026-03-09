@@ -1,54 +1,14 @@
 import { PrismaClient } from '@prisma/client';
-import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
+import { dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { readCsv as readCsvFromDir } from '../src/csvUtils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const prisma = new PrismaClient();
 
-function parseCsvLine(line: string): string[] {
-  const values: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      values.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  values.push(current);
-  return values.map((v) => v.trim());
-}
-
+const dataDir = __dirname + '/../../src/data';
 function readCsv(filename: string): Record<string, string>[] {
-  const filePath = resolve(__dirname, '../../src/data', filename);
-  const content = readFileSync(filePath, 'utf-8');
-  const lines = content.trim().split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) return [];
-
-  const headers = parseCsvLine(lines[0]);
-  const rows: Record<string, string>[] = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const values = parseCsvLine(lines[i]);
-    const row: Record<string, string> = {};
-    headers.forEach((h, idx) => {
-      row[h] = values[idx] ?? '';
-    });
-    rows.push(row);
-  }
-  return rows;
+  return readCsvFromDir(dataDir, filename);
 }
 
 function toBool(val: string): boolean {
@@ -215,15 +175,15 @@ async function main() {
     await prisma.neakLevel.upsert({
       where: { neakLevelCode: row.NeakLevelCode },
       update: {
-        neakLevelInfoHu: row.NekaLevelInfoHu || '',
-        neakLevelInfoEn: row.NekaLevelInfoEn || '',
-        neakLevelInfoDe: row.NekaLevelInfoDe || '',
+        neakLevelInfoHu: row.NeakLevelInfoHu || '',
+        neakLevelInfoEn: row.NeakLevelInfoEn || '',
+        neakLevelInfoDe: row.NeakLevelInfoDe || '',
       },
       create: {
         neakLevelCode: row.NeakLevelCode,
-        neakLevelInfoHu: row.NekaLevelInfoHu || '',
-        neakLevelInfoEn: row.NekaLevelInfoEn || '',
-        neakLevelInfoDe: row.NekaLevelInfoDe || '',
+        neakLevelInfoHu: row.NeakLevelInfoHu || '',
+        neakLevelInfoEn: row.NeakLevelInfoEn || '',
+        neakLevelInfoDe: row.NeakLevelInfoDe || '',
       },
     });
   }

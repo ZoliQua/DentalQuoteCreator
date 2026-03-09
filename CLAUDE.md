@@ -55,6 +55,13 @@
 - Local .htaccess backups: `deploy/public_html.htaccess` and `deploy/passenger-backend.htaccess`
 - See `deploy/README.txt` for full deployment guide
 
+## Code Quality Rules
+- **Permission checks**: Every new or modified backend endpoint MUST have appropriate `requirePermission()` or `requireAuth()` calls — audit against ALL_PERMISSION_KEYS
+- **Consistent patterns**: Use `requirePermission(request, reply, 'scope.action')` consistently (NOT manual requireAuth + hasPermission combos)
+- **Error handling**: Never use empty `catch {}` blocks — at minimum log the error with `console.error`
+- **Frontend hooks**: Always verify `useCallback`/`useMemo` dependency arrays include all referenced state variables
+- **Validation**: Validate entity existence (patient, quote) before creating related records
+
 ## Conventions
 - Hungarian language is primary (hu.ts is the source of truth for i18n keys)
 - IDs use prefixes: plistXXX (pricelists), pcatXXXX (categories), catXXXXX (catalog items)
