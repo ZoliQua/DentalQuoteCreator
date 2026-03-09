@@ -6,6 +6,7 @@
 
 [![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/ZoliQua/DentalQuoteCreator/releases/tag/v1.1.0)
 [![Backend](https://img.shields.io/badge/backend-0.2.0-green.svg)](https://github.com/ZoliQua/DentalQuoteCreator/releases/tag/v1.1.0)
+[![Tests](https://img.shields.io/badge/tests-179%20passed-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-Private-red.svg)]()
 
 ---
@@ -196,6 +197,29 @@ cd backend && npm run build
 cd backend && npm start
 ```
 
+## Tesztelés
+
+A backend API teljes körű tesztlefedettséggel rendelkezik **Vitest 4** keretrendszerrel.
+
+```bash
+# Tesztek futtatása
+cd backend && npm test
+
+# Tesztek figyelő módban
+cd backend && npm run test:watch
+```
+
+**179 teszt, 14 teszt fájl** — lefedett területek:
+- Hitelesítés (bejelentkezés, kijelentkezés, session kezelés)
+- Jogosultságrendszer (401/403 ellenőrzések minden végpontra)
+- Páciensek, árajánlatok, számlák CRUD
+- Orvosok, katalógus, árlisták, kategóriák CRUD
+- Odontogram (fogállapot, napi, idővonal)
+- NEAK (beállítások, osztályok, szintek, ellenőrzések)
+- Időpont-kezelés (típusok, székek, időpontok)
+- Beállítások (általános, számla, NEAK)
+- Adat export/import, health végpontok
+
 ## Projektstruktúra
 
 ```
@@ -221,6 +245,22 @@ DentalQuoteCreator/
 │   ├── pages/                    # Oldal-komponensek
 │   └── types/                    # TypeScript típusdefiníciók
 ├── backend/                      # Backend forráskód
+│   ├── __tests__/                # API tesztek (Vitest)
+│   │   ├── helpers/              # Teszt segédfüggvények
+│   │   ├── auth.test.ts          # Hitelesítés tesztek
+│   │   ├── permissions.test.ts   # Jogosultság tesztek
+│   │   ├── patients.test.ts      # Páciens CRUD tesztek
+│   │   ├── quotes.test.ts        # Árajánlat CRUD tesztek
+│   │   ├── invoices.test.ts      # Számla tesztek
+│   │   ├── doctors.test.ts       # Orvos CRUD tesztek
+│   │   ├── catalog.test.ts       # Katalógus CRUD tesztek
+│   │   ├── pricelists.test.ts    # Árlista & kategória tesztek
+│   │   ├── odontogram.test.ts    # Odontogram tesztek
+│   │   ├── neak.test.ts          # NEAK tesztek
+│   │   ├── appointments.test.ts  # Időpont tesztek
+│   │   ├── settings.test.ts      # Beállítás tesztek
+│   │   ├── data-export-import.test.ts # Export/import tesztek
+│   │   └── health.test.ts        # Health & debug tesztek
 │   ├── src/server.ts             # Fastify szerver (API útvonalak)
 │   ├── prisma/schema.prisma      # Adatbázis séma
 │   └── prisma/seed.ts            # Adatbázis feltöltő
@@ -431,6 +471,29 @@ cd backend && npm run build
 cd backend && npm start
 ```
 
+## Testing
+
+The backend API has comprehensive test coverage using **Vitest 4**.
+
+```bash
+# Run tests
+cd backend && npm test
+
+# Watch mode
+cd backend && npm run test:watch
+```
+
+**179 tests across 14 test files** — covered areas:
+- Authentication (login, logout, session management)
+- Permission system (401/403 checks on all endpoints)
+- Patients, quotes, invoices CRUD
+- Doctors, catalog, price lists, categories CRUD
+- Odontogram (dental status, daily, timeline)
+- NEAK (settings, departments, levels, checks)
+- Appointments (types, chairs, scheduling)
+- Settings (general, invoice, NEAK)
+- Data export/import, health endpoints
+
 ## Project Structure
 
 ```
@@ -456,6 +519,22 @@ DentalQuoteCreator/
 │   ├── pages/                    # Page components
 │   └── types/                    # TypeScript type definitions
 ├── backend/                      # Backend source code
+│   ├── __tests__/                # API tests (Vitest)
+│   │   ├── helpers/              # Test utilities
+│   │   ├── auth.test.ts          # Authentication tests
+│   │   ├── permissions.test.ts   # Permission tests
+│   │   ├── patients.test.ts      # Patient CRUD tests
+│   │   ├── quotes.test.ts        # Quote CRUD tests
+│   │   ├── invoices.test.ts      # Invoice tests
+│   │   ├── doctors.test.ts       # Doctor CRUD tests
+│   │   ├── catalog.test.ts       # Catalog CRUD tests
+│   │   ├── pricelists.test.ts    # Price list & category tests
+│   │   ├── odontogram.test.ts    # Odontogram tests
+│   │   ├── neak.test.ts          # NEAK tests
+│   │   ├── appointments.test.ts  # Appointment tests
+│   │   ├── settings.test.ts      # Settings tests
+│   │   ├── data-export-import.test.ts # Export/import tests
+│   │   └── health.test.ts        # Health & debug tests
 │   ├── src/server.ts             # Fastify server (API routes)
 │   ├── prisma/schema.prisma      # Database schema
 │   └── prisma/seed.ts            # Database seeder
@@ -666,6 +745,29 @@ cd backend && npm run build
 cd backend && npm start
 ```
 
+## Testen
+
+Die Backend-API verfügt über umfassende Testabdeckung mit **Vitest 4**.
+
+```bash
+# Tests ausführen
+cd backend && npm test
+
+# Watch-Modus
+cd backend && npm run test:watch
+```
+
+**179 Tests in 14 Testdateien** — abgedeckte Bereiche:
+- Authentifizierung (Anmeldung, Abmeldung, Sitzungsverwaltung)
+- Berechtigungssystem (401/403-Prüfungen für alle Endpunkte)
+- Patienten, Kostenvoranschläge, Rechnungen CRUD
+- Ärzte, Katalog, Preislisten, Kategorien CRUD
+- Odontogramm (Zahnstatus, täglich, Zeitstrahl)
+- NEAK (Einstellungen, Abteilungen, Ebenen, Prüfungen)
+- Terminverwaltung (Typen, Stühle, Termine)
+- Einstellungen (allgemein, Rechnung, NEAK)
+- Datenexport/-import, Health-Endpunkte
+
 ## Projektstruktur
 
 ```
@@ -691,6 +793,22 @@ DentalQuoteCreator/
 │   ├── pages/                    # Seitenkomponenten
 │   └── types/                    # TypeScript-Typdefinitionen
 ├── backend/                      # Backend-Quellcode
+│   ├── __tests__/                # API-Tests (Vitest)
+│   │   ├── helpers/              # Test-Hilfsfunktionen
+│   │   ├── auth.test.ts          # Authentifizierungstests
+│   │   ├── permissions.test.ts   # Berechtigungstests
+│   │   ├── patients.test.ts      # Patienten-CRUD-Tests
+│   │   ├── quotes.test.ts        # Kostenvoranschlag-CRUD-Tests
+│   │   ├── invoices.test.ts      # Rechnungstests
+│   │   ├── doctors.test.ts       # Arzt-CRUD-Tests
+│   │   ├── catalog.test.ts       # Katalog-CRUD-Tests
+│   │   ├── pricelists.test.ts    # Preislisten- & Kategorietests
+│   │   ├── odontogram.test.ts    # Odontogramm-Tests
+│   │   ├── neak.test.ts          # NEAK-Tests
+│   │   ├── appointments.test.ts  # Termintests
+│   │   ├── settings.test.ts      # Einstellungstests
+│   │   ├── data-export-import.test.ts # Export/Import-Tests
+│   │   └── health.test.ts        # Health- & Debug-Tests
 │   ├── src/server.ts             # Fastify-Server (API-Routen)
 │   ├── prisma/schema.prisma      # Datenbankschema
 │   └── prisma/seed.ts            # Datenbank-Seeder
@@ -732,4 +850,4 @@ npm run dev
 
 ---
 
-*Built with React, Fastify, Prisma, and PostgreSQL.*
+*Built with React, Fastify, Prisma, PostgreSQL, and tested with Vitest.*
