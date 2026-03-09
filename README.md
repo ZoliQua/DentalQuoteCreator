@@ -7,7 +7,7 @@
 [![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/ZoliQua/DentalQuoteCreator/releases/tag/v1.1.0)
 [![Backend](https://img.shields.io/badge/backend-0.2.0-green.svg)](https://github.com/ZoliQua/DentalQuoteCreator/releases/tag/v1.1.0)
 [![Tests](https://img.shields.io/badge/tests-179%20passed-brightgreen.svg)]()
-[![License](https://img.shields.io/badge/license-Private-red.svg)]()
+[![License](https://img.shields.io/badge/license-BSL%201.1-orange.svg)](LICENSE)
 
 ---
 
@@ -846,7 +846,38 @@ npm run dev
 
 ## Author
 
-**Zoltán Mackó** — [macko.dental@gmail.com](mailto:macko.dental@gmail.com)
+**Zoltan Dul PhD** — [zoltan.dul@gmail.com](mailto:zoltan.dul@gmail.com)
+
+---
+
+## License / Licensz / Lizenz
+
+This project is licensed under the **Business Source License 1.1 (BSL 1.1)**.
+
+| | |
+|---|---|
+| **Licensor** | Zoltan Dul PhD |
+| **Licensed Work** | DentalQuoteCreator |
+| **Change Date** | 2030-03-09 |
+| **Change License** | MIT |
+
+### What this means / Mit jelent ez / Was das bedeutet
+
+**Allowed without a commercial license:**
+- Viewing, forking, and studying the source code
+- Non-production use (development, testing, evaluation, academic research)
+- Contributing to the project via pull requests
+
+**Requires a commercial license:**
+- Running the software in a production environment (dental clinic, SaaS, hosting for others)
+- Offering the software as a managed service
+- Embedding or redistributing the software in a commercial product
+
+**After the Change Date (2030-03-09):** the code automatically converts to the **MIT License**, making it fully open source with no restrictions.
+
+For commercial licensing inquiries, contact: [zoltan.dul@gmail.com](mailto:zoltan.dul@gmail.com)
+
+See the full [LICENSE](LICENSE) file for details.
 
 ---
 
