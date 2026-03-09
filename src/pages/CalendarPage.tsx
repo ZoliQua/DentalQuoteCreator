@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Calendar } from '@dq-calendar';
 import type { CalendarEvent, CalendarView, CalendarConfig, CalendarCallbacks, CalendarLabels, Chair } from '@dq-calendar';
 import { useSettings } from '../context/SettingsContext';
@@ -44,6 +44,7 @@ export function CalendarPage({ initialView: initialViewProp }: CalendarPageProps
   const { t, settings, appLanguage } = useSettings();
   const { patients } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   // ── data hooks ──
   const {
@@ -222,7 +223,11 @@ export function CalendarPage({ initialView: initialViewProp }: CalendarPageProps
       currentRangeRef.current = { start, end };
       fetchAppointments(start.toISOString(), end.toISOString());
     },
-  }), [updateAppointment, fetchAppointments, refetch]);
+    onViewChange: (view: CalendarView) => {
+      const viewRoute = view === 'month' ? '/calendar/month' : view === 'day' ? '/calendar/day' : '/calendar/week';
+      navigate(viewRoute, { replace: true });
+    },
+  }), [updateAppointment, fetchAppointments, refetch, navigate]);
 
   // ── Modal handlers ──
   const handleSave = async (data: Partial<Appointment>, scope?: 'single' | 'future' | 'all') => {

@@ -6794,6 +6794,10 @@ const seedSettingsFromEnv = async () => {
   }
 };
 
+// Export for testing — tests use server.inject() without calling start()
+export { server, prisma, hashPassword, createShortId, buildPermissionMap };
+export type { PermissionKey, AuthenticatedUser };
+
 const start = async () => {
   try {
     await prisma.$connect();
@@ -6807,5 +6811,7 @@ const start = async () => {
   }
 };
 
-start();
+// Only start when run directly (not imported by tests)
+const isDirectRun = !process.env.VITEST;
+if (isDirectRun) start();
 
