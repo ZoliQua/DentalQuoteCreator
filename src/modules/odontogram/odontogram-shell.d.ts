@@ -5,6 +5,23 @@ declare module '@odontogram-shell' {
     OdontogramNumberingSystem,
   } from './odontogramSettings';
 
+  /**
+   * Custom theme configuration. Overrides the default color palette via
+   * CSS custom properties (`--odon-*`).
+   */
+  type OdontogramThemeConfig = {
+    colors?: {
+      background?: string;
+      panel?: string;
+      card?: string;
+      text?: string;
+      muted?: string;
+      line?: string;
+      accent?: string;
+      accent2?: string;
+    };
+  };
+
   type OdontogramShellProps = {
     language?: OdontogramLanguage;
     onLanguageChange?: (lang: OdontogramLanguage) => void;
@@ -12,6 +29,8 @@ declare module '@odontogram-shell' {
     onNumberingChange?: (system: OdontogramNumberingSystem) => void;
     darkMode?: boolean;
     onDarkModeChange?: (dark: boolean) => void;
+    /** Custom theme configuration for color overrides. */
+    themeConfig?: OdontogramThemeConfig;
   };
 
   const OdontogramShell: ComponentType<OdontogramShellProps>;
