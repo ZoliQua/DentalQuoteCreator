@@ -4,3 +4,6 @@
 [submodule "src/modules/dq-importer"]
 	path = src/modules/dq-importer
 	url = https://github.com/ZoliQua/DQ-Importer.git
+[submodule "src/modules/dq-techniq"]
+	path = src/modules/dq-techniq
+	url = https://github.com/ZoliQua/DQ-Dental-Techniq.git

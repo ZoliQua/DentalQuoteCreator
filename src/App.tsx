@@ -31,6 +31,7 @@ import { Card, CardContent } from './components/common';
 import { ImporterPage } from '@dq-importer';
 import { OdontogramHost } from './modules/odontogram/OdontogramHost';
 import type { OdontogramState } from './modules/odontogram/types';
+import { LabWorkOrdersPage, LabWorkOrderEditorPage, LabPartnersPage } from './modules/dq-techniq';
 
 function ImporterOdontogramViewer({ initialState }: { initialState: unknown }) {
   return <OdontogramHost patientId="" mode="view" initialState={initialState as OdontogramState | null} onChange={() => {}} hidePanel />;
@@ -142,6 +143,10 @@ function App() {
         <Route path="/data/browser" element={<Guard permission="data.browse"><DatabaseBrowserPage /></Guard>} />
         <Route path="/odontogram-lab" element={<Guard permission="lab.view"><OdontogramLabPage /></Guard>} />
         <Route path="/importer" element={<Guard permission="lab.view"><ImporterPage OdontogramViewer={ImporterOdontogramViewer} /></Guard>} />
+        <Route path="/lab" element={<Guard permission="lab.workorders.view"><LabWorkOrdersPage /></Guard>} />
+        <Route path="/lab/new" element={<Guard permission="lab.workorders.create"><LabWorkOrderEditorPage /></Guard>} />
+        <Route path="/lab/partners" element={<Guard permission="lab.partners.manage"><LabPartnersPage /></Guard>} />
+        <Route path="/lab/:workOrderId" element={<Guard permission="lab.workorders.view"><LabWorkOrderEditorPage /></Guard>} />
         <Route
           path="/admin"
           element={canOpenAdmin ? <AdminPage /> : <NoPermissionPage />}

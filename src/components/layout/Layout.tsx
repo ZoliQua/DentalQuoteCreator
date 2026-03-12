@@ -244,6 +244,8 @@ export function Layout({ children }: LayoutProps) {
       children: [
         { to: '/odontogram-lab', label: t.nav.labOdontogram },
         { to: '/importer', label: t.nav.labImporter },
+        { to: '/lab', label: t.nav?.labWorkOrders ?? 'Munkalapok', permission: 'lab.workorders.view' },
+        { to: '/lab/partners', label: t.nav?.labPartners ?? 'Laborpartnerek', permission: 'lab.partners.manage' },
       ],
     },
   ];

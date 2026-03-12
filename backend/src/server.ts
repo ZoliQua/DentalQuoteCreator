@@ -59,6 +59,9 @@ const formatRRuleDt = (d: Date): string => {
 const createChairId = (nr: number): string => `chair-${String(nr).padStart(2, '0')}`;
 const createSmsLogId = (): string => 'SL' + randomBytes(4).toString('hex');
 const createEmailLogId = (): string => 'EL' + randomBytes(4).toString('hex');
+const createLabPartnerId = (): string => 'LP' + randomBytes(4).toString('hex');
+const createLabWorkOrderId = (): string => 'LW' + randomBytes(4).toString('hex');
+const createLabWorkOrderItemId = (): string => 'LI' + randomBytes(4).toString('hex');
 
 const MAX_ID_RETRIES = 5;
 async function createWithUniqueId<T>(
@@ -117,6 +120,12 @@ const ALL_PERMISSION_KEYS = [
   'email.history',
   'email.settings',
   'notifications.view',
+  'lab.workorders.view',
+  'lab.workorders.create',
+  'lab.workorders.edit',
+  'lab.workorders.delete',
+  'lab.workorders.status',
+  'lab.partners.manage',
   'admin.users.manage',
   'admin.permissions.manage',
 ] as const;
@@ -6793,6 +6802,295 @@ const seedSettingsFromEnv = async () => {
     }
   }
 };
+
+// ─── Dental Techniq Module: Lab Partners ────────────────────────────
+
+server.get('/lab-partners', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'lab.workorders.view');
+  if (!user) return;
+  return prisma.labPartner.findMany({ orderBy: { labName: 'asc' } });
+});
+
+server.post('/lab-partners', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'lab.partners.manage');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const partner = await createWithUniqueId(createLabPartnerId, (id) =>
+    prisma.labPartner.create({
+      data: {
+        labPartnerId: id,
+        labName: String(body.labName || ''),
+        contactName: body.contactName ? String(body.contactName) : null,
+        phone: body.phone ? String(body.phone) : null,
+        email: body.email ? String(body.email) : null,
+        address: body.address ? String(body.address) : null,
+        taxNumber: body.taxNumber ? String(body.taxNumber) : null,
+        notes: body.notes ? String(body.notes) : null,
+        isActive: body.isActive !== false,
+      },
+    }),
+  );
+  return reply.code(201).send(partner);
+});
+
+server.put('/lab-partners/:labPartnerId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'lab.partners.manage');
+  if (!user) return;
+  const { labPartnerId } = request.params as { labPartnerId: string };
+  const body = request.body as JsonRecord;
+  try {
+    const partner = await prisma.labPartner.update({
+      where: { labPartnerId },
+      data: {
+        labName: body.labName === undefined ? undefined : String(body.labName),
+        contactName: body.contactName === undefined ? undefined : (body.contactName ? String(body.contactName) : null),
+        phone: body.phone === undefined ? undefined : (body.phone ? String(body.phone) : null),
+        email: body.email === undefined ? undefined : (body.email ? String(body.email) : null),
+        address: body.address === undefined ? undefined : (body.address ? String(body.address) : null),
+        taxNumber: body.taxNumber === undefined ? undefined : (body.taxNumber ? String(body.taxNumber) : null),
+        notes: body.notes === undefined ? undefined : (body.notes ? String(body.notes) : null),
+        isActive: body.isActive === undefined ? undefined : Boolean(body.isActive),
+      },
+    });
+    return partner;
+  } catch {
+    return reply.code(404).send({ message: 'Lab partner not found' });
+  }
+});
+
+server.delete('/lab-partners/:labPartnerId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'lab.partners.manage');
+  if (!user) return;
+  const { labPartnerId } = request.params as { labPartnerId: string };
+  try {
+    await prisma.labPartner.delete({ where: { labPartnerId } });
+    return { status: 'ok' };
+  } catch {
+    return reply.code(404).send({ message: 'Lab partner not found' });
+  }
+});
+
+// ─── Dental Techniq Module: Lab Work Orders ─────────────────────────
+
+async function nextWorkOrderNumber(): Promise<string> {
+  const year = new Date().getFullYear();
+  const prefix = `ML-${year}-`;
+  const last = await prisma.labWorkOrder.findFirst({
+    where: { workOrderNumber: { startsWith: prefix } },
+    orderBy: { workOrderNumber: 'desc' },
+    select: { workOrderNumber: true },
+  });
+  const seq = last ? parseInt(last.workOrderNumber.slice(prefix.length), 10) + 1 : 1;
+  return `${prefix}${String(seq).padStart(4, '0')}`;
+}
+
+server.get('/lab-work-orders', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'lab.workorders.view');
+  if (!user) return;
+  const query = request.query as { status?: string; patientId?: string; labPartnerId?: string };
+  const where: Record<string, unknown> = {};
+  if (query.status) where.status = query.status;
+  if (query.patientId) where.patientId = query.patientId;
+  if (query.labPartnerId) where.labPartnerId = query.labPartnerId;
+  return prisma.labWorkOrder.findMany({
+    where,
+    include: { items: { orderBy: { sortOrder: 'asc' } }, labPartner: true },
+    orderBy: { createdAt: 'desc' },
+  });
+});
+
+server.get('/lab-work-orders/:workOrderId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'lab.workorders.view');
+  if (!user) return;
+  const { workOrderId } = request.params as { workOrderId: string };
+  const order = await prisma.labWorkOrder.findUnique({
+    where: { workOrderId },
+    include: { items: { orderBy: { sortOrder: 'asc' } }, labPartner: true },
+  });
+  if (!order) return reply.code(404).send({ message: 'Work order not found' });
+  return order;
+});
+
+server.get('/lab-work-orders/patient/:patientId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'lab.workorders.view');
+  if (!user) return;
+  const { patientId } = request.params as { patientId: string };
+  return prisma.labWorkOrder.findMany({
+    where: { patientId },
+    include: { items: { orderBy: { sortOrder: 'asc' } }, labPartner: true },
+    orderBy: { createdAt: 'desc' },
+  });
+});
+
+server.post('/lab-work-orders', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'lab.workorders.create');
+  if (!user) return;
+  const body = request.body as JsonRecord;
+  const items = (body.items || []) as Array<JsonRecord>;
+
+  const workOrderNumber = await nextWorkOrderNumber();
+
+  const order = await createWithUniqueId(createLabWorkOrderId, (id) =>
+    prisma.labWorkOrder.create({
+      data: {
+        workOrderId: id,
+        workOrderNumber,
+        patientId: String(body.patientId),
+        labPartnerId: String(body.labPartnerId),
+        doctorId: body.doctorId ? String(body.doctorId) : null,
+        quoteId: body.quoteId ? String(body.quoteId) : null,
+        priority: String(body.priority || 'normal'),
+        toothNotation: body.toothNotation ? String(body.toothNotation) : null,
+        shade: body.shade ? String(body.shade) : null,
+        material: body.material ? String(body.material) : null,
+        upperImpression: Boolean(body.upperImpression),
+        lowerImpression: Boolean(body.lowerImpression),
+        bite: Boolean(body.bite),
+        facebow: Boolean(body.facebow),
+        photos: Boolean(body.photos),
+        notes: body.notes ? String(body.notes) : null,
+        requestedDeadline: body.requestedDeadline ? new Date(String(body.requestedDeadline)) : null,
+        currency: String(body.currency || 'HUF'),
+        createdByUserId: user.id,
+        items: {
+          create: items.map((item, i) => ({
+            itemId: createLabWorkOrderItemId(),
+            catalogItemId: item.catalogItemId ? String(item.catalogItemId) : null,
+            description: String(item.description || ''),
+            tooth: item.tooth ? String(item.tooth) : null,
+            quantity: Number(item.quantity) || 1,
+            unitPrice: item.unitPrice != null ? Number(item.unitPrice) : null,
+            totalPrice: item.unitPrice != null ? Number(item.unitPrice) * (Number(item.quantity) || 1) : null,
+            sortOrder: i,
+          })),
+        },
+      },
+      include: { items: { orderBy: { sortOrder: 'asc' } }, labPartner: true },
+    }),
+  );
+
+  // Calculate totalPrice
+  const total = order.items.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
+  if (total > 0) {
+    await prisma.labWorkOrder.update({ where: { workOrderId: order.workOrderId }, data: { totalPrice: total } });
+    order.totalPrice = total;
+  }
+
+  await logActivity(user.id, 'lab.workorder.create', { entityType: 'LabWorkOrder', entityId: order.workOrderId });
+  return reply.code(201).send(order);
+});
+
+server.put('/lab-work-orders/:workOrderId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'lab.workorders.edit');
+  if (!user) return;
+  const { workOrderId } = request.params as { workOrderId: string };
+  const body = request.body as JsonRecord;
+  const items = body.items as Array<JsonRecord> | undefined;
+
+  try {
+    // Update main order fields
+    const order = await prisma.labWorkOrder.update({
+      where: { workOrderId },
+      data: {
+        labPartnerId: body.labPartnerId === undefined ? undefined : String(body.labPartnerId),
+        doctorId: body.doctorId === undefined ? undefined : (body.doctorId ? String(body.doctorId) : null),
+        quoteId: body.quoteId === undefined ? undefined : (body.quoteId ? String(body.quoteId) : null),
+        priority: body.priority === undefined ? undefined : String(body.priority),
+        toothNotation: body.toothNotation === undefined ? undefined : (body.toothNotation ? String(body.toothNotation) : null),
+        shade: body.shade === undefined ? undefined : (body.shade ? String(body.shade) : null),
+        material: body.material === undefined ? undefined : (body.material ? String(body.material) : null),
+        upperImpression: body.upperImpression === undefined ? undefined : Boolean(body.upperImpression),
+        lowerImpression: body.lowerImpression === undefined ? undefined : Boolean(body.lowerImpression),
+        bite: body.bite === undefined ? undefined : Boolean(body.bite),
+        facebow: body.facebow === undefined ? undefined : Boolean(body.facebow),
+        photos: body.photos === undefined ? undefined : Boolean(body.photos),
+        notes: body.notes === undefined ? undefined : (body.notes ? String(body.notes) : null),
+        labNotes: body.labNotes === undefined ? undefined : (body.labNotes ? String(body.labNotes) : null),
+        requestedDeadline: body.requestedDeadline === undefined ? undefined : (body.requestedDeadline ? new Date(String(body.requestedDeadline)) : null),
+        promisedDeadline: body.promisedDeadline === undefined ? undefined : (body.promisedDeadline ? new Date(String(body.promisedDeadline)) : null),
+        currency: body.currency === undefined ? undefined : String(body.currency),
+      },
+    });
+
+    // Replace items if provided
+    if (items) {
+      await prisma.labWorkOrderItem.deleteMany({ where: { workOrderId } });
+      await prisma.labWorkOrderItem.createMany({
+        data: items.map((item, i) => ({
+          itemId: createLabWorkOrderItemId(),
+          workOrderId,
+          catalogItemId: item.catalogItemId ? String(item.catalogItemId) : null,
+          description: String(item.description || ''),
+          tooth: item.tooth ? String(item.tooth) : null,
+          quantity: Number(item.quantity) || 1,
+          unitPrice: item.unitPrice != null ? Number(item.unitPrice) : null,
+          totalPrice: item.unitPrice != null ? Number(item.unitPrice) * (Number(item.quantity) || 1) : null,
+          sortOrder: i,
+        })),
+      });
+
+      // Recalculate total
+      const newItems = await prisma.labWorkOrderItem.findMany({ where: { workOrderId } });
+      const total = newItems.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
+      await prisma.labWorkOrder.update({ where: { workOrderId }, data: { totalPrice: total } });
+    }
+
+    const updated = await prisma.labWorkOrder.findUnique({
+      where: { workOrderId },
+      include: { items: { orderBy: { sortOrder: 'asc' } }, labPartner: true },
+    });
+
+    await logActivity(user.id, 'lab.workorder.update', { entityType: 'LabWorkOrder', entityId: workOrderId });
+    return updated;
+  } catch {
+    return reply.code(404).send({ message: 'Work order not found' });
+  }
+});
+
+server.patch('/lab-work-orders/:workOrderId/status', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'lab.workorders.status');
+  if (!user) return;
+  const { workOrderId } = request.params as { workOrderId: string };
+  const body = request.body as JsonRecord;
+  const status = String(body.status) as 'draft' | 'sent' | 'in_progress' | 'ready' | 'delivered' | 'accepted' | 'revision' | 'cancelled';
+
+  const validStatuses = ['draft', 'sent', 'in_progress', 'ready', 'delivered', 'accepted', 'revision', 'cancelled'];
+  if (!validStatuses.includes(status)) {
+    return reply.code(400).send({ message: 'Invalid status' });
+  }
+
+  try {
+    const data: Record<string, unknown> = { status };
+    if (body.labNotes !== undefined) data.labNotes = body.labNotes ? String(body.labNotes) : null;
+    if (body.promisedDeadline !== undefined) data.promisedDeadline = body.promisedDeadline ? new Date(String(body.promisedDeadline)) : null;
+    if (status === 'sent') data.sentAt = new Date();
+    if (status === 'delivered' || status === 'accepted') data.receivedAt = new Date();
+
+    const order = await prisma.labWorkOrder.update({
+      where: { workOrderId },
+      data,
+      include: { items: { orderBy: { sortOrder: 'asc' } }, labPartner: true },
+    });
+
+    await logActivity(user.id, 'lab.workorder.status', { entityType: 'LabWorkOrder', entityId: workOrderId, details: { status } });
+    return order;
+  } catch {
+    return reply.code(404).send({ message: 'Work order not found' });
+  }
+});
+
+server.delete('/lab-work-orders/:workOrderId', async (request, reply) => {
+  const user = await requirePermission(request, reply, 'lab.workorders.delete');
+  if (!user) return;
+  const { workOrderId } = request.params as { workOrderId: string };
+  try {
+    await prisma.labWorkOrder.delete({ where: { workOrderId } });
+    await logActivity(user.id, 'lab.workorder.delete', { entityType: 'LabWorkOrder', entityId: workOrderId });
+    return { status: 'ok' };
+  } catch {
+    return reply.code(404).send({ message: 'Work order not found' });
+  }
+});
 
 // Export for testing — tests use server.inject() without calling start()
 export { server, prisma, hashPassword, createShortId, buildPermissionMap };

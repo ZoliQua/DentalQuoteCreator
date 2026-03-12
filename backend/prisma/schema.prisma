@@ -139,6 +139,7 @@ model Patient {
   appointments Appointment[]
   smsLogs      SmsLog[]
   emailLogs    EmailLog[]
+  labWorkOrders LabWorkOrder[]
 }
 
 model Quote {
@@ -613,4 +614,89 @@ model EmailLog {
   @@index([patientId])
   @@index([status])
   @@index([createdAt])
+}
+
+// ─── Dental Techniq Module ──────────────────────────────────────────
+
+enum LabWorkOrderStatus {
+  draft
+  sent
+  in_progress
+  ready
+  delivered
+  accepted
+  revision
+  cancelled
+}
+
+model LabPartner {
+  labPartnerId String   @id
+  labName      String
+  contactName  String?
+  phone        String?
+  email        String?
+  address      String?
+  taxNumber    String?
+  notes        String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workOrders LabWorkOrder[]
+}
+
+model LabWorkOrder {
+  workOrderId       String             @id
+  workOrderNumber   String             @unique
+  patientId         String
+  labPartnerId      String
+  doctorId          String?
+  quoteId           String?
+  status            LabWorkOrderStatus @default(draft)
+  priority          String             @default("normal")
+  toothNotation     String?
+  shade             String?
+  material          String?
+  upperImpression   Boolean            @default(false)
+  lowerImpression   Boolean            @default(false)
+  bite              Boolean            @default(false)
+  facebow           Boolean            @default(false)
+  photos            Boolean            @default(false)
+  notes             String?
+  labNotes          String?
+  requestedDeadline DateTime?
+  promisedDeadline  DateTime?
+  sentAt            DateTime?
+  receivedAt        DateTime?
+  totalPrice        Float?
+  currency          String             @default("HUF")
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  createdByUserId   String?
+
+  patient    Patient    @relation(fields: [patientId], references: [patientId])
+  labPartner LabPartner @relation(fields: [labPartnerId], references: [labPartnerId])
+  items      LabWorkOrderItem[]
+
+  @@index([patientId])
+  @@index([labPartnerId])
+  @@index([status])
+  @@index([workOrderNumber])
+  @@index([createdAt])
+}
+
+model LabWorkOrderItem {
+  itemId        String  @id
+  workOrderId   String
+  catalogItemId String?
+  description   String
+  tooth         String?
+  quantity      Int     @default(1)
+  unitPrice     Float?
+  totalPrice    Float?
+  sortOrder     Int     @default(0)
+
+  workOrder LabWorkOrder @relation(fields: [workOrderId], references: [workOrderId], onDelete: Cascade)
+
+  @@index([workOrderId])
 }
