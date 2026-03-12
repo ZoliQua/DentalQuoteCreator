@@ -65,6 +65,7 @@ import { EmailHistoryTable } from '../components/email/EmailHistoryTable';
 import { EmailSendModal } from '../components/email/EmailSendModal';
 import { NeakCheckModal } from '../modules/neak/NeakCheckModal';
 import { checkJogviszony, saveCheck } from '../modules/neak';
+import { useLabWorkOrders, LabWorkOrderStatusBadge } from '../modules/dq-techniq';
 
 type TimelineEditorModalProps = {
   isOpen: boolean;
@@ -325,7 +326,7 @@ export function PatientDetailPage() {
   }
 
   // Redirect base path to status tab
-  const validTabs = ['status', 'treatments', 'card', 'calendar', 'notifications', 'quotes', 'invoices', 'neak'];
+  const validTabs = ['status', 'treatments', 'card', 'calendar', 'notifications', 'quotes', 'invoices', 'lab', 'neak'];
   if (!subPath || !validTabs.includes(activeTab)) {
     return <Navigate to={`${basePath}/status`} replace />;
   }
@@ -338,6 +339,7 @@ export function PatientDetailPage() {
     { key: 'notifications', to: `${basePath}/notifications`, label: t.patients.patientTabNotifications, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg> },
     { key: 'quotes', to: `${basePath}/quotes`, label: t.patients.patientTabQuotes, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
     { key: 'invoices', to: `${basePath}/invoices`, label: t.patients.patientTabInvoices, icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg> },
+    { key: 'lab', to: `${basePath}/lab`, label: t.nav?.labWorkOrders ?? 'Munkalapok', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg> },
     ...(patient.patientType?.toLowerCase().includes('neak') ? [{ key: 'neak', to: `${basePath}/neak`, label: t.patients.patientTabNeak, icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M9 12l2 2 4-4" /></svg> }] : []),
   ];
 
@@ -1316,6 +1318,10 @@ export function PatientDetailPage() {
         </div>
       )}
 
+      {activeTab === 'lab' && (
+        <PatientLabTab patientId={patient.patientId} />
+      )}
+
       {/* SMS Send Modal */}
       <SmsSendModal
         isOpen={smsModalOpen}
@@ -1488,6 +1494,103 @@ export function PatientDetailPage() {
           </button>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+function PatientLabTab({ patientId }: { patientId: string }) {
+  const { t } = useSettings();
+  const navigate = useNavigate();
+  const { workOrders, partners, loading, loadPatientWorkOrders, loadPartners } = useLabWorkOrders();
+
+  useEffect(() => {
+    loadPatientWorkOrders(patientId);
+    loadPartners();
+  }, [patientId, loadPatientWorkOrders, loadPartners]);
+
+  const getLabName = (labPartnerId: string) => {
+    const lp = partners.find((p) => p.labPartnerId === labPartnerId);
+    return lp?.labName ?? labPartnerId;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-theme-primary">
+          {t.lab?.workOrders ?? 'Munkalapok'}
+        </h2>
+        <Button onClick={() => navigate(`/lab/new?patientId=${patientId}`)}>
+          {t.lab?.newWorkOrder ?? 'Új munkalap'}
+        </Button>
+      </div>
+
+      {loading ? (
+        <p className="text-theme-secondary text-center py-8">{t.common.loading ?? 'Betöltés...'}</p>
+      ) : workOrders.length === 0 ? (
+        <Card>
+          <CardContent>
+            <p className="text-theme-secondary text-center py-4">
+              {t.lab?.noWorkOrders ?? 'Nincs munkalap.'}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {workOrders.map((order) => {
+            const isOverdue =
+              order.requestedDeadline &&
+              !['delivered', 'accepted', 'cancelled'].includes(order.status) &&
+              new Date(order.requestedDeadline) < new Date();
+
+            return (
+              <Card
+                key={order.workOrderId}
+                className="cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => navigate(`/lab/${order.workOrderId}`)}
+              >
+                <CardContent>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="font-mono font-medium text-theme-primary text-sm">
+                        {order.workOrderNumber}
+                      </span>
+                      {order.priority === 'urgent' && (
+                        <span className="px-1.5 py-0.5 bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200 text-xs rounded font-medium">
+                          {t.lab?.urgent ?? 'Sürgős'}
+                        </span>
+                      )}
+                      <LabWorkOrderStatusBadge status={order.status} />
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-theme-secondary shrink-0">
+                      <span>{getLabName(order.labPartnerId)}</span>
+                      {order.requestedDeadline && (
+                        <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
+                          {formatDate(order.requestedDeadline)}
+                          {isOverdue && (
+                            <span className="ml-1 text-xs">{t.lab?.overdue ?? '(lejárt)'}</span>
+                          )}
+                        </span>
+                      )}
+                      {order.totalPrice != null && (
+                        <span className="font-medium text-theme-primary">
+                          {formatCurrency(order.totalPrice, order.currency as 'HUF' | 'EUR')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {order.toothNotation && (
+                    <p className="text-xs text-theme-secondary mt-1">
+                      {t.lab?.toothNotation ?? 'Érintett fogak'}: {order.toothNotation}
+                      {order.shade && ` · ${t.lab?.shade ?? 'Fogszín'}: ${order.shade}`}
+                      {order.material && ` · ${t.lab?.material ?? 'Anyag'}: ${order.material}`}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
