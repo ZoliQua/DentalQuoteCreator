@@ -62,6 +62,14 @@
 - **Frontend hooks**: Always verify `useCallback`/`useMemo` dependency arrays include all referenced state variables
 - **Validation**: Validate entity existence (patient, quote) before creating related records
 
+## Versioning
+- Version is defined in `src/version.ts` as `APP_VERSION` constant
+- Also kept in sync in `package.json` `version` field
+- DEV versions use semver format: `X.Y.Z-dev.N` (e.g., `1.2.0-dev.1`)
+- Every commit increments the dev number (dev.1, dev.2, ...) — update both `src/version.ts` and `package.json`
+- `CHANGELOG_DEV.md` tracks all dev changes — update it with every commit
+- When releasing, remove the `-dev.N` suffix and move CHANGELOG_DEV entries to a proper CHANGELOG
+
 ## Conventions
 - Hungarian language is primary (hu.ts is the source of truth for i18n keys)
 - IDs use prefixes: plistXXX (pricelists), pcatXXXX (categories), catXXXXX (catalog items)

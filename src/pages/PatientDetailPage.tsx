@@ -1639,7 +1639,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
     insuranceNum: '',
     phone: '+36 ',
     email: '',
-    country: settings.patient.defaultCountry,
+    country: settings.patient?.defaultCountry,
     isForeignAddress: false,
     zipCode: '',
     city: '',
@@ -1708,12 +1708,12 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
       insuranceNum: patient.insuranceNum || '',
       phone: patient.phone || (isHu ? '+36 ' : '+'),
       email: patient.email || '',
-      country: patient.country || settings.patient.defaultCountry,
+      country: patient.country || settings.patient?.defaultCountry,
       isForeignAddress: patient.isForeignAddress || false,
       zipCode: patient.zipCode || '',
       city: patient.city || '',
       street: patient.street || '',
-      patientType: patient.patientType || settings.patient.patientTypes[0] || '',
+      patientType: patient.patientType || settings.patient?.patientTypes[0] || '',
       notes: patient.notes || '',
       mothersName: patient.mothersName || '',
       neakDocumentType: patient.neakDocumentType ?? 1,
@@ -1727,7 +1727,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
     setErrors({});
     setCitySuggestions([]);
     setVatResult(null);
-  }, [isOpen, patient, settings.patient.defaultCountry, settings.patient.patientTypes]);
+  }, [isOpen, patient, settings.patient?.defaultCountry, settings.patient?.patientTypes]);
 
   const validateEmail = (email: string): boolean => {
     if (!email) return true;
@@ -1803,7 +1803,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
     setFormData({
       ...formData,
       isForeignAddress: checked,
-      country: checked ? '' : settings.patient.defaultCountry,
+      country: checked ? '' : settings.patient?.defaultCountry,
     });
     setCitySuggestions([]);
   };
@@ -2023,7 +2023,7 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
                       ? 'border-blue-500 bg-blue-50'
                       : 'border-green-500 bg-green-50'
                   }`}
-                  title={formData.isForeignAddress ? t.patients.foreignAddress : countryName(settings.patient.defaultCountry)}
+                  title={formData.isForeignAddress ? t.patients.foreignAddress : countryName(settings.patient?.defaultCountry)}
                 >
                   {formData.isForeignAddress ? '🇪🇺' : '🇭🇺'}
                 </button>
@@ -2208,12 +2208,12 @@ function PatientEditModal({ isOpen, patient, onClose, onSubmit }: PatientEditMod
                 { value: '50', label: '50%' },
               ]}
             />
-            {settings.patient.patientTypes.length > 0 && (
+            {settings.patient?.patientTypes.length > 0 && (
               <Select
                 label={t.patients.patientType}
                 value={formData.patientType || ''}
                 onChange={(e) => setFormData({ ...formData, patientType: e.target.value })}
-                options={settings.patient.patientTypes.map((pt) => ({ value: pt, label: pt }))}
+                options={settings.patient?.patientTypes.map((pt) => ({ value: pt, label: pt }))}
               />
             )}
           </div>

@@ -139,7 +139,7 @@ export function QuoteEditorPage() {
   }, [patientId, quoteId, patient, createQuote, navigate]);
 
   const quote = quoteId ? getQuote(quoteId) : undefined;
-  const effectiveQuoteLang: 'hu' | 'en' | 'de' = quote?.quoteLang ?? settings.quote.quoteLang ?? 'hu';
+  const effectiveQuoteLang: 'hu' | 'en' | 'de' = quote?.quoteLang ?? settings.quote?.quoteLang ?? 'hu';
 
   useEffect(() => {
     if (!patientId) return;

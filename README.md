@@ -1,12 +1,16 @@
-# DentalQuoteCreator
+# 🦷 DentalQuoter
 
 **Fogászati rendelőkezelő és árajánlat-készítő rendszer**
 **Dental Practice Management & Quote Creator**
 **Zahnarztpraxis-Verwaltung & Kostenvoranschlag-Ersteller**
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/ZoliQua/DentalQuoteCreator/releases/tag/v1.1.0)
-[![Backend](https://img.shields.io/badge/backend-0.2.0-green.svg)](https://github.com/ZoliQua/DentalQuoteCreator/releases/tag/v1.1.0)
+[![Version](https://img.shields.io/badge/version-1.2.0--dev-blue.svg)](https://github.com/ZoliQua/DentalQuoteCreator)
+[![Backend](https://img.shields.io/badge/backend-0.2.0-green.svg)](https://github.com/ZoliQua/DentalQuoteCreator)
 [![Tests](https://img.shields.io/badge/tests-179%20passed-brightgreen.svg)]()
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6.svg?logo=typescript&logoColor=white)]()
+[![React](https://img.shields.io/badge/React-18.3-61DAFB.svg?logo=react&logoColor=white)]()
+[![Fastify](https://img.shields.io/badge/Fastify-5.7-000000.svg?logo=fastify&logoColor=white)]()
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1.svg?logo=postgresql&logoColor=white)]()
 [![License](https://img.shields.io/badge/license-BSL%201.1-orange.svg)](LICENSE)
 
 ---
@@ -833,16 +837,38 @@ Berechtigungen können pro Benutzer auf der Admin-Seite überschrieben werden.
 
 ---
 
+## Architecture / Architektúra / Architektur
+
+```
+┌─────────────────────────────────┐     ┌──────────────────────────────┐
+│  🌐 fogorvosa.hu (Production)   │     │  🏠 Synology DS918+ (NAS)    │
+│                                 │     │                              │
+│  ┌───────────┐  ┌────────────┐  │     │  ┌────────────────────────┐  │
+│  │ React SPA │  │  Fastify   │  │◄────│  │ DQ-Importer (Docker)   │  │
+│  │ (Vite)    │──│  + Prisma  │  │HTTPS│  │ Express + Playwright   │  │
+│  └───────────┘  │  + PgSQL   │  │     │  │ Chromium headless      │  │
+│                 └────────────┘  │     │  └────────────────────────┘  │
+└─────────────────────────────────┘     └──────────────────────────────┘
+```
+
 ## Quick Start
 
 ```bash
-git clone https://github.com/ZoliQua/DentalQuoteCreator.git
+git clone --recurse-submodules https://github.com/ZoliQua/DentalQuoteCreator.git
 cd DentalQuoteCreator
 npm install && cd backend && npm install && cd ..
 cp backend/.env.example backend/.env  # edit with your values
 cd backend && npx prisma migrate dev && cd ..
-npm run dev
+npm run dev  # starts frontend + backend + scraper
 ```
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | 🚀 Start all (frontend + backend + scraper) |
+| `npm run dev:frontend` | 🖥️ Frontend only (Vite) |
+| `npm run dev:server` | ⚙️ Backend only (Fastify) |
+| `npm run build` | 📦 Production build |
+| `cd backend && npm test` | 🧪 Run 179 API tests |
 
 ## Author
 
@@ -881,4 +907,4 @@ See the full [LICENSE](LICENSE) file for details.
 
 ---
 
-*Built with React, Fastify, Prisma, PostgreSQL, and tested with Vitest.*
+*Built with React, Fastify, Prisma, PostgreSQL, Playwright, Docker, and tested with Vitest.*

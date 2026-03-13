@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { usePatients } from '../../hooks';
 import { formatPatientName } from '../../utils';
 import dcqLogo from '../../assets/dcq_logo.svg';
+import { APP_VERSION } from '../../version';
 
 interface NavChild {
   to: string;
@@ -486,6 +487,9 @@ export function Layout({ children }: LayoutProps) {
           >
             {isSidebarOpen ? t.login.logout : t.login.logoutShort}
           </button>
+          <div className="mt-2 text-center text-xs text-theme-tertiary opacity-60">
+            {isSidebarOpen ? `v${APP_VERSION}` : `v${APP_VERSION.split('-')[0]}`}
+          </div>
         </div>
       </aside>
 
