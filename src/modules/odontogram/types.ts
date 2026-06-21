@@ -50,6 +50,7 @@ export type OdontogramToothState = {
   caries: string[];
   fillingMaterial: OdontogramFillingMaterial;
   fillingSurfaces: string[];
+  fillingSurfaceMaterials?: Record<string, OdontogramFillingMaterial>;
   fissureSealing: boolean;
   contactMesial: boolean;
   contactDistal: boolean;
