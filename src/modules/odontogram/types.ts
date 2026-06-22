@@ -46,6 +46,7 @@ export type OdontogramToothState = {
   pulpInflam: boolean;
   endoResection: boolean;
   mods: string[];
+  periapicalType?: 'none' | 'granuloma' | 'cyst' | 'abscess';
   endo: OdontogramEndoStatus;
   caries: string[];
   fillingMaterial: OdontogramFillingMaterial;
