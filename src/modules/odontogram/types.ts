@@ -45,14 +45,17 @@ export type OdontogramToothState = {
   toothSelection: OdontogramToothSelection;
   pulpInflam: boolean;
   endoResection: boolean;
+  rootResorption?: boolean;
   mods: string[];
   periapicalType?: 'none' | 'granuloma' | 'cyst' | 'abscess';
   endo: OdontogramEndoStatus;
   caries: string[];
+  cariesDepth?: 'surface' | 'dentin' | 'deep';
   fillingMaterial: OdontogramFillingMaterial;
   fillingSurfaces: string[];
   fillingSurfaceMaterials?: Record<string, OdontogramFillingMaterial>;
   fissureSealing: boolean;
+  calculus?: boolean;
   contactMesial: boolean;
   contactDistal: boolean;
   bruxismWear: boolean;
