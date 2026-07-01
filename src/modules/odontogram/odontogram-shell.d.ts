@@ -31,6 +31,10 @@ declare module '@odontogram-shell' {
     onDarkModeChange?: (dark: boolean) => void;
     /** Custom theme configuration for color overrides. */
     themeConfig?: OdontogramThemeConfig;
+    /** Enable per-tooth notes (double-click to add/edit). */
+    enableNotes?: boolean;
+    /** Enable ICDAS II per-surface caries scoring (0–6) instead of the 3-level depth. */
+    enableIcdas?: boolean;
   };
 
   const OdontogramShell: ComponentType<OdontogramShellProps>;

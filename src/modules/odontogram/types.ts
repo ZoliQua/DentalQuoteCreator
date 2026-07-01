@@ -50,8 +50,8 @@ export type OdontogramToothState = {
   periapicalType?: 'none' | 'granuloma' | 'cyst' | 'abscess';
   endo: OdontogramEndoStatus;
   caries: string[];
-  cariesActiveDepth?: 'surface' | 'dentin' | 'deep';
-  cariesDepths?: Record<string, 'surface' | 'dentin' | 'deep'>;
+  cariesActiveDepth?: number;
+  cariesDepths?: Record<string, number>;
   fillingMaterial: OdontogramFillingMaterial;
   fillingSurfaces: string[];
   fillingSurfaceMaterials?: Record<string, OdontogramFillingMaterial>;
