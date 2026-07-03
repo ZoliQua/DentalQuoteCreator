@@ -34,6 +34,7 @@ export type OdontogramMobility = 'none' | 'm1' | 'm2' | 'm3';
 export type OdontogramCrownMaterial =
   | 'natural'
   | 'broken'
+  | 'crownprep'
   | 'radix'
   | 'emax'
   | 'zircon'
