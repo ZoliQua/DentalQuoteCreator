@@ -8,10 +8,13 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@odontogram-shell': path.resolve(
-        __dirname,
-        './src/modules/odontogram/engine/src/App.tsx'
-      ),
+      // Runtime resolves to the published npm package (built, versioned) —
+      // no longer the raw submodule source. Types still come from the
+      // hand-maintained shim via the tsconfig `paths` mapping of the same
+      // alias (see tsconfig.json). Switching the shim to the package's own
+      // types is a separate follow-up (needs a language/numbering boundary
+      // adapter — the host's enums differ from the package's).
+      '@odontogram-shell': 'react-odontogram-modul',
       '@dq-importer': path.resolve(__dirname, './src/modules/dq-importer/src'),
       '@dq-calendar': path.resolve(__dirname, './src/modules/dq-calendar'),
     },

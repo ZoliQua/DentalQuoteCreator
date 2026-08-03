@@ -4,7 +4,7 @@ export { clearSelection, setOcclusalVisible, setWisdomVisible, setShowBase, setH
 import { createPortal } from 'react-dom';
 import type { OdontogramState } from './types';
 import './odontogramHost.css';
-import './engine/src/index.css';
+import 'react-odontogram-modul/style.css';
 import { useSettings } from '../../context/SettingsContext';
 
 export type OdontogramHostProps = {
