@@ -35,7 +35,7 @@ absent the base/unspecified code is used.
 
 | Charted finding (axis) | Diagnosis key | WHO ICD-10 | Notes / data-driven subcode |
 |---|---|---|---|
-| `caries` (surface set) | caries | **K02** Dental caries | DX-0. Refine by `radiographicDepth`: E1/E2 → **K02.0** (enamel), D1–D3 → **K02.1** (dentine). |
+| `caries` (surface set) | caries | **K02** Dental caries | DX-0. Refine by `radiographicDepth`: E1/E2 → **K02.0** (enamel), D1–D3 → **K02.1** (dentine). (K02.0/.1 depth subcode deferred — not shipped; keeps DX-0 caries byte-identical) |
 | `rootCaries` active/cavitated | cariesCementum | **K02.2** Caries of cementum | arrested → **K02.3** Arrested dental caries. |
 | `pulpDx` reversible/irreversible-pulpitis | pulpitis | **K04.0** Pulpitis | WHO K04.0 covers both; the reversible/irreversible nuance is ICD-10-CM only (K04.01/.02) → belongs to the US pack (DX-5), not the WHO base. |
 | `pulpDx` necrosis | pulpNecrosis | **K04.1** Necrosis of pulp | |
