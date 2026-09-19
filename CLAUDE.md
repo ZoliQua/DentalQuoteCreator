@@ -7,7 +7,7 @@
 - Backend runs on /backend prefix (frontend proxied via Vite)
 
 ## Git Submodules
-- **Odontogram Engine**: `src/modules/odontogram/engine` → https://github.com/ZoliQua/React-Odontogram-Modul.git
+- **Odontogram Engine**: `src/modules/odontogram/engine` → https://github.com/ZoliQua/React-Advanced-Odontogram.git
 - **DQ-Importer**: `src/modules/dq-importer` → https://github.com/ZoliQua/DQ-Importer.git (private repo)
 - NEVER inline submodule files into the main repo — they must remain as git submodules
 - After cloning, run `git submodule update --init --recursive`
